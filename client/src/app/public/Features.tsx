@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check } from "lucide-react";
 import { PageHero } from "./components/PageHero";
-import { Reveal } from "./components/Reveal";
 import { FEATURE_TABS } from "./data/marketing";
 
 export const Features: React.FC = () => {
