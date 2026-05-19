@@ -27,6 +27,8 @@ import { PlatformLogin } from "./pages/PlatformLogin";
 import { PlatformLayout } from "./platform/PlatformLayout";
 import { PlatformDashboard } from "./platform/Dashboard";
 import { TenantHub } from "./platform/Tenants/TenantHub";
+import { TenantDetail } from "./platform/Tenants/TenantDetail";
+import { ImpersonateExchange } from "./pages/ImpersonateExchange";
 import { PlanManager } from "./platform/Subscriptions/PlanManager";
 import { RevenueLedger } from "./platform/Subscriptions/Ledger";
 import { SupportHub } from "./platform/Support/SupportHub";
@@ -46,6 +48,7 @@ export const AppRoutes = () => {
       </Route>
 
       <Route path="/s/:schoolSlug/login" element={<Login />} />
+      <Route path="/s/:schoolSlug/impersonate" element={<ImpersonateExchange />} />
       <Route path="/s/:schoolSlug/portal/login" element={<PortalLogin />} />
       <Route path="/s/:schoolSlug/portal/dashboard" element={<PortalDashboard />} />
 
@@ -53,6 +56,7 @@ export const AppRoutes = () => {
       <Route path="/platform" element={<PlatformLayout />}>
         <Route path="dashboard" element={<PlatformDashboard />} />
         <Route path="tenants" element={<TenantHub />} />
+        <Route path="tenants/:slug" element={<TenantDetail />} />
         <Route path="subscriptions/plans" element={<PlanManager />} />
         <Route path="subscriptions/ledger" element={<RevenueLedger />} />
         <Route path="support" element={<SupportHub />} />

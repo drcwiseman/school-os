@@ -11,6 +11,8 @@ import { ConflictError, UnauthorizedError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
 import { getUserPermissions } from "../middleware/rbac";
 import { isFeatureAllowedForTenant } from "../services/plan-features";
+import { exchangeImpersonationToken } from "../services/impersonation";
+import { isReadOnlyImpersonation } from "../middleware/auth";
 
 const router = Router();
 
@@ -81,12 +83,35 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       isFeatureAllowedForTenant(user.tenantId, "messaging_enabled"),
       isFeatureAllowedForTenant(user.tenantId, "portal_enabled"),
     ]);
+    const session = (req as any).session;
     res.json({
       success: true,
       user: safeUser,
       permissions,
       roles: roleRows,
       modules: { messaging_enabled: messaging, portal_enabled: portal },
+      impersonation: isReadOnlyImpersonation(session) ? { readOnly: true } : null,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /s/:schoolSlug/api/auth/impersonate?token= — platform shadow login (one-time)
+router.get("/impersonate", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = String(req.query.token ?? "");
+    if (!token) throw new UnauthorizedError("Missing impersonation token");
+    const result = await exchangeImpersonationToken(token, req.ip, req.headers["user-agent"]);
+    if (!result) throw new UnauthorizedError("Invalid or expired impersonation token");
+    res.cookie("session_token", result.session.token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    res.json({
+      success: true,
+      readOnly: result.readOnly,
+      redirect: `/s/${(req as any).tenant?.slug ?? ""}/dashboard`,
     });
   } catch (err) { next(err); }
 });

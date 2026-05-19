@@ -9,12 +9,16 @@ export const userStatusEnum   = pgEnum("user_status",   ["active", "inactive", "
 // ─── Platform Tables ─────────────────────────────────────────────────────────
 
 export const tenants = pgTable("tenants", {
-  id:        uuid("id").primaryKey().defaultRandom(),
-  slug:      text("slug").notNull().unique(),
-  name:      text("name").notNull(),
-  status:    tenantStatusEnum("status").notNull().default("trial"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  id:             uuid("id").primaryKey().defaultRandom(),
+  slug:           text("slug").notNull().unique(),
+  name:           text("name").notNull(),
+  status:         tenantStatusEnum("status").notNull().default("trial"),
+  customDomain:   text("custom_domain"),
+  subdomain:      text("subdomain"),
+  domainVerified: boolean("domain_verified").notNull().default(false),
+  sslConfig:      jsonb("ssl_config").$type<Record<string, unknown>>().default({}),
+  createdAt:      timestamp("created_at").notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
   slugIdx: uniqueIndex("tenants_slug_idx").on(t.slug),
 }));
@@ -81,6 +85,7 @@ export const sessions = pgTable("sessions", {
   token:     text("token").notNull().unique(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  metadata:  jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
@@ -1052,4 +1057,100 @@ export const tenantPlans = pgTable("tenant_plans", {
   startedAt: timestamp("started_at").notNull().defaultNow(),
 }, (t) => ({
   pk: uniqueIndex("tenant_plans_pk").on(t.tenantId),
+}));
+
+// ─── SaaS Enterprise Architecture Extensions ──────────────────────────────────
+
+export const tenantCampuses = pgTable("tenant_campuses", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:      text("name").notNull(),
+  code:      text("code").notNull(),
+  address:   text("address").default(""),
+  status:    text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantIdx: index("tenant_campuses_tenant_idx").on(t.tenantId),
+}));
+
+export const addonFeatures = pgTable("addon_features", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  code:        text("code").notNull().unique(),
+  name:        text("name").notNull(),
+  description: text("description").notNull().default(""),
+  priceMonthly: integer("price_monthly").notNull().default(0),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const tenantAddons = pgTable("tenant_addons", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  addonId:   uuid("addon_id").notNull().references(() => addonFeatures.id, { onDelete: "cascade" }),
+  status:    text("status").notNull().default("active"), // active, suspended, pending_payment
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantAddonIdx: uniqueIndex("tenant_addons_tenant_addon_idx").on(t.tenantId, t.addonId),
+}));
+
+export const tenantBillingUsage = pgTable("tenant_billing_usage", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  metric:       text("metric").notNull(), // 'sms_volume', 'ai_credits', 'storage_bytes'
+  quantityUsed: integer("quantity_used").notNull().default(0),
+  billingCycle: text("billing_cycle").notNull(), // '2026-05'
+  updatedAt:    timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  metricIdx: uniqueIndex("tenant_billing_usage_metric_idx").on(t.tenantId, t.metric, t.billingCycle),
+}));
+
+export const usageBillingThresholds = pgTable("usage_billing_thresholds", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  metric:           text("metric").notNull().unique(),
+  includedQuantity: integer("included_quantity").notNull().default(0),
+  overageUnitPrice: integer("overage_unit_price").notNull().default(0),
+  currency:         text("currency").notNull().default("USD"),
+});
+
+export const saasBillingLines = pgTable("saas_billing_lines", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  billingCycle: text("billing_cycle").notNull(),
+  lineType:     text("line_type").notNull(),
+  description:  text("description").notNull(),
+  quantity:     integer("quantity").notNull().default(1),
+  unitAmount:   integer("unit_amount").notNull().default(0),
+  amount:       integer("amount").notNull().default(0),
+  metric:       text("metric"),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantCycleIdx: index("saas_billing_lines_tenant_cycle_idx").on(t.tenantId, t.billingCycle),
+}));
+
+export const platformAuditLogs = pgTable("platform_audit_logs", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  platformAdminId: uuid("platform_admin_id").references(() => platformAdmins.id, { onDelete: "set null" }),
+  tenantId:        uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+  action:          text("action").notNull(),
+  entityType:      text("entity_type").notNull(),
+  entityId:        text("entity_id"),
+  beforeJson:      jsonb("before_json"),
+  afterJson:       jsonb("after_json"),
+  ip:              text("ip"),
+  createdAt:       timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index("platform_audit_logs_created_idx").on(t.createdAt),
+}));
+
+export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  token:           text("token").notNull().unique(),
+  tenantId:        uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  targetUserId:    uuid("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  platformAdminId: uuid("platform_admin_id").notNull().references(() => platformAdmins.id, { onDelete: "cascade" }),
+  readOnly:        boolean("read_only").notNull().default(true),
+  expiresAt:       timestamp("expires_at").notNull(),
+  usedAt:          timestamp("used_at"),
+  createdAt:       timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  tokenIdx: uniqueIndex("platform_impersonation_tokens_token_idx").on(t.token),
 }));

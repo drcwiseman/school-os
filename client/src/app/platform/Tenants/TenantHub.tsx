@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Plus, Settings } from "lucide-react";
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
@@ -54,6 +55,16 @@ export const TenantHub: React.FC = () => {
     <div className="space-y-8">
       <h2 className="text-xl font-bold text-white">Schools (tenants)</h2>
       <p className="text-xs text-slate-400">A tenant is one school. Provision a <strong className="text-slate-300">school administrator</strong> ERP account — teachers and secretaries are added later under HR → Staff.</p>
+
+      <ul className="flex flex-wrap gap-2 text-xs">
+        {tenants.map((t) => (
+          <li key={t.id}>
+            <Link to={`/platform/tenants/${t.slug}`} className="text-blue-400 hover:underline">
+              {t.name}
+            </Link>
+          </li>
+        ))}
+      </ul>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <form onSubmit={provision} className="bg-[#090f1c] border border-slate-900 rounded-xl p-6 space-y-3">

@@ -20,7 +20,13 @@ export function generateSessionToken(): string {
   return crypto.randomBytes(48).toString("hex");
 }
 
-export async function createSession(userId: string, tenantId: string, ip?: string, ua?: string) {
+export async function createSession(
+  userId: string,
+  tenantId: string,
+  ip?: string,
+  ua?: string,
+  metadata?: Record<string, unknown>,
+) {
   const token = generateSessionToken();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
   const [session] = await db.insert(sessions).values({
@@ -29,6 +35,7 @@ export async function createSession(userId: string, tenantId: string, ip?: strin
     token,
     ipAddress: ip,
     userAgent: ua,
+    metadata: metadata ?? {},
     expiresAt,
   }).returning();
   return session;
@@ -58,6 +65,21 @@ export async function validateSession(token: string) {
 
 export async function deleteSession(token: string) {
   await db.delete(sessions).where(eq(sessions.token, token));
+}
+
+export function isReadOnlyImpersonation(session: { metadata?: Record<string, unknown> | null }): boolean {
+  const m = (session.metadata ?? {}) as Record<string, unknown>;
+  return Boolean(m.impersonation && m.readOnly);
+}
+
+/** Block mutating HTTP methods during read-only platform impersonation. */
+export function blockWriteIfImpersonationReadOnly(req: Request, res: Response, next: NextFunction) {
+  const session = (req as any).session;
+  if (!session) return next();
+  if (!isReadOnlyImpersonation(session)) return next();
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
+  return next(new UnauthorizedError("Read-only impersonation — changes are not allowed"));
 }
 
 // ─── Express middleware ───────────────────────────────────────────────────────

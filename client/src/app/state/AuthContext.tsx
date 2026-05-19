@@ -15,6 +15,7 @@ interface AuthContextType {
   permissions: string[];
   roles: { id: string; name: string }[];
   modules: TenantModules;
+  impersonationReadOnly: boolean;
   loading: boolean;
   schoolSlug: string | null;
   setAuth: (
@@ -37,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [schoolSlug, setSchoolSlug] = useState<string | null>(null);
   const [modules, setModules] = useState<TenantModules>({ messaging_enabled: true, portal_enabled: true });
+  const [impersonationReadOnly, setImpersonationReadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,9 +55,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setPermissions(res.permissions || []);
             setRoles(res.roles || []);
             if (res.modules) setModules(res.modules);
+            setImpersonationReadOnly(Boolean(res.impersonation?.readOnly));
           }
         })
-        .catch(() => setUser(null))
+        .catch(() => {
+          setUser(null);
+          setImpersonationReadOnly(false);
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -88,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, permissions, roles, modules, loading, schoolSlug, setAuth, hasPermission, moduleEnabled, logout }}>
+    <AuthContext.Provider value={{ user, permissions, roles, modules, impersonationReadOnly, loading, schoolSlug, setAuth, hasPermission, moduleEnabled, logout }}>
       {children}
     </AuthContext.Provider>
   );

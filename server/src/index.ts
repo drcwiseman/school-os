@@ -9,6 +9,7 @@ import routes from "./routes/index";
 import { rateLimit } from "./middleware/rate-limit";
 import { tick as processJobs } from "./services/queue";
 import { ensureRuntimeSchema } from "./db/ensure-runtime-schema";
+import { attachTenantFromHost, redirectSchoolHostToSlugPath } from "./middleware/host-tenant";
 
 function isApiPath(url: string) {
   return url.startsWith("/api") || /^\/s\/[^/]+\/api(\/|$)/.test(url);
@@ -29,6 +30,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+app.use(attachTenantFromHost);
 
 // Basic Request Logger
 app.use((req, res, next) => {
@@ -50,6 +52,8 @@ app.use("/s", rateLimit);
 
 // All API routes
 app.use(routes);
+
+app.use(redirectSchoolHostToSlugPath);
 
 // Serve built React SPA when dist exists (production or single-port deploy)
 const clientDist = path.join(__dirname, "../../client/dist");

@@ -10,6 +10,11 @@ A full-stack, enterprise-grade multi-tenant SaaS application designed to manage 
 - **Validation**: Zod
 - **Queue/PDF**: In-process queue with DB-backed jobs, pdf-lib (Phase 12)
 
+## Product roadmap
+
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — security model and delivered ERP phases (1–15)
+- **[docs/SAAS-ECOSYSTEM.md](docs/SAAS-ECOSYSTEM.md)** — enterprise SaaS blueprint (provisioning, domains, marketplace, usage billing, AI, mobile)
+
 ## Architectural Constraints
 - **Multi-Tenancy**: Every tenant-owned DB query MUST be scoped via `tenant_id`. Handled automatically via Express URL routing `/s/:schoolSlug/*`.
 - **RBAC**: Fine-grained atomic permissions (e.g., `students.create`). Checked via `requirePermission` middleware.

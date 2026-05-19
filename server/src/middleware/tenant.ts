@@ -1,35 +1,33 @@
 import { Request, Response, NextFunction } from "express";
-import { db } from "../db";
-import { tenants } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError, ForbiddenError } from "./error";
+import { resolveTenantByHost, resolveTenantBySlug } from "../services/tenant-resolve";
 
 export async function resolveTenant(req: Request, res: Response, next: NextFunction) {
   try {
     let slug = req.params.schoolSlug as string | undefined;
 
-    // Easy Switch: Extract school slug from subdomain if USE_SUBDOMAIN is enabled
-    if (process.env.USE_SUBDOMAIN === "true") {
-      const host = req.headers.host || "";
-      const parts = host.split(".");
-      // If host is e.g. school-a.schoolos.com or school-a.localhost:5000
-      if (parts.length >= 2 && parts[0] !== "www" && parts[0] !== "localhost") {
-        slug = parts[0];
+    if ((req as any).tenant && (req as any).tenant.slug) {
+      return next();
+    }
+
+    if (!slug && process.env.USE_SUBDOMAIN === "true") {
+      const fromHost = await resolveTenantByHost(req.headers.host ?? "");
+      if (fromHost) {
+        (req as any).tenant = fromHost;
+        req.params.schoolSlug = fromHost.slug;
+        return next();
       }
     }
 
     if (!slug) return next(new NotFoundError("School slug is required"));
 
-    const [tenant] = await db
-      .select()
-      .from(tenants)
-      .where(eq(tenants.slug, slug))
-      .limit(1);
-
+    const tenant = await resolveTenantBySlug(slug);
     if (!tenant) return next(new NotFoundError(`School '${slug}' not found`));
     if (tenant.status === "suspended") return next(new ForbiddenError("This school account is suspended"));
 
     (req as any).tenant = tenant;
+    req.params.schoolSlug = tenant.slug;
     next();
   } catch (err) {
     next(err);

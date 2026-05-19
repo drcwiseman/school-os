@@ -62,6 +62,50 @@ export async function ensureRuntimeSchema() {
       CONSTRAINT "platform_sessions_token_unique" UNIQUE("token")
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "platform_sessions_token_idx" ON "platform_sessions" ("token")`,
+    `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "custom_domain" text`,
+    `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "subdomain" text`,
+    `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "domain_verified" boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "ssl_config" jsonb NOT NULL DEFAULT '{}'`,
+    `CREATE TABLE IF NOT EXISTS "tenant_campuses" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+      "name" text NOT NULL,
+      "code" text NOT NULL,
+      "address" text DEFAULT '',
+      "status" text DEFAULT 'active' NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "addon_features" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "code" text NOT NULL,
+      "name" text NOT NULL,
+      "description" text DEFAULT '' NOT NULL,
+      "price_monthly" integer DEFAULT 0 NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      CONSTRAINT "addon_features_code_unique" UNIQUE("code")
+    )`,
+    `CREATE TABLE IF NOT EXISTS "tenant_addons" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+      "addon_id" uuid NOT NULL REFERENCES "addon_features"("id") ON DELETE cascade,
+      "status" text DEFAULT 'active' NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL,
+      CONSTRAINT "tenant_addons_tenant_addon_idx" UNIQUE("tenant_id", "addon_id")
+    )`,
+    `CREATE TABLE IF NOT EXISTS "tenant_billing_usage" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+      "metric" text NOT NULL,
+      "quantity_used" integer DEFAULT 0 NOT NULL,
+      "billing_cycle" text NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL,
+      CONSTRAINT "tenant_billing_usage_metric_idx" UNIQUE("tenant_id", "metric", "billing_cycle")
+    )`,
+    `INSERT INTO "addon_features" ("code", "name", "description", "price_monthly") VALUES
+      ('ai_homework', 'AI Homework Assistant', 'AI homework auto-grading and personalized feedback loops', 2900),
+      ('white_label', 'White-Label Branding', 'Full custom domain, SMTP mail transport, and customized logo assets', 4900),
+      ('multi_campus', 'Multi-Campus Nodes Scaling', 'Manage distinct geographical branches under a centralized dashboard', 9900)
+    ON CONFLICT ("code") DO NOTHING`,
   ];
 
   for (const stmt of statements) {

@@ -1,6 +1,8 @@
 # SchoolOS — Multi-Tenant Architecture
 
-SchoolOS is a **multi-tenant education ERP SaaS**. Three **separate security domains** must never be mixed:
+SchoolOS is a **multi-tenant education ERP SaaS**. For the **enterprise SaaS ecosystem blueprint** (auto-provision, domains, add-ons, usage billing, multi-campus, AI, mobile) and competitive positioning, see **[SAAS-ECOSYSTEM.md](./SAAS-ECOSYSTEM.md)**.
+
+Three **separate security domains** must never be mixed:
 
 | Domain | Who | Database identity | Session cookie | Login URL |
 |--------|-----|-------------------|----------------|-----------|
@@ -488,3 +490,37 @@ See [README](../README.md#logging-in).
 **HR contracts**
 
 - UI: **Update salary** on open contracts (uses existing `PATCH` salary field)
+
+### Phase 16 — Domains & routing
+
+- Migration `0010`: `tenants.subdomain`, `custom_domain`, `domain_verified`, `ssl_config`
+- `server/src/services/tenant-resolve.ts` — resolve tenant by verified custom domain or subdomain/slug
+- `server/src/middleware/host-tenant.ts` — attach tenant from `Host`; optional redirect to `/s/:slug/…`
+- Platform: `PATCH /api/platform/tenants/:slug/domain`, `POST …/domain/verify`
+- UI: **Tenant detail** — custom domain + DNS TXT instructions
+
+**Env:** `USE_SUBDOMAIN=true`, `PLATFORM_DOMAIN=school.bclimaxtech.com`, `CLIENT_ORIGIN` for impersonation URLs.
+
+### Phase 17 — Platform ops (impersonation & audit)
+
+- `platform_audit_logs`, `platform_impersonation_tokens`, `sessions.metadata` (impersonation + read-only flag)
+- `POST /api/platform/tenants/:slug/impersonate` → one-time URL
+- `GET /s/:slug/api/auth/impersonate?token=` — exchange token, set `session_token`
+- `blockWriteIfImpersonationReadOnly` on school mutating APIs
+- `GET /api/platform/audit-logs` — combined school + platform feed
+- UI: Command Center **Shadow**, **Audit Trail**, read-only banner in school ERP
+
+### Phase 18 — Add-on marketplace
+
+- Tables: `addon_features`, `tenant_addons`; seed: `ai_homework`, `white_label`, `multi_campus`
+- `plan-features` merges active add-ons into feature checks
+- Platform: `GET/POST /api/platform/tenants/:slug/addons`
+- UI: toggles on tenant detail
+
+### Phase 19 — Usage billing
+
+- `tenant_billing_usage`, `usage_billing_thresholds`, `saas_billing_lines`
+- `incrementUsage`, `checkUsageAllowed`, `generateBillingLines`
+- SMS campaigns increment `sms_volume` in `campaign-worker`
+- Platform: usage + `POST …/usage/generate-lines`
+- UI: usage meters and billing lines on tenant detail

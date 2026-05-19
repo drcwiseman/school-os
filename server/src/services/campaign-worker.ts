@@ -2,6 +2,7 @@ import { db } from "../db";
 import { campaigns, deliveryLogs, guardians, studentGuardians, students, studentClassHistory, users } from "../db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { getMessagingProvider } from "./messaging";
+import { incrementUsage, checkUsageAllowed } from "./usage-billing";
 
 export async function processCampaignJob(tenantId: string, payload: { campaignId: string }) {
   const provider = getMessagingProvider();
@@ -46,6 +47,8 @@ export async function processCampaignJob(tenantId: string, payload: { campaignId
   const body = `Campaign: ${campaign.name}`;
   let sent = 0;
   for (const r of recipients) {
+    const gate = await checkUsageAllowed(tenantId, "sms_volume", 1);
+    if (!gate.allowed) break;
     const result = await provider.send({ to: r.to, body, channel: "sms" });
     await db.insert(deliveryLogs).values({
       tenantId,
@@ -56,7 +59,10 @@ export async function processCampaignJob(tenantId: string, payload: { campaignId
       providerRef: result.providerRef,
       error: result.error,
     });
-    if (result.success) sent++;
+    if (result.success) {
+      sent++;
+      await incrementUsage(tenantId, "sms_volume", 1);
+    }
   }
 
   await db.update(campaigns).set({ status: "sent", sentAt: new Date() }).where(eq(campaigns.id, campaign.id));

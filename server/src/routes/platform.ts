@@ -24,6 +24,19 @@ import { NotFoundError, ConflictError, UnauthorizedError } from "../middleware/e
 import { requirePlatformPermission } from "../lib/platform-permissions";
 import { createAuditLog } from "../services/audit";
 import { platformAdminAuthColumns, platformAdminPublic } from "../db/platform-admin-columns";
+import {
+  setCustomDomain, verifyCustomDomain, getDomainInstructions,
+} from "../services/domain-verify";
+import { createPlatformAuditLog, listGlobalAuditFeed } from "../services/platform-audit";
+import {
+  createImpersonationToken, findImpersonationTargetUser,
+} from "../services/impersonation";
+import {
+  getTenantAddonsDetailed, activateTenantAddon, deactivateTenantAddon, listAddonCatalog,
+} from "../services/tenant-addons";
+import {
+  getTenantUsage, generateBillingLines, getBillingLines, currentBillingCycle,
+} from "../services/usage-billing";
 
 const router = Router();
 
@@ -191,11 +204,28 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
     const [existing] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
     if (existing) throw new ConflictError("School slug already taken");
 
-    const [tenant] = await db.insert(tenants).values({ slug, name, status: "active" }).returning();
+    const [tenant] = await db.insert(tenants).values({
+      slug,
+      name,
+      status: "active",
+      subdomain: slug, // Auto-generated subdomain
+      domainVerified: false,
+      sslConfig: { status: "pending_dns_configuration", challengeType: "http-01" },
+    }).returning();
+
     const cc = (country ?? "").toUpperCase();
     const cur = (currency?.toUpperCase() ?? (cc ? defaultCurrencyForCountry(cc) : "USD"));
     await db.insert(tenantSettings).values({ tenantId: tenant.id, country: cc, currency: cur });
     await enableDefaultFeaturesForTenant(tenant.id);
+
+    // Seed default usage-based billing metrics
+    const currentCycle = new Date().toISOString().slice(0, 7); // e.g. "2026-05"
+    const { tenantBillingUsage } = await import("../db/schema");
+    await db.insert(tenantBillingUsage).values([
+      { tenantId: tenant.id, metric: "sms_volume", quantityUsed: 0, billingCycle: currentCycle },
+      { tenantId: tenant.id, metric: "ai_credits", quantityUsed: 0, billingCycle: currentCycle },
+      { tenantId: tenant.id, metric: "storage_bytes", quantityUsed: 0, billingCycle: currentCycle },
+    ]);
 
     if (planCode) {
       const [plan] = await db.select().from(plans).where(eq(plans.code, planCode)).limit(1);
@@ -281,9 +311,173 @@ router.get("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("ten
     const [tp] = await db.select({ plan: plans }).from(tenantPlans)
       .innerJoin(plans, eq(tenantPlans.planId, plans.id))
       .where(eq(tenantPlans.tenantId, tenant.id)).limit(1);
-    res.json({ success: true, data: { tenant, settings, plan: tp?.plan ?? null } });
+    const cycle = currentBillingCycle();
+    res.json({
+      success: true,
+      data: {
+        tenant,
+        settings,
+        plan: tp?.plan ?? null,
+        domain: getDomainInstructions(tenant),
+        addons: await getTenantAddonsDetailed(tenant.id),
+        usage: await getTenantUsage(tenant.id, cycle),
+        billingLines: await getBillingLines(tenant.id, cycle),
+        billingCycle: cycle,
+      },
+    });
   } catch (err) { next(err); }
 });
+
+router.patch("/tenants/:slug/domain", requirePlatformAuth, requirePlatformPermission("tenants.provision"),
+  validate({ body: z.object({ customDomain: z.string().min(3) }) }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as any).platformAdmin;
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const updated = await setCustomDomain(tenant.id, req.body.customDomain);
+      await createPlatformAuditLog({
+        platformAdminId: admin.id,
+        tenantId: tenant.id,
+        action: "tenant.domain.set",
+        entityType: "tenant",
+        entityId: tenant.id,
+        after: updated,
+        ip: req.ip,
+      });
+      res.json({ success: true, data: getDomainInstructions(updated!) });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/tenants/:slug/domain/verify", requirePlatformAuth, requirePlatformPermission("tenants.provision"),
+  async (req, res, next) => {
+    try {
+      const admin = (req as any).platformAdmin;
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const updated = await verifyCustomDomain(tenant.id);
+      await createPlatformAuditLog({
+        platformAdminId: admin.id,
+        tenantId: tenant.id,
+        action: "tenant.domain.verified",
+        entityType: "tenant",
+        entityId: tenant.id,
+        ip: req.ip,
+      });
+      res.json({ success: true, data: getDomainInstructions(updated!) });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPermission("tenants.read"),
+  async (req, res, next) => {
+    try {
+      const admin = (req as any).platformAdmin;
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const target = await findImpersonationTargetUser(tenant.id);
+      if (!target) throw new NotFoundError("No school administrator user to impersonate");
+      const row = await createImpersonationToken({
+        tenantId: tenant.id,
+        targetUserId: target.id,
+        platformAdminId: admin.id,
+        readOnly: true,
+      });
+      await createPlatformAuditLog({
+        platformAdminId: admin.id,
+        tenantId: tenant.id,
+        action: "tenant.impersonate",
+        entityType: "user",
+        entityId: target.id,
+        ip: req.ip,
+      });
+      const base = process.env.CLIENT_ORIGIN ?? "";
+      res.json({
+        success: true,
+        data: {
+          url: `${base}/s/${tenant.slug}/impersonate?token=${row.token}`,
+          expiresAt: row.expiresAt,
+          readOnly: row.readOnly,
+        },
+      });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/audit-logs", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const limit = Number(req.query.limit ?? 100);
+    res.json({ success: true, data: await listGlobalAuditFeed(limit) });
+  } catch (err) { next(err); }
+});
+
+router.get("/addons", requirePlatformAuth, async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await listAddonCatalog() });
+  } catch (err) { next(err); }
+});
+
+router.get("/tenants/:slug/addons", requirePlatformAuth, requirePlatformPermission("tenants.features"), async (req, res, next) => {
+  try {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+    if (!tenant) throw new NotFoundError("Tenant not found");
+    res.json({ success: true, data: await getTenantAddonsDetailed(tenant.id) });
+  } catch (err) { next(err); }
+});
+
+router.post("/tenants/:slug/addons", requirePlatformAuth, requirePlatformPermission("tenants.features"),
+  validate({ body: z.object({ code: z.string(), active: z.boolean() }) }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as any).platformAdmin;
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      if (req.body.active) {
+        await activateTenantAddon(tenant.id, req.body.code);
+      } else {
+        await deactivateTenantAddon(tenant.id, req.body.code);
+      }
+      await createPlatformAuditLog({
+        platformAdminId: admin.id,
+        tenantId: tenant.id,
+        action: req.body.active ? "tenant.addon.activate" : "tenant.addon.deactivate",
+        entityType: "addon",
+        entityId: req.body.code,
+        ip: req.ip,
+      });
+      res.json({ success: true, data: await getTenantAddonsDetailed(tenant.id) });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/tenants/:slug/usage", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+    if (!tenant) throw new NotFoundError("Tenant not found");
+    const cycle = String(req.query.cycle ?? currentBillingCycle());
+    res.json({
+      success: true,
+      data: {
+        cycle,
+        usage: await getTenantUsage(tenant.id, cycle),
+        lines: await getBillingLines(tenant.id, cycle),
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+router.post("/tenants/:slug/usage/generate-lines", requirePlatformAuth, requirePlatformPermission("stats.read"),
+  async (req, res, next) => {
+    try {
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const cycle = String(req.body?.cycle ?? currentBillingCycle());
+      const lines = await generateBillingLines(tenant.id, cycle);
+      res.json({ success: true, data: { cycle, lines } });
+    } catch (err) { next(err); }
+  },
+);
 
 router.patch("/tenants/:slug/feature-flags", requirePlatformAuth, requirePlatformPermission("tenants.features"),
   validate({ body: z.object({ flags: z.record(z.boolean()) }) }),

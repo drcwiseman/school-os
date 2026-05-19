@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { resolveTenant } from "../middleware/tenant";
+import { blockWriteIfImpersonationReadOnly } from "../middleware/auth";
 import authRoutes     from "./auth";
 import tenantRoutes   from "./tenant";
 import studentRoutes  from "./students";
@@ -39,26 +40,28 @@ router.use("/s/:schoolSlug", resolveTenant, (req, res, next) => {
   next();
 });
 
-router.use("/s/:schoolSlug/api/auth",       resolveTenant, authRoutes);
-router.use("/s/:schoolSlug/api/admin",      resolveTenant, tenantRoutes);
-router.use("/s/:schoolSlug/api/students",   resolveTenant, studentRoutes);
-router.use("/s/:schoolSlug/api/admissions", resolveTenant, admissionsRouter);
-router.use("/s/:schoolSlug/api/attendance", resolveTenant, attendanceRouter);
-router.use("/s/:schoolSlug/api/academics",   resolveTenant, academicsRoutes);
-router.use("/s/:schoolSlug/api/finance",     resolveTenant, financeRoutes);
-router.use("/s/:schoolSlug/api/exams",       resolveTenant, examsRoutes);
-router.use("/s/:schoolSlug/api/hr",          resolveTenant, hrRoutes);
-router.use("/s/:schoolSlug/api/payroll",     resolveTenant, payrollRoutes);
-router.use("/s/:schoolSlug/api/discipline",  resolveTenant, disciplineRoutes);
-router.use("/s/:schoolSlug/api/health",      resolveTenant, healthRoutes);
-router.use("/s/:schoolSlug/api/library",     resolveTenant, libraryRoutes);
-router.use("/s/:schoolSlug/api/inventory",   resolveTenant, inventoryRoutes);
-router.use("/s/:schoolSlug/api/transport",   resolveTenant, transportRoutes);
-router.use("/s/:schoolSlug/api/boarding",    resolveTenant, boardingRoutes);
-router.use("/s/:schoolSlug/api/messaging",   resolveTenant, messagingRoutes);
-router.use("/s/:schoolSlug/api/reports",     resolveTenant, reportsRoutes);
+const schoolApi = [resolveTenant, blockWriteIfImpersonationReadOnly];
+
+router.use("/s/:schoolSlug/api/auth",       ...schoolApi, authRoutes);
+router.use("/s/:schoolSlug/api/admin",      ...schoolApi, tenantRoutes);
+router.use("/s/:schoolSlug/api/students",   ...schoolApi, studentRoutes);
+router.use("/s/:schoolSlug/api/admissions", ...schoolApi, admissionsRouter);
+router.use("/s/:schoolSlug/api/attendance", ...schoolApi, attendanceRouter);
+router.use("/s/:schoolSlug/api/academics",   ...schoolApi, academicsRoutes);
+router.use("/s/:schoolSlug/api/finance",     ...schoolApi, financeRoutes);
+router.use("/s/:schoolSlug/api/exams",       ...schoolApi, examsRoutes);
+router.use("/s/:schoolSlug/api/hr",          ...schoolApi, hrRoutes);
+router.use("/s/:schoolSlug/api/payroll",     ...schoolApi, payrollRoutes);
+router.use("/s/:schoolSlug/api/discipline",  ...schoolApi, disciplineRoutes);
+router.use("/s/:schoolSlug/api/health",      ...schoolApi, healthRoutes);
+router.use("/s/:schoolSlug/api/library",     ...schoolApi, libraryRoutes);
+router.use("/s/:schoolSlug/api/inventory",   ...schoolApi, inventoryRoutes);
+router.use("/s/:schoolSlug/api/transport",   ...schoolApi, transportRoutes);
+router.use("/s/:schoolSlug/api/boarding",    ...schoolApi, boardingRoutes);
+router.use("/s/:schoolSlug/api/messaging",   ...schoolApi, messagingRoutes);
+router.use("/s/:schoolSlug/api/reports",     ...schoolApi, reportsRoutes);
 router.use("/s/:schoolSlug/api/portal",      resolveTenant, portalRoutes);
-router.use("/s/:schoolSlug/api/settings",    resolveTenant, settingsRoutes);
-router.use("/s/:schoolSlug/api/dashboard",   resolveTenant, dashboardRoutes);
+router.use("/s/:schoolSlug/api/settings",    ...schoolApi, settingsRoutes);
+router.use("/s/:schoolSlug/api/dashboard",   ...schoolApi, dashboardRoutes);
 
 export default router;

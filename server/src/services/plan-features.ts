@@ -2,6 +2,7 @@ import { db } from "../db";
 import { plans, tenantPlans } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { getTenantFeatureFlags } from "./tenant-features";
+import { isAddonFeatureAllowed } from "./tenant-addons";
 
 /** Plan-level feature flags from subscription tier (features_json on plans). */
 export async function getTenantPlanFeatures(tenantId: string): Promise<Record<string, boolean>> {
@@ -22,6 +23,7 @@ export async function getTenantPlanFeatures(tenantId: string): Promise<Record<st
 
 /** Tenant toggle AND plan must allow the feature (both default true if unset). */
 export async function isFeatureAllowedForTenant(tenantId: string, featureCode: string): Promise<boolean> {
+  if (!(await isAddonFeatureAllowed(tenantId, featureCode))) return false;
   const tenantFlags = await getTenantFeatureFlags(tenantId);
   const planFlags = await getTenantPlanFeatures(tenantId);
   if (tenantFlags[featureCode] === false) return false;
