@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api } from "../api/client";
+import { api, downloadPdf } from "../api/client";
 import { Loader2 } from "lucide-react";
 
 function formatMoney(cents: number | undefined) {
@@ -28,6 +28,14 @@ export const PortalDashboard: React.FC = () => {
       }
     })();
   }, [schoolSlug]);
+
+  const downloadReportCard = async (id: string) => {
+    await downloadPdf(`/s/${schoolSlug}/api/portal/pdf/report-card/${id}`);
+  };
+
+  const downloadReceipt = async (id: string) => {
+    await downloadPdf(`/s/${schoolSlug}/api/portal/pdf/receipt/${id}`);
+  };
 
   const logout = async () => {
     await api.post(`/s/${schoolSlug}/api/portal/logout`, {});
@@ -75,9 +83,23 @@ export const PortalDashboard: React.FC = () => {
             </PortalCard>
 
             <PortalCard title="Report cards">
-              <ul className="text-slate-300 text-sm space-y-1">
+              <ul className="text-slate-300 text-sm space-y-2">
                 {(data.reportCards ?? []).length === 0 ? <li>No published report cards yet.</li> : (data.reportCards ?? []).map((rc: any) => (
-                  <li key={rc.id}>Student {rc.studentId?.slice(0, 8)} — published {new Date(rc.createdAt).toLocaleDateString()}</li>
+                  <li key={rc.id} className="flex justify-between items-center gap-2">
+                    <span>Student {rc.studentId?.slice(0, 8)} — {new Date(rc.createdAt).toLocaleDateString()}</span>
+                    <button type="button" className="btn-ghost text-xs" onClick={() => downloadReportCard(rc.id)}>PDF</button>
+                  </li>
+                ))}
+              </ul>
+            </PortalCard>
+
+            <PortalCard title="Payment receipts">
+              <ul className="text-slate-300 text-sm space-y-2">
+                {(data.receipts ?? []).length === 0 ? <li>No receipts yet.</li> : (data.receipts ?? []).map((r: any) => (
+                  <li key={r.id} className="flex justify-between items-center gap-2">
+                    <span>{r.receiptNo} — {formatMoney(r.amount)}</span>
+                    <button type="button" className="btn-ghost text-xs" onClick={() => downloadReceipt(r.id)}>PDF</button>
+                  </li>
                 ))}
               </ul>
             </PortalCard>
@@ -106,7 +128,10 @@ export const PortalDashboard: React.FC = () => {
 
             {data.reportCard && (
               <PortalCard title="Report card">
-                <p className="text-slate-300 text-sm">Latest published report — {new Date(data.reportCard.createdAt).toLocaleDateString()}</p>
+                <div className="flex justify-between items-center">
+                  <p className="text-slate-300 text-sm">Latest published — {new Date(data.reportCard.createdAt).toLocaleDateString()}</p>
+                  <button type="button" className="btn-ghost text-xs" onClick={() => downloadReportCard(data.reportCard.id)}>Download PDF</button>
+                </div>
               </PortalCard>
             )}
 

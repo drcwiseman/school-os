@@ -228,6 +228,7 @@ See [README](../README.md#logging-in).
 | **3** | Payment void, mark/payroll soft delete, append-only `audit_logs`, relational platform feature flags |
 | **4** | Extended soft delete (assessments, fee structures, staff), plan ↔ feature enforcement, platform role permissions, staff UI for void/delete |
 | **5** | Tenant suspend/activate, staff user status, portal dashboard enrichment, students/users/fee-structure UI |
+| **6** | Portal PDF downloads (OBAC), settings↔feature sync, marks entry UI, audit actor names, sidebar portal link |
 
 ### Phase 4 details
 
@@ -276,3 +277,21 @@ See [README](../README.md#logging-in).
 - Students: remove (soft-delete)
 - Users & Roles: suspend / disable / remove
 - Finance: fee structures tab with remove
+
+### Phase 6 details
+
+**Portal PDFs (ownership-checked)**
+
+- `GET /s/:slug/api/portal/pdf/report-card/:id` — published card, `results_visible` + optional `fees_must_be_clear`
+- `GET /s/:slug/api/portal/pdf/receipt/:id` — receipt for linked child/student only
+
+**Settings ↔ relational features**
+
+- `PATCH /api/settings` syncs `featureFlagsJson` to `tenant_features` via `setTenantFeaturesBulk`
+- `GET /api/settings` merges relational flags into response
+
+**Staff UI**
+
+- Exams: marks entry tab, publish report cards, staff PDF export
+- Audit log: shows actor email (joined from `users`)
+- Sidebar: Parent portal link when `portal_enabled`

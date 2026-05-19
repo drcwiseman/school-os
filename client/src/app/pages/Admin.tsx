@@ -298,7 +298,7 @@ function AuditTable({ logs }: { logs: any[] }) {
               <td className="text-slate-400">{new Date(log.createdAt).toLocaleString()}</td>
               <td className="font-mono text-xs">{log.action}</td>
               <td>{log.entityType} {log.entityId?.slice(0, 8)}</td>
-              <td className="text-slate-400">{log.actorUserId?.slice(0, 8) ?? "—"}</td>
+              <td className="text-slate-400">{log.actorEmail ?? log.actorUserId?.slice(0, 8) ?? "—"}</td>
             </tr>
           ))}
         </tbody>

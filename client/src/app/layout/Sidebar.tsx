@@ -2,9 +2,9 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import {
-  LayoutDashboard, Users, UserCog, LogOut, Settings, GraduationCap, DollarSign,
+  LayoutDashboard, Users, UserCog,   LogOut, Settings, GraduationCap, DollarSign,
   CalendarCheck, BookOpen, ClipboardList, Briefcase, Wallet, Bus, Megaphone, FileBarChart,
-  ShieldAlert, HeartPulse, Library, Package, Home,
+  ShieldAlert, HeartPulse, Library, Package, Home, ExternalLink,
 } from "lucide-react";
 import { OPERATIONS_MODULES } from "../pages/operations-modules";
 
@@ -38,6 +38,7 @@ export const Sidebar: React.FC = () => {
       perm: m.perm,
     })),
     { name: "Messaging", path: `/s/${schoolSlug}/messaging`, icon: Megaphone, perm: "messaging.view", module: "messaging_enabled" as const },
+    { name: "Parent portal", path: `/s/${schoolSlug}/portal/login`, icon: ExternalLink, module: "portal_enabled" as const, external: true },
     { name: "Reports", path: `/s/${schoolSlug}/reports`, icon: FileBarChart, perm: "reports.view" },
     { name: "Users & Roles", path: `/s/${schoolSlug}/admin`, icon: Users, perm: "rbac.manage.roles" },
     { name: "Settings", path: `/s/${schoolSlug}/settings`, icon: Settings, perm: "settings.view" },
@@ -59,10 +60,13 @@ export const Sidebar: React.FC = () => {
         {links.map((item) => {
           const active = location.pathname.startsWith(item.path);
           const Icon = item.icon;
+          const external = "external" in item && item.external;
           return (
             <Link
               key={item.name}
               to={item.path}
+              target={external ? "_blank" : undefined}
+              rel={external ? "noopener noreferrer" : undefined}
               className={`nav-item ${active ? "active" : ""}`}
             >
               <Icon className="w-5 h-5" />

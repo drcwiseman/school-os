@@ -138,7 +138,26 @@ router.get("/audit-logs", ...guard, requirePermission("audit.view"), async (req:
     const tenant = (req as any).tenant;
     const q      = await paginationSchema.parseAsync(req.query);
     const { limit, offset } = paginate(q.page, q.limit);
-    const rows = await db.select().from(auditLogs).where(eq(auditLogs.tenantId, tenant.id)).orderBy(desc(auditLogs.createdAt)).limit(limit).offset(offset);
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        tenantId: auditLogs.tenantId,
+        actorUserId: auditLogs.actorUserId,
+        actorEmail: users.email,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        beforeJson: auditLogs.beforeJson,
+        afterJson: auditLogs.afterJson,
+        ip: auditLogs.ip,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.actorUserId, users.id))
+      .where(eq(auditLogs.tenantId, tenant.id))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
     res.json(paginatedResponse(rows, rows.length, q.page, q.limit));
   } catch (err) { next(err); }
 });

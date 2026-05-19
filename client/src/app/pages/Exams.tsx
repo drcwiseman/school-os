@@ -4,18 +4,22 @@ import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
+import { downloadPdf } from "../api/client";
 import { Loader2 } from "lucide-react";
 
 export const Exams: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const { hasPermission } = useAuth();
-  const [tab, setTab] = useState<"assessments" | "moderation" | "reports">("assessments");
+  const [tab, setTab] = useState<"assessments" | "marks" | "moderation" | "reports">("assessments");
   const [assessments, setAssessments] = useState<any[]>([]);
   const [moderation, setModeration] = useState<any[]>([]);
   const [reportCards, setReportCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", classId: "", subjectId: "" });
+  const [marksAssessmentId, setMarksAssessmentId] = useState("");
+  const [marksRows, setMarksRows] = useState<{ id?: string; studentId: string; score: string; status?: string }[]>([]);
+  const [marksLoading, setMarksLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -38,6 +42,13 @@ export const Exams: React.FC = () => {
   };
 
   useEffect(() => { load(); }, [schoolSlug, tab]);
+
+  useEffect(() => {
+    if (tab === "marks" && assessments.length === 0) {
+      api.get(`/s/${schoolSlug}/api/exams/assessments`).then((res) => setAssessments(res.data ?? [])).catch(() => {});
+    }
+    if (tab === "marks" && marksAssessmentId) loadMarks(marksAssessmentId);
+  }, [tab, marksAssessmentId]);
 
   const createAssessment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +82,66 @@ export const Exams: React.FC = () => {
     }
   };
 
+  const loadMarks = async (assessmentId: string) => {
+    if (!assessmentId) return;
+    setMarksLoading(true);
+    try {
+      const res = await api.get(`/s/${schoolSlug}/api/exams/assessments/${assessmentId}/marks`);
+      setMarksRows((res.data?.marks ?? []).map((m: any) => ({
+        id: m.id,
+        studentId: m.studentId,
+        score: m.score != null ? String(m.score) : "",
+        status: m.status,
+      })));
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setMarksLoading(false);
+    }
+  };
+
+  const saveMarks = async () => {
+    if (!marksAssessmentId) return toast("Select an assessment", "error");
+    try {
+      await api.put(`/s/${schoolSlug}/api/exams/assessments/${marksAssessmentId}/marks`, {
+        entries: marksRows.map((r) => ({
+          studentId: r.studentId,
+          score: r.score === "" ? null : Number(r.score),
+        })),
+      });
+      toast("Marks saved", "success");
+      loadMarks(marksAssessmentId);
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
+  const addMarkRow = () => {
+    const studentId = window.prompt("Student UUID");
+    if (!studentId) return;
+    setMarksRows([...marksRows, { studentId, score: "" }]);
+  };
+
+  const removeMark = async (markId: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/exams/marks/${markId}`);
+      toast("Mark removed", "success");
+      loadMarks(marksAssessmentId);
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
+  const publishReport = async (id: string) => {
+    try {
+      await api.patch(`/s/${schoolSlug}/api/exams/report-cards/${id}/publish`, {});
+      toast("Report card published to portal", "success");
+      load();
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
   const approve = async (id: string) => {
     try {
       await api.post(`/s/${schoolSlug}/api/exams/assessments/${id}/approve`, {});
@@ -91,7 +162,7 @@ export const Exams: React.FC = () => {
       </div>
 
       <div className="flex gap-2">
-        {(["assessments", "moderation", "reports"] as const).map((t) => (
+        {(["assessments", "marks", "moderation", "reports"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm capitalize ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"}`}>
             {t}
           </button>
@@ -112,7 +183,8 @@ export const Exams: React.FC = () => {
             { k: "maxScore", l: "Max" },
           ]} actions={(row) => (
             <div className="flex gap-2">
-              <button type="button" className="btn-ghost text-xs" onClick={() => submitMarks(row.id)}>Submit marks</button>
+              <button type="button" className="btn-ghost text-xs" onClick={() => { setMarksAssessmentId(row.id); setTab("marks"); }}>Enter marks</button>
+              <button type="button" className="btn-ghost text-xs" onClick={() => submitMarks(row.id)}>Submit</button>
               {hasPermission("exams.moderate") && (
                 <ConfirmAction
                   label="Remove"
@@ -123,6 +195,66 @@ export const Exams: React.FC = () => {
             </div>
           )} />
         </>
+      )}
+
+      {tab === "marks" && (
+        <div className="card p-4 space-y-4">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[200px]">
+              <label className="label">Assessment</label>
+              <select
+                className="input"
+                value={marksAssessmentId}
+                onChange={(e) => { setMarksAssessmentId(e.target.value); loadMarks(e.target.value); }}
+              >
+                <option value="">Select assessment…</option>
+                {assessments.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+            {hasPermission("exams.enter_marks") && (
+              <>
+                <button type="button" className="btn-ghost" onClick={addMarkRow}>Add row</button>
+                <button type="button" className="btn-primary" onClick={saveMarks}>Save marks</button>
+              </>
+            )}
+          </div>
+          {marksLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary-500" /></div>
+          ) : (
+            <table className="table">
+              <thead><tr><th>Student</th><th>Score</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                {marksRows.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-6 text-slate-400">No marks — select assessment or add rows.</td></tr>
+                ) : marksRows.map((r, i) => (
+                  <tr key={r.id ?? i}>
+                    <td className="font-mono text-xs">{r.studentId.slice(0, 12)}…</td>
+                    <td>
+                      <input
+                        className="input w-24"
+                        type="number"
+                        min={0}
+                        value={r.score}
+                        disabled={!hasPermission("exams.enter_marks")}
+                        onChange={(e) => {
+                          const next = [...marksRows];
+                          next[i] = { ...r, score: e.target.value };
+                          setMarksRows(next);
+                        }}
+                      />
+                    </td>
+                    <td className="capitalize text-sm">{r.status ?? "draft"}</td>
+                    <td>
+                      {r.id && hasPermission("exams.moderate") && (
+                        <ConfirmAction label="Remove" confirmMessage="Remove this mark?" onConfirm={() => removeMark(r.id!)} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
 
       {tab === "moderation" && (
@@ -138,7 +270,14 @@ export const Exams: React.FC = () => {
         <DataTable loading={loading} rows={reportCards} cols={[
           { k: "studentId", l: "Student" },
           { k: "published", l: "Published", r: (x) => x.published ? "Yes" : "No" },
-        ]} />
+        ]} actions={(row) => (
+          <div className="flex gap-2">
+            {!row.published && hasPermission("exams.publish") && (
+              <button type="button" className="btn-ghost text-xs" onClick={() => publishReport(row.id)}>Publish</button>
+            )}
+            <button type="button" className="btn-ghost text-xs" onClick={() => downloadPdf(`/s/${schoolSlug}/api/reports/pdf/report-card/${row.id}`)}>PDF</button>
+          </div>
+        )} />
       )}
     </div>
   );

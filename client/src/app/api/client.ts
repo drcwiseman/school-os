@@ -33,6 +33,10 @@ class ApiClient {
     return this.request(endpoint, { ...options, method: "PATCH", body: JSON.stringify(body) });
   }
 
+  put(endpoint: string, body?: any, options?: RequestInit) {
+    return this.request(endpoint, { ...options, method: "PUT", body: JSON.stringify(body) });
+  }
+
   delete(endpoint: string, options?: RequestInit) {
     return this.request(endpoint, { ...options, method: "DELETE" });
   }

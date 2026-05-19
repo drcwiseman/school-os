@@ -2,9 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import {
-  parentAccounts, studentAccounts, students, invoices,
+  parentAccounts, studentAccounts, students, invoices, payments, receipts,
   reportCards, announcements, assignments, attendanceRecords, attendanceSessions,
 } from "../db/schema";
+import { generateReportCardPdf, generateReceiptPdf } from "../services/pdf";
+import { assertPortalCanAccessStudent } from "../services/portal-access";
 import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import {
   requirePortalAuth,
@@ -21,6 +23,12 @@ import { isFeatureAllowedForTenant } from "../services/plan-features";
 import { ForbiddenError } from "../middleware/error";
 
 const router = Router();
+
+function sendPdf(res: any, bytes: Uint8Array, filename: string) {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(Buffer.from(bytes));
+}
 
 router.post("/login", validate({ body: z.object({ email: z.string().email(), password: z.string() }) }), async (req, res, next) => {
   try {
@@ -112,8 +120,26 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
           .orderBy(desc(attendanceSessions.date))
           .limit(30)
         : [];
+      const receiptRows = studentIds.length
+        ? await db.select({
+          id: receipts.id,
+          receiptNo: receipts.receiptNo,
+          amount: receipts.amount,
+          issuedAt: receipts.issuedAt,
+          studentId: payments.studentId,
+        })
+          .from(receipts)
+          .innerJoin(payments, eq(receipts.paymentId, payments.id))
+          .where(and(
+            eq(receipts.tenantId, tenant.id),
+            inArray(payments.studentId, studentIds),
+            isNull(payments.deletedAt),
+          ))
+          .orderBy(desc(receipts.issuedAt))
+          .limit(20)
+        : [];
       const msgs = await db.select().from(announcements).where(and(eq(announcements.tenantId, tenant.id), eq(announcements.published, true))).orderBy(desc(announcements.createdAt)).limit(10);
-      res.json({ success: true, data: { children, statements, reportCards: publishedCards, attendance, announcements: msgs } });
+      res.json({ success: true, data: { children, statements, receipts: receiptRows, reportCards: publishedCards, attendance, announcements: msgs } });
     } else {
       const studentId = principal.account.studentId;
       const [student] = await db.select().from(students).where(and(eq(students.id, studentId), eq(students.tenantId, tenant.id))).limit(1);
@@ -135,6 +161,63 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
         .limit(30);
       res.json({ success: true, data: { student, assignments: classAssignments, reportCard, attendance } });
     }
+  } catch (e) { next(e); }
+});
+
+router.get("/pdf/report-card/:id", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    const flags = await getTenantFeatureFlags(tenant.id);
+    if (flags.results_visible === false) throw new ForbiddenError("Results are not available on the portal");
+
+    const [rc] = await db.select().from(reportCards).where(and(
+      eq(reportCards.id, req.params.id),
+      eq(reportCards.tenantId, tenant.id),
+      eq(reportCards.published, true),
+    )).limit(1);
+    if (!rc) throw new NotFoundError("Report card not found");
+
+    await assertPortalCanAccessStudent(principal, tenant.id, rc.studentId);
+
+    if (flags.fees_must_be_clear === true) {
+      const studentInvoices = await db.select().from(invoices).where(and(
+        eq(invoices.tenantId, tenant.id),
+        eq(invoices.studentId, rc.studentId),
+        isNull(invoices.deletedAt),
+      ));
+      if (studentInvoices.some((i) => i.status !== "paid")) {
+        throw new ForbiddenError("Outstanding fees must be cleared before downloading results");
+      }
+    }
+
+    const bytes = await generateReportCardPdf(tenant.id, rc.id);
+    sendPdf(res, bytes, `report-card-${rc.id.slice(0, 8)}.pdf`);
+  } catch (e) { next(e); }
+});
+
+router.get("/pdf/receipt/:id", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+
+    const [rec] = await db.select().from(receipts).where(and(
+      eq(receipts.id, req.params.id),
+      eq(receipts.tenantId, tenant.id),
+    )).limit(1);
+    if (!rec) throw new NotFoundError("Receipt not found");
+
+    const [payment] = await db.select().from(payments).where(and(
+      eq(payments.id, rec.paymentId),
+      eq(payments.tenantId, tenant.id),
+      isNull(payments.deletedAt),
+    )).limit(1);
+    if (!payment?.studentId) throw new NotFoundError("Payment not found");
+
+    await assertPortalCanAccessStudent(principal, tenant.id, payment.studentId);
+
+    const bytes = await generateReceiptPdf(tenant.id, rec.id);
+    sendPdf(res, bytes, `receipt-${rec.receiptNo ?? rec.id.slice(0, 8)}.pdf`);
   } catch (e) { next(e); }
 });
 

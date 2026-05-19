@@ -9,6 +9,7 @@ import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { createAuditLog } from "../services/audit";
 import { NotFoundError } from "../middleware/error";
+import { getTenantFeatureFlags, setTenantFeaturesBulk } from "../services/tenant-features";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
@@ -18,7 +19,14 @@ router.get("/", ...guard, requirePermission("settings.view"), async (req, res, n
     const tenant = (req as any).tenant;
     const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
     if (!settings) throw new NotFoundError("Settings not found");
-    res.json({ success: true, data: settings });
+    const flags = await getTenantFeatureFlags(tenant.id);
+    res.json({
+      success: true,
+      data: {
+        ...settings,
+        featureFlagsJson: { ...(settings.featureFlagsJson as object ?? {}), ...flags },
+      },
+    });
   } catch (e) { next(e); }
 });
 
@@ -37,8 +45,17 @@ router.patch("/", ...guard, requirePermission("settings.manage"),
       const user = (req as any).user;
       const [before] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
       if (!before) throw new NotFoundError("Settings not found");
+      const patch = { ...req.body };
+      if (patch.featureFlagsJson) {
+        const updates = Object.entries(patch.featureFlagsJson).map(([code, enabled]) => ({
+          code,
+          enabled: Boolean(enabled),
+        }));
+        const merged = await setTenantFeaturesBulk(tenant.id, updates);
+        patch.featureFlagsJson = merged;
+      }
       const [updated] = await db.update(tenantSettings)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...patch, updatedAt: new Date() })
         .where(eq(tenantSettings.tenantId, tenant.id))
         .returning();
       await createAuditLog({
