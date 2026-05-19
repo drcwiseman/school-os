@@ -2,14 +2,27 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { staff, staffContracts, leaveRequests } from "../db/schema";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, sql, ne } from "drizzle-orm";
 import { softDeleteStaffMember } from "../services/soft-delete";
 import { createAuditLog } from "../services/audit";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
-import { NotFoundError } from "../middleware/error";
+import { NotFoundError, BadRequestError } from "../middleware/error";
+
+async function findOverlappingLeave(tenantId: string, staffId: string, start: Date, end: Date, excludeId?: string) {
+  const conditions = [
+    eq(leaveRequests.tenantId, tenantId),
+    eq(leaveRequests.staffId, staffId),
+    inArray(leaveRequests.status, ["pending", "approved"]),
+    sql`${leaveRequests.startDate} <= ${end}`,
+    sql`${leaveRequests.endDate} >= ${start}`,
+  ];
+  if (excludeId) conditions.push(ne(leaveRequests.id, excludeId));
+  return db.select({ id: leaveRequests.id, startDate: leaveRequests.startDate, endDate: leaveRequests.endDate, status: leaveRequests.status })
+    .from(leaveRequests).where(and(...conditions)).limit(5);
+}
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
@@ -110,6 +123,45 @@ router.post("/staff/:id/contracts", ...guard, requirePermission("hr.manage"),
   }
 );
 
+router.patch("/staff/:staffId/contracts/:contractId", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({
+    endDate: z.string().nullable().optional(),
+    salary: z.number().int().optional(),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const updates: Record<string, unknown> = {};
+      if (req.body.salary !== undefined) updates.salary = req.body.salary;
+      if (req.body.endDate !== undefined) {
+        updates.endDate = req.body.endDate === null ? null : new Date(req.body.endDate);
+      }
+      const [row] = await db.update(staffContracts).set(updates).where(and(
+        eq(staffContracts.id, req.params.contractId),
+        eq(staffContracts.staffId, req.params.staffId),
+        eq(staffContracts.tenantId, tenant.id),
+      )).returning();
+      if (!row) throw new NotFoundError("Contract not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/leave/check", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { staffId, startDate, endDate, excludeId } = req.query;
+    if (typeof staffId !== "string" || typeof startDate !== "string" || typeof endDate !== "string") {
+      throw new BadRequestError("staffId, startDate, and endDate are required");
+    }
+    const overlaps = await findOverlappingLeave(
+      tenant.id, staffId, new Date(startDate), new Date(endDate),
+      typeof excludeId === "string" ? excludeId : undefined,
+    );
+    res.json({ success: true, data: { hasConflict: overlaps.length > 0, overlaps } });
+  } catch (e) { next(e); }
+});
+
 router.get("/leave", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -142,9 +194,14 @@ router.post("/leave", ...guard, requirePermission("hr.view"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      const start = new Date(req.body.startDate);
+      const end = new Date(req.body.endDate);
+      if (end < start) throw new BadRequestError("End date must be on or after start date");
+      const overlaps = await findOverlappingLeave(tenant.id, req.body.staffId, start, end);
+      if (overlaps.length) throw new BadRequestError("Leave overlaps an existing pending or approved request");
       const [row] = await db.insert(leaveRequests).values({
         tenantId: tenant.id, staffId: req.body.staffId,
-        startDate: new Date(req.body.startDate), endDate: new Date(req.body.endDate), reason: req.body.reason,
+        startDate: start, endDate: end, reason: req.body.reason,
       }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
@@ -156,8 +213,19 @@ router.patch("/leave/:id", ...guard, requirePermission("hr.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const [row] = await db.update(leaveRequests).set({ status: req.body.status }).where(and(eq(leaveRequests.id, req.params.id), eq(leaveRequests.tenantId, tenant.id))).returning();
-      if (!row) throw new NotFoundError("Leave request not found");
+      const [existing] = await db.select().from(leaveRequests).where(and(
+        eq(leaveRequests.id, req.params.id), eq(leaveRequests.tenantId, tenant.id),
+      )).limit(1);
+      if (!existing) throw new NotFoundError("Leave request not found");
+      if (req.body.status === "approved") {
+        const overlaps = await findOverlappingLeave(
+          tenant.id, existing.staffId, existing.startDate, existing.endDate, existing.id,
+        );
+        if (overlaps.length) throw new BadRequestError("Cannot approve: overlaps another approved or pending leave");
+      }
+      const [row] = await db.update(leaveRequests).set({ status: req.body.status }).where(and(
+        eq(leaveRequests.id, req.params.id), eq(leaveRequests.tenantId, tenant.id),
+      )).returning();
       res.json({ success: true, data: row });
     } catch (e) { next(e); }
   }

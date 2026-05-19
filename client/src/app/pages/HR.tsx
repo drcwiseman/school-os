@@ -132,10 +132,12 @@ type LeaveRow = {
 
 function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: string; hasPermission: (p: string) => boolean; toast: (m: string, t?: "success" | "error") => void }) {
   const [rows, setRows] = useState<LeaveRow[]>([]);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ staffId: "", startDate: "", endDate: "", reason: "" });
+  const [conflictWarning, setConflictWarning] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -150,8 +152,31 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
 
   useEffect(() => { load(); }, [schoolSlug]);
 
+  useEffect(() => {
+    api.get(`/s/${schoolSlug}/api/hr/staff`).then((r) => setStaffList(r.data ?? [])).catch(() => {});
+  }, [schoolSlug]);
+
+  useEffect(() => {
+    if (!form.staffId || !form.startDate || !form.endDate) {
+      setConflictWarning(false);
+      return;
+    }
+    const params = new URLSearchParams({
+      staffId: form.staffId,
+      startDate: form.startDate,
+      endDate: form.endDate,
+    });
+    api.get(`/s/${schoolSlug}/api/hr/leave/check?${params}`)
+      .then((r) => setConflictWarning(!!r.data?.hasConflict))
+      .catch(() => setConflictWarning(false));
+  }, [form.staffId, form.startDate, form.endDate, schoolSlug]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (conflictWarning) {
+      toast("Leave overlaps an existing request", "error");
+      return;
+    }
     try {
       await api.post(`/s/${schoolSlug}/api/hr/leave`, form);
       toast("Leave request submitted", "success");
@@ -187,14 +212,34 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
         )}
       </div>
       {showForm && (
-        <form onSubmit={submit} className="card p-4 grid md:grid-cols-4 gap-3">
-          <input className="input" required placeholder="Staff UUID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} />
-          <input className="input" type="date" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-          <input className="input" type="date" required value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-          <input className="input" placeholder="Reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
-          <div className="md:col-span-4">
-            <button type="submit" className="btn-primary">Submit</button>
+        <form onSubmit={submit} className="card p-4 space-y-3">
+          <div className="grid md:grid-cols-4 gap-3">
+            <div>
+              <label className="label">Staff</label>
+              <select className="input" required value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })}>
+                <option value="">Select staff…</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.employeeNo} — {s.firstName} {s.lastName}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Start</label>
+              <input className="input" type="date" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">End</label>
+              <input className="input" type="date" required value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Reason</label>
+              <input className="input" placeholder="Optional" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+            </div>
           </div>
+          {conflictWarning && (
+            <p className="text-sm text-amber-400">Warning: dates overlap another pending or approved leave for this staff member.</p>
+          )}
+          <button type="submit" className="btn-primary">Submit</button>
         </form>
       )}
       {viewMode === "calendar" ? (
@@ -248,6 +293,7 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
   const [selectedStaff, setSelectedStaff] = useState("");
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [form, setForm] = useState({ salary: "", startDate: "", endDate: "" });
+  const [closeDates, setCloseDates] = useState<Record<string, string>>({});
 
   useEffect(() => {
     api.get(`/s/${schoolSlug}/api/hr/staff`).then((r) => setStaffList(r.data ?? [])).catch(() => {});
@@ -276,6 +322,18 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
     } catch (err: any) { toast(err.message, "error"); }
   };
 
+  const closeContract = async (contractId: string) => {
+    if (!selectedStaff) return;
+    const endDate = closeDates[contractId];
+    if (!endDate) { toast("Pick an end date", "error"); return; }
+    try {
+      await api.patch(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts/${contractId}`, { endDate });
+      toast("Contract updated", "success");
+      const r = await api.get(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts`);
+      setContracts(r.data ?? []);
+    } catch (err: any) { toast(err.message, "error"); }
+  };
+
   if (!hasPermission("hr.view")) return null;
 
   return (
@@ -296,9 +354,22 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
             {contracts.length === 0 ? (
               <li className="text-slate-500">No contracts on file.</li>
             ) : contracts.map((c) => (
-              <li key={c.id}>
-                ${(c.salary / 100).toFixed(2)} / yr — {new Date(c.startDate).toLocaleDateString()}
-                {c.endDate ? ` – ${new Date(c.endDate).toLocaleDateString()}` : " (open)"}
+              <li key={c.id} className="flex flex-wrap justify-between items-center gap-2 py-1">
+                <span>
+                  ${(c.salary / 100).toFixed(2)} / yr — {new Date(c.startDate).toLocaleDateString()}
+                  {c.endDate ? ` – ${new Date(c.endDate).toLocaleDateString()}` : " (open)"}
+                </span>
+                {!c.endDate && hasPermission("hr.manage") && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      className="input text-xs w-36"
+                      type="date"
+                      value={closeDates[c.id] ?? ""}
+                      onChange={(e) => setCloseDates({ ...closeDates, [c.id]: e.target.value })}
+                    />
+                    <button type="button" className="btn-ghost text-xs" onClick={() => closeContract(c.id)}>Set end date</button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -325,9 +396,15 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
   );
 }
 
+function hasStaffOverlap(leaves: LeaveRow[]) {
+  const ids = leaves.map((l) => l.staffId);
+  return new Set(ids).size < ids.length;
+}
+
 function LeaveCalendar({ rows }: { rows: LeaveRow[] }) {
   const [month, setMonth] = useState(() => new Date());
   const approved = rows.filter((r) => r.status === "approved");
+  const active = rows.filter((r) => r.status === "approved" || r.status === "pending");
   const year = month.getFullYear();
   const monthIdx = month.getMonth();
   const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
@@ -345,6 +422,16 @@ function LeaveCalendar({ rows }: { rows: LeaveRow[] }) {
     });
   };
 
+  const conflictsOnDay = (day: number) => {
+    const d = dateStr(day);
+    const dayActive = active.filter((l) => {
+      const s = l.startDate.slice(0, 10);
+      const e = l.endDate.slice(0, 10);
+      return d >= s && d <= e;
+    });
+    return hasStaffOverlap(dayActive);
+  };
+
   const prev = () => setMonth(new Date(year, monthIdx - 1, 1));
   const next = () => setMonth(new Date(year, monthIdx + 1, 1));
 
@@ -357,7 +444,7 @@ function LeaveCalendar({ rows }: { rows: LeaveRow[] }) {
         <h3 className="font-semibold text-white">{month.toLocaleString("default", { month: "long", year: "numeric" })}</h3>
         <button type="button" className="btn-ghost text-sm" onClick={next}>Next →</button>
       </div>
-      <p className="text-xs text-slate-500">Approved leave only</p>
+      <p className="text-xs text-slate-500">Approved leave · amber border = overlapping requests for same staff</p>
       <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d}>{d}</div>)}
       </div>
@@ -365,8 +452,11 @@ function LeaveCalendar({ rows }: { rows: LeaveRow[] }) {
         {cells.map((day, i) => {
           if (day === null) return <div key={`e-${i}`} className="min-h-[72px]" />;
           const leaves = onLeave(day);
+          const conflict = conflictsOnDay(day);
           return (
-            <div key={day} className={`min-h-[72px] rounded border p-1 text-left ${leaves.length ? "border-emerald-500/40 bg-emerald-500/10" : "border-slate-800"}`}>
+            <div key={day} className={`min-h-[72px] rounded border p-1 text-left ${
+              conflict ? "border-amber-500/60 bg-amber-500/10" : leaves.length ? "border-emerald-500/40 bg-emerald-500/10" : "border-slate-800"
+            }`}>
               <span className="text-xs text-slate-400">{day}</span>
               {leaves.map((l) => (
                 <p key={l.id} className="text-[10px] text-emerald-300 truncate mt-0.5" title={`${l.staffFirstName} ${l.staffLastName}`}>

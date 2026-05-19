@@ -21,6 +21,37 @@ router.get("/runs", ...guard, requirePermission("payroll.view"), async (req, res
   } catch (e) { next(e); }
 });
 
+router.get("/runs/:id", ...guard, requirePermission("payroll.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [run] = await db.select().from(payrollRuns).where(and(
+      eq(payrollRuns.id, req.params.id),
+      eq(payrollRuns.tenantId, tenant.id),
+      isNull(payrollRuns.deletedAt),
+    )).limit(1);
+    if (!run) throw new NotFoundError("Payroll run not found");
+    const items = await db
+      .select({
+        id: payrollItems.id,
+        staffId: payrollItems.staffId,
+        grossPay: payrollItems.grossPay,
+        deductions: payrollItems.deductions,
+        netPay: payrollItems.netPay,
+        employeeNo: staff.employeeNo,
+        firstName: staff.firstName,
+        lastName: staff.lastName,
+      })
+      .from(payrollItems)
+      .innerJoin(staff, eq(payrollItems.staffId, staff.id))
+      .where(and(
+        eq(payrollItems.payrollRunId, run.id),
+        eq(payrollItems.tenantId, tenant.id),
+        isNull(payrollItems.deletedAt),
+      ));
+    res.json({ success: true, data: { run, items } });
+  } catch (e) { next(e); }
+});
+
 router.post("/runs", ...guard, requirePermission("payroll.run"),
   validate({ body: z.object({ period: z.string() }) }),
   async (req, res, next) => {
@@ -78,7 +109,21 @@ router.delete("/runs/:id", ...guard, requirePermission("payroll.run"), async (re
 router.get("/payslips", ...guard, requirePermission("payroll.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(payslips).where(eq(payslips.tenantId, tenant.id)).orderBy(desc(payslips.issuedAt)) });
+    const rows = await db
+      .select({
+        id: payslips.id,
+        staffId: payslips.staffId,
+        issuedAt: payslips.issuedAt,
+        dataJson: payslips.dataJson,
+        employeeNo: staff.employeeNo,
+        firstName: staff.firstName,
+        lastName: staff.lastName,
+      })
+      .from(payslips)
+      .innerJoin(staff, eq(payslips.staffId, staff.id))
+      .where(eq(payslips.tenantId, tenant.id))
+      .orderBy(desc(payslips.issuedAt));
+    res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
 

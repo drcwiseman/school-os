@@ -236,6 +236,7 @@ See [README](../README.md#logging-in).
 | **11** | Applicant timeline, student documents, parent portal linking, HR CSV import/export |
 | **12** | Leave approve/reject, student portal accounts, applicant documents, campaign audience picker |
 | **13** | Leave calendar, announcement audience + publish, applicant doc verify/reject, staff contracts UI |
+| **14** | Payroll run detail, announcement edit/delete, contract end-date, leave conflict checks |
 
 ### Phase 4 details
 
@@ -430,3 +431,27 @@ See [README](../README.md#logging-in).
 
 - `PATCH /admissions/:id/documents/:docId` — set status `pending` | `verified` | `rejected`
 - Verify / Reject actions in applicant Timeline panel
+
+### Phase 14 details
+
+**Payroll**
+
+- `GET /payroll/runs/:id` — run with line items (staff names, gross/deductions/net in cents)
+- `GET /payroll/payslips` — joined with staff; UI expands draft runs and shows payslip amounts
+
+**Messaging announcements**
+
+- `PATCH /announcements/:id` — also `title`, `body`
+- `DELETE /announcements/:id`
+- UI: edit inline, delete
+
+**HR contracts**
+
+- `PATCH /hr/staff/:staffId/contracts/:contractId` — `endDate`, optional `salary`
+- UI: set end date on open contracts
+
+**HR leave conflicts**
+
+- `GET /hr/leave/check?staffId&startDate&endDate` — overlap detection
+- POST leave and PATCH approve reject overlapping pending/approved leave
+- Calendar highlights days with same-staff overlaps; leave form uses staff picker + live warning

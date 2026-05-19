@@ -16,6 +16,8 @@ export const Messaging: React.FC = () => {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [announcementAudience, setAnnouncementAudience] = useState<"all" | "parents" | "staff">("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", body: "", audience: "all" as "all" | "parents" | "staff" });
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     audience: "parents",
@@ -61,6 +63,30 @@ export const Messaging: React.FC = () => {
     try {
       await api.patch(`/s/${schoolSlug}/api/messaging/announcements/${id}`, { published: true });
       toast("Published to portal", "success");
+      load();
+    } catch (err: any) { toast(err.message, "error"); }
+  };
+
+  const startEdit = (a: { id: string; title: string; body: string; audience: string }) => {
+    setEditingId(a.id);
+    setEditForm({ title: a.title, body: a.body, audience: a.audience as "all" | "parents" | "staff" });
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    try {
+      await api.patch(`/s/${schoolSlug}/api/messaging/announcements/${editingId}`, editForm);
+      toast("Announcement updated", "success");
+      setEditingId(null);
+      load();
+    } catch (err: any) { toast(err.message, "error"); }
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/messaging/announcements/${id}`);
+      toast("Announcement deleted", "success");
+      if (editingId === id) setEditingId(null);
       load();
     } catch (err: any) { toast(err.message, "error"); }
   };
@@ -142,12 +168,36 @@ export const Messaging: React.FC = () => {
                           {a.published ? "published" : "draft"} · {a.audience}
                         </span>
                       </div>
-                      <p className="text-slate-500 mt-1">{a.body.slice(0, 80)}</p>
-                      {!a.published && (
-                        <button type="button" className="btn-ghost text-xs mt-2 text-primary-400" onClick={() => publishAnnouncement(a.id)}>
-                          Publish to portal
-                        </button>
+                      {editingId === a.id ? (
+                        <div className="mt-2 space-y-2">
+                          <input className="input text-sm" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+                          <textarea className="input text-sm min-h-[60px]" value={editForm.body} onChange={(e) => setEditForm({ ...editForm, body: e.target.value })} />
+                          <select className="input text-sm" value={editForm.audience} onChange={(e) => setEditForm({ ...editForm, audience: e.target.value as "all" | "parents" | "staff" })}>
+                            <option value="all">Everyone</option>
+                            <option value="parents">Parents</option>
+                            <option value="staff">Staff</option>
+                          </select>
+                          <div className="flex gap-2">
+                            <button type="button" className="btn-primary text-xs" onClick={saveEdit}>Save</button>
+                            <button type="button" className="btn-ghost text-xs" onClick={() => setEditingId(null)}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-slate-500 mt-1">{a.body.slice(0, 80)}</p>
                       )}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {!a.published && editingId !== a.id && (
+                          <button type="button" className="btn-ghost text-xs text-primary-400" onClick={() => publishAnnouncement(a.id)}>
+                            Publish to portal
+                          </button>
+                        )}
+                        {editingId !== a.id && (
+                          <>
+                            <button type="button" className="btn-ghost text-xs" onClick={() => startEdit(a)}>Edit</button>
+                            <button type="button" className="btn-ghost text-xs text-red-400" onClick={() => deleteAnnouncement(a.id)}>Delete</button>
+                          </>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>

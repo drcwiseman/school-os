@@ -65,6 +65,8 @@ router.post("/announcements", ...guard, requirePermission("messaging.send"),
 
 router.patch("/announcements/:id", ...guard, requirePermission("messaging.send"),
   validate({ body: z.object({
+    title: z.string().optional(),
+    body: z.string().optional(),
     published: z.boolean().optional(),
     audience: z.enum(["all", "parents", "staff"]).optional(),
   }) }),
@@ -72,6 +74,8 @@ router.patch("/announcements/:id", ...guard, requirePermission("messaging.send")
     try {
       const tenant = (req as any).tenant;
       const updates: Record<string, unknown> = {};
+      if (req.body.title !== undefined) updates.title = req.body.title;
+      if (req.body.body !== undefined) updates.body = req.body.body;
       if (req.body.published !== undefined) updates.published = req.body.published;
       if (req.body.audience !== undefined) updates.audience = req.body.audience;
       const [row] = await db.update(announcements).set(updates).where(and(
@@ -83,6 +87,18 @@ router.patch("/announcements/:id", ...guard, requirePermission("messaging.send")
     } catch (e) { next(e); }
   }
 );
+
+router.delete("/announcements/:id", ...guard, requirePermission("messaging.send"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(announcements).where(and(
+      eq(announcements.id, req.params.id),
+      eq(announcements.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Announcement not found");
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
 
 router.get("/campaigns", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
   try {
