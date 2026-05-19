@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
-import { Search, Plus, Filter, MoreVertical, Loader2 } from "lucide-react";
+import { ConfirmAction } from "../components/ConfirmAction";
+import { useAuth } from "../state/AuthContext";
+import { useToast } from "../components/Toast";
+import { Search, Plus, Filter, Loader2 } from "lucide-react";
 
 interface Student {
   id: string;
@@ -13,6 +16,8 @@ interface Student {
 
 export const StudentsList: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
+  const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -30,6 +35,16 @@ export const StudentsList: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const removeStudent = async (id: string, name: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/students/${id}`);
+      toast(`${name} removed`, "success");
+      fetchStudents();
+    } catch (err: any) {
+      toast(err.message, "error");
     }
   };
 
@@ -100,9 +115,13 @@ export const StudentsList: React.FC = () => {
                     <td className="font-medium text-white">{s.firstName} {s.lastName}</td>
                     <td>{getStatusBadge(s.status)}</td>
                     <td className="text-right">
-                      <button className="p-1 hover:bg-slate-700 rounded transition-colors text-slate-400 hover:text-white">
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
+                      {hasPermission("students.delete") && (
+                        <ConfirmAction
+                          label="Remove"
+                          confirmMessage={`Remove student ${s.firstName} ${s.lastName}?`}
+                          onConfirm={() => removeStudent(s.id, `${s.firstName} ${s.lastName}`)}
+                        />
+                      )}
                     </td>
                   </tr>
                 ))

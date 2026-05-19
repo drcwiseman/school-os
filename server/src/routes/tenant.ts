@@ -98,6 +98,24 @@ router.post("/users/:userId/roles", ...guard, requirePermission("rbac.manage.rol
   }
 );
 
+router.patch("/users/:userId/status", ...guard, requirePermission("settings.users.manage"),
+  validate({ body: z.object({ status: z.enum(["active", "suspended", "disabled", "inactive"]) }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const actor = (req as any).user;
+      if (actor.id === req.params.userId && req.body.status !== "active") {
+        throw new ConflictError("Cannot suspend or disable your own account");
+      }
+      const [before] = await db.select().from(users).where(and(eq(users.id, req.params.userId), eq(users.tenantId, tenant.id), isNull(users.deletedAt))).limit(1);
+      if (!before) throw new NotFoundError("User not found");
+      const [updated] = await db.update(users).set({ status: req.body.status, updatedAt: new Date() }).where(eq(users.id, before.id)).returning();
+      await createAuditLog({ tenantId: tenant.id, actorUserId: actor.id, action: "user.status.update", entityType: "user", entityId: before.id, before, after: updated, ip: req.ip });
+      res.json({ success: true, data: updated });
+    } catch (err) { next(err); }
+  },
+);
+
 router.delete("/users/:userId", ...guard, requirePermission("settings.users.manage"),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

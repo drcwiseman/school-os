@@ -3,10 +3,11 @@ import { ForbiddenError } from "../middleware/error";
 
 /** Platform operator capabilities — separate from tenant RBAC. */
 export const PLATFORM_ROLE_PERMISSIONS: Record<string, string[]> = {
-  super_admin: ["*", "tenants.provision"],
+  super_admin: ["*", "tenants.provision", "tenants.suspend"],
   support: [
     "tenants.read",
     "tenants.features",
+    "tenants.suspend",
     "stats.read",
     "plans.read",
   ],

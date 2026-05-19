@@ -3,9 +3,9 @@ import { z } from "zod";
 import { db } from "../db";
 import {
   parentAccounts, studentAccounts, students, invoices,
-  reportCards, announcements, assignments,
+  reportCards, announcements, assignments, attendanceRecords, attendanceSessions,
 } from "../db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import {
   requirePortalAuth,
   createParentSession,
@@ -90,14 +90,30 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
       const studentIds = children.map((c) => c.id);
       let statements: typeof invoices.$inferSelect[] = [];
       if (studentIds.length) {
-        statements = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenant.id), inArray(invoices.studentId, studentIds)));
+        statements = await db.select().from(invoices).where(and(
+          eq(invoices.tenantId, tenant.id),
+          inArray(invoices.studentId, studentIds),
+          isNull(invoices.deletedAt),
+        ));
       }
       const paidOk = !feesMustBeClear || statements.every((i) => i.status === "paid");
       const publishedCards = resultsVisible && paidOk && studentIds.length
         ? await db.select().from(reportCards).where(and(eq(reportCards.tenantId, tenant.id), inArray(reportCards.studentId, studentIds), eq(reportCards.published, true)))
         : [];
+      const attendance = studentIds.length
+        ? await db.select({
+          studentId: attendanceRecords.studentId,
+          status: attendanceRecords.status,
+          date: attendanceSessions.date,
+        })
+          .from(attendanceRecords)
+          .innerJoin(attendanceSessions, eq(attendanceRecords.sessionId, attendanceSessions.id))
+          .where(and(eq(attendanceRecords.tenantId, tenant.id), inArray(attendanceRecords.studentId, studentIds)))
+          .orderBy(desc(attendanceSessions.date))
+          .limit(30)
+        : [];
       const msgs = await db.select().from(announcements).where(and(eq(announcements.tenantId, tenant.id), eq(announcements.published, true))).orderBy(desc(announcements.createdAt)).limit(10);
-      res.json({ success: true, data: { children, statements, reportCards: publishedCards, announcements: msgs } });
+      res.json({ success: true, data: { children, statements, reportCards: publishedCards, attendance, announcements: msgs } });
     } else {
       const studentId = principal.account.studentId;
       const [student] = await db.select().from(students).where(and(eq(students.id, studentId), eq(students.tenantId, tenant.id))).limit(1);
@@ -108,7 +124,16 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
         const [rc] = await db.select().from(reportCards).where(and(eq(reportCards.studentId, student.id), eq(reportCards.published, true))).orderBy(desc(reportCards.createdAt)).limit(1);
         reportCard = rc ?? null;
       }
-      res.json({ success: true, data: { student, assignments: classAssignments, reportCard } });
+      const attendance = await db.select({
+        status: attendanceRecords.status,
+        date: attendanceSessions.date,
+      })
+        .from(attendanceRecords)
+        .innerJoin(attendanceSessions, eq(attendanceRecords.sessionId, attendanceSessions.id))
+        .where(and(eq(attendanceRecords.tenantId, tenant.id), eq(attendanceRecords.studentId, student.id)))
+        .orderBy(desc(attendanceSessions.date))
+        .limit(30);
+      res.json({ success: true, data: { student, assignments: classAssignments, reportCard, attendance } });
     }
   } catch (e) { next(e); }
 });

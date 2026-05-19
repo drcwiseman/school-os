@@ -183,6 +183,18 @@ router.patch("/tenants/:slug/feature-flags", requirePlatformAuth, requirePlatfor
   }
 );
 
+router.patch("/tenants/:slug/status", requirePlatformAuth, requirePlatformPermission("tenants.suspend"),
+  validate({ body: z.object({ status: z.enum(["active", "suspended", "trial"]) }) }),
+  async (req, res, next) => {
+    try {
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const [updated] = await db.update(tenants).set({ status: req.body.status, updatedAt: new Date() }).where(eq(tenants.id, tenant.id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (err) { next(err); }
+  },
+);
+
 router.patch("/tenants/:slug/plan", requirePlatformAuth, requirePlatformPermission("plans.assign"),
   validate({ body: z.object({ planCode: z.string() }) }),
   async (req, res, next) => {

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { ConfirmAction } from "../components/ConfirmAction";
+import { useAuth } from "../state/AuthContext";
 import { Loader2, Shield, Users, ScrollText } from "lucide-react";
 
 type Tab = "users" | "roles" | "audit";
@@ -9,6 +11,7 @@ type Tab = "users" | "roles" | "audit";
 export const Admin: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [tab, setTab] = useState<Tab>("users");
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
@@ -53,6 +56,26 @@ export const Admin: React.FC = () => {
       await api.post(`/s/${schoolSlug}/api/admin/roles`, { name: newRoleName });
       setNewRoleName("");
       toast("Role created", "success");
+      loadAll();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const updateUserStatus = async (userId: string, status: string) => {
+    try {
+      await api.patch(`/s/${schoolSlug}/api/admin/users/${userId}/status`, { status });
+      toast("User status updated", "success");
+      loadAll();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const removeUser = async (userId: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/admin/users/${userId}`);
+      toast("User removed", "success");
       loadAll();
     } catch (err: any) {
       toast(err.message, "error");
@@ -107,7 +130,12 @@ export const Admin: React.FC = () => {
       {loading ? (
         <LoadingSpinner />
       ) : tab === "users" ? (
-        <UsersTable users={users} />
+        <UsersTable
+          users={users}
+          canManage={hasPermission("settings.users.manage")}
+          onStatusChange={updateUserStatus}
+          onRemove={removeUser}
+        />
       ) : tab === "roles" ? (
         <RolesPanel
           roles={roles}
@@ -136,21 +164,46 @@ function LoadingSpinner() {
   );
 }
 
-function UsersTable({ users }: { users: any[] }) {
+function UsersTable({ users, canManage, onStatusChange, onRemove }: {
+  users: any[];
+  canManage: boolean;
+  onStatusChange: (id: string, status: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const statusBadge = (status: string) => {
+    if (status === "active") return <span className="badge-green capitalize">{status}</span>;
+    if (status === "suspended") return <span className="badge-red capitalize">{status}</span>;
+    return <span className="badge-gray capitalize">{status}</span>;
+  };
+
   return (
     <div className="card overflow-hidden">
       <table className="table">
         <thead>
-          <tr><th>Email</th><th>Name</th><th>Status</th></tr>
+          <tr><th>Email</th><th>Name</th><th>Status</th>{canManage && <th>Actions</th>}</tr>
         </thead>
         <tbody>
           {users.length === 0 ? (
-            <tr><td colSpan={3} className="text-center py-8 text-slate-400">No users found.</td></tr>
+            <tr><td colSpan={canManage ? 4 : 3} className="text-center py-8 text-slate-400">No users found.</td></tr>
           ) : users.map((u) => (
             <tr key={u.id}>
               <td>{u.email}</td>
               <td>{u.firstName} {u.lastName}</td>
-              <td><span className="badge-green capitalize">{u.status}</span></td>
+              <td>{statusBadge(u.status)}</td>
+              {canManage && (
+                <td className="flex flex-wrap gap-2">
+                  {u.status !== "active" && (
+                    <button type="button" className="btn-ghost text-xs" onClick={() => onStatusChange(u.id, "active")}>Activate</button>
+                  )}
+                  {u.status === "active" && (
+                    <button type="button" className="btn-ghost text-xs text-amber-400" onClick={() => onStatusChange(u.id, "suspended")}>Suspend</button>
+                  )}
+                  {u.status !== "disabled" && (
+                    <button type="button" className="btn-ghost text-xs" onClick={() => onStatusChange(u.id, "disabled")}>Disable</button>
+                  )}
+                  <ConfirmAction label="Remove" confirmMessage={`Remove ${u.email}?`} onConfirm={() => onRemove(u.id)} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

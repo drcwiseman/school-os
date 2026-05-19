@@ -227,6 +227,7 @@ See [README](../README.md#logging-in).
 | **1–2** | Core ERP modules, tenant RBAC, operations split |
 | **3** | Payment void, mark/payroll soft delete, append-only `audit_logs`, relational platform feature flags |
 | **4** | Extended soft delete (assessments, fee structures, staff), plan ↔ feature enforcement, platform role permissions, staff UI for void/delete |
+| **5** | Tenant suspend/activate, staff user status, portal dashboard enrichment, students/users/fee-structure UI |
 
 ### Phase 4 details
 
@@ -251,3 +252,27 @@ See [README](../README.md#logging-in).
 - Exams: remove assessments
 - Payroll: remove draft runs
 - HR: remove staff (via ModuleCrud)
+
+### Phase 5 details
+
+**Tenant lifecycle (platform)**
+
+- `PATCH /api/platform/tenants/:slug/status` — `active` | `suspended` | `trial` (permission: `tenants.suspend`)
+- Suspended schools are blocked at `resolveTenant` for staff and portal routes
+
+**Staff account lifecycle**
+
+- `PATCH /s/:slug/api/admin/users/:userId/status` — activate, suspend, disable (not soft-delete)
+- Soft-delete remains `DELETE .../admin/users/:userId`
+- Sessions only validate `status === active`
+
+**Portal (OBAC)**
+
+- Parent dashboard: children, fee statements (non-deleted invoices), report cards, attendance, announcements
+- Student dashboard: profile, assignments, report card, attendance
+
+**Staff UI (remaining soft-delete / admin)**
+
+- Students: remove (soft-delete)
+- Users & Roles: suspend / disable / remove
+- Finance: fee structures tab with remove

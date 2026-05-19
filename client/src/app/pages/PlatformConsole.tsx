@@ -95,6 +95,18 @@ export const PlatformConsole: React.FC = () => {
     }
   };
 
+  const toggleTenantStatus = async (slug: string, status: "active" | "suspended") => {
+    const label = status === "suspended" ? "suspend" : "reactivate";
+    if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} school /s/${slug}?`)) return;
+    try {
+      await api.patch(`/api/platform/tenants/${slug}/status`, { status });
+      toast(`School ${status === "suspended" ? "suspended" : "reactivated"}`, "success");
+      await loadData();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
   const updateSchoolPlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSchoolForPlan) return toast("Select a school", "error");
@@ -297,13 +309,22 @@ export const PlatformConsole: React.FC = () => {
                           </span>
                         </td>
                         <td>{new Date(t.createdAt).toLocaleDateString()}</td>
-                        <td className="text-right">
+                        <td className="text-right space-x-2">
                           <Link 
                             to={`/s/${t.slug}/login`} 
                             className="inline-flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 font-semibold"
                           >
-                            Open Console <ArrowUpRight className="w-3.5 h-3.5" />
+                            Open <ArrowUpRight className="w-3.5 h-3.5" />
                           </Link>
+                          {t.status === "active" ? (
+                            <button type="button" className="btn-ghost text-xs text-red-400" onClick={() => toggleTenantStatus(t.slug, "suspended")}>
+                              Suspend
+                            </button>
+                          ) : (
+                            <button type="button" className="btn-ghost text-xs text-emerald-400" onClick={() => toggleTenantStatus(t.slug, "active")}>
+                              Activate
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -405,6 +426,28 @@ export const PlatformConsole: React.FC = () => {
                     Provision School Schema
                   </button>
                 </form>
+              </div>
+
+              <div className="card p-5">
+                <h2 className="text-base font-bold text-white mb-3">Registered schools</h2>
+                <table className="table text-sm">
+                  <thead><tr><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    {tenants.map((t) => (
+                      <tr key={t.id}>
+                        <td>{t.name} <code className="text-xs text-slate-500 ml-1">/s/{t.slug}</code></td>
+                        <td><span className={`badge ${t.status === "active" ? "badge-green" : "badge-red"}`}>{t.status}</span></td>
+                        <td>
+                          {t.status === "active" ? (
+                            <button type="button" className="btn-ghost text-xs text-red-400" onClick={() => toggleTenantStatus(t.slug, "suspended")}>Suspend</button>
+                          ) : (
+                            <button type="button" className="btn-ghost text-xs text-emerald-400" onClick={() => toggleTenantStatus(t.slug, "active")}>Activate</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 

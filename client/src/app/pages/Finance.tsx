@@ -29,11 +29,12 @@ export const Finance: React.FC = () => {
   const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [tab, setTab] = useState<"overview" | "payments" | "debtors" | "receipts">("overview");
+  const [tab, setTab] = useState<"overview" | "payments" | "debtors" | "receipts" | "fees">("overview");
   const [invoices, setInvoices] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [debtors, setDebtors] = useState<any[]>([]);
   const [receipts, setReceipts] = useState<any[]>([]);
+  const [feeStructures, setFeeStructures] = useState<any[]>([]);
 
   useEffect(() => { load(); }, [schoolSlug, tab]);
 
@@ -49,6 +50,8 @@ export const Finance: React.FC = () => {
         setInvoices(inv.data || []);
       } else if (tab === "payments") {
         setPayments((await api.get(`/s/${schoolSlug}/api/finance/payments`)).data ?? []);
+      } else if (tab === "fees") {
+        setFeeStructures((await api.get(`/s/${schoolSlug}/api/finance/fee-structures`)).data ?? []);
       } else if (tab === "debtors") {
         setDebtors((await api.get(`/s/${schoolSlug}/api/finance/debtors`)).data ?? []);
       } else {
@@ -65,6 +68,16 @@ export const Finance: React.FC = () => {
     try {
       await api.post(`/s/${schoolSlug}/api/finance/payments/${id}/void`, {});
       toast("Payment voided", "success");
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const deleteFeeStructure = async (id: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/finance/fee-structures/${id}`);
+      toast("Fee structure removed", "success");
       load();
     } catch (err: any) {
       toast(err.message, "error");
@@ -104,6 +117,7 @@ export const Finance: React.FC = () => {
       <div className="flex gap-2">
         <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>overview</button>
         <button type="button" onClick={() => setTab("payments")} className={tabBtn("payments")}>payments</button>
+        <button type="button" onClick={() => setTab("fees")} className={tabBtn("fees")}>fee structures</button>
         <button type="button" onClick={() => setTab("debtors")} className={tabBtn("debtors")}>debtors</button>
         <button type="button" onClick={() => setTab("receipts")} className={tabBtn("receipts")}>receipts</button>
       </div>
@@ -153,6 +167,34 @@ export const Finance: React.FC = () => {
             canVoid={hasPermission("finance.refund.create")}
             onVoid={voidPayment}
           />
+        </div>
+      )}
+
+      {tab === "fees" && (
+        <div className="card overflow-hidden">
+          <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Fee structures</h3></div>
+          <table className="table">
+            <thead><tr><th>Name</th><th>Active</th>{hasPermission("finance.invoice.create") && <th>Actions</th>}</tr></thead>
+            <tbody>
+              {feeStructures.length === 0 ? (
+                <tr><td colSpan={hasPermission("finance.invoice.create") ? 3 : 2} className="text-center py-8 text-slate-400">No fee structures.</td></tr>
+              ) : feeStructures.map((fs) => (
+                <tr key={fs.id}>
+                  <td>{fs.name}</td>
+                  <td>{fs.isActive ? "Yes" : "No"}</td>
+                  {hasPermission("finance.invoice.create") && (
+                    <td>
+                      <ConfirmAction
+                        label="Remove"
+                        confirmMessage={`Remove fee structure "${fs.name}"?`}
+                        onConfirm={() => deleteFeeStructure(fs.id)}
+                      />
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
