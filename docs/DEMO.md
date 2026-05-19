@@ -130,8 +130,8 @@ Logs often show `column "role" does not exist` on `platform_admins`. Migrations 
 cd /root/school-os
 git pull
 npm install
-npm run db:repair          # adds platform_admins.role + enum values (safe to re-run)
-npm run db:migrate         # should complete 0004–0008 after repair + fixed 0005
+npm run db:repair          # applies 0004–0008 SQL without transactions (safe to re-run)
+npm run db:migrate         # PG10-safe migrator (no single transaction wrap)
 npm run db:ensure-platform
 npm run db:seed
 pm2 restart school-os --update-env

@@ -42,9 +42,14 @@ ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "deleted_by" uuid REFERENCES "us
 ALTER TABLE "payments" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp;
 ALTER TABLE "payments" ADD COLUMN IF NOT EXISTS "deleted_by" uuid REFERENCES "users"("id") ON DELETE set null;
 
--- Portal account integrity: parent must have guardian; student must have student_id
-ALTER TABLE "portal_accounts" DROP CONSTRAINT IF EXISTS "portal_accounts_type_link_check";
-ALTER TABLE "portal_accounts" ADD CONSTRAINT "portal_accounts_type_link_check" CHECK (
-  (type = 'parent' AND guardian_id IS NOT NULL AND student_id IS NULL)
-  OR (type = 'student' AND student_id IS NOT NULL AND guardian_id IS NULL)
-);
+-- Portal account integrity (legacy portal_accounts only; skip if already on parent_accounts)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'portal_accounts') THEN
+    ALTER TABLE "portal_accounts" DROP CONSTRAINT IF EXISTS "portal_accounts_type_link_check";
+    ALTER TABLE "portal_accounts" ADD CONSTRAINT "portal_accounts_type_link_check" CHECK (
+      (type = 'parent' AND guardian_id IS NOT NULL AND student_id IS NULL)
+      OR (type = 'student' AND student_id IS NOT NULL AND guardian_id IS NULL)
+    );
+  END IF;
+END $$;
