@@ -17,7 +17,7 @@ export const PublicHeader: React.FC = () => {
 
   return (
     <header className="mkt-header sticky top-0 z-50">
-      <div className="mx-auto max-w-6xl px-4 pb-3 pt-4 lg:px-6">
+      <div className="mx-auto max-w-6xl px-4 pb-3 pt-4 lg:px-6 relative">
         <div className="mkt-nav-pill flex items-center justify-between gap-3 px-3 py-2.5 sm:px-5">
           <Link to="/" className="flex shrink-0 items-center gap-2.5" onClick={closeAll}>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-marketing-accent to-marketing-navy text-white shadow-md">
@@ -61,50 +61,50 @@ export const PublicHeader: React.FC = () => {
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
-      </div>
 
-      {/* Full-width mega menu — fixed so it never clips to the Features button width */}
-      {featuresOpen && (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 top-16 z-40 cursor-default bg-marketing-navy/10 backdrop-blur-[2px] lg:top-[4.75rem]"
-            aria-label="Close menu"
-            onClick={() => setFeaturesOpen(false)}
-          />
-          <div className="mkt-mega-dropdown animate-mega-in fixed left-0 right-0 z-50 lg:top-[4.75rem]">
-            <div className="mx-auto max-w-6xl px-6 py-8 lg:px-8">
-              <div className="grid gap-4 md:grid-cols-3">
-                {MEGA_MENU.map((item) => (
+        {/* Compact mega menu — absolute positioned directly relative to header container */}
+        {featuresOpen && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-45 cursor-default bg-marketing-navy/10 backdrop-blur-[2px]"
+              aria-label="Close menu"
+              onClick={() => setFeaturesOpen(false)}
+            />
+            <div className="absolute inset-x-4 top-full z-50 mt-2 flex justify-center pointer-events-none">
+              <div className="mkt-mega-dropdown animate-mega-in pointer-events-auto w-full max-w-4xl p-5 sm:p-6 bg-white/95 backdrop-blur-md border border-marketing-navy/10 rounded-2xl shadow-2xl">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {MEGA_MENU.map((item) => (
+                    <Link
+                      key={item.title}
+                      to={item.href}
+                      className="mkt-mega-card group flex flex-col gap-3 rounded-xl p-4"
+                      onClick={closeAll}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-marketing-accent/10 text-marketing-accent transition-all duration-300 group-hover:bg-marketing-accent group-hover:text-white">
+                        <item.icon className="h-5 w-5" strokeWidth={1.5} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-heading text-sm font-semibold leading-snug text-marketing-navy">{item.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-marketing-navy/55">{item.description}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                <div className="mt-4 border-t border-marketing-navy/5 pt-4 text-center">
                   <Link
-                    key={item.title}
-                    to={item.href}
-                    className="mkt-mega-card group flex gap-4 rounded-2xl p-5"
+                    to="/features"
+                    className="text-sm font-semibold text-marketing-accent transition-colors hover:text-marketing-navy"
                     onClick={closeAll}
                   >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-marketing-accent/10 text-marketing-accent transition-all duration-300 group-hover:scale-110 group-hover:bg-marketing-accent group-hover:text-white group-hover:shadow-lg">
-                      <item.icon className="h-6 w-6" strokeWidth={1.5} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-heading text-base font-semibold text-marketing-navy">{item.title}</p>
-                      <p className="mt-1.5 text-sm leading-relaxed text-marketing-navy/55">{item.description}</p>
-                    </div>
+                    View all capabilities →
                   </Link>
-                ))}
-              </div>
-              <div className="mt-6 text-center">
-                <Link
-                  to="/features"
-                  className="text-sm font-semibold text-marketing-accent transition-colors hover:text-marketing-navy"
-                  onClick={closeAll}
-                >
-                  View all capabilities →
-                </Link>
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {mobileOpen && (
         <nav className="border-t border-marketing-navy/8 bg-white px-5 py-4 shadow-lg lg:hidden">

@@ -3,9 +3,9 @@ import { z } from "zod";
 import { db } from "../db";
 import {
   tenants, tenantSettings, users, roles, rolePermissions, permissions,
-  plans, tenantPlans, platformAdmins,
+  plans, tenantPlans, platformAdmins, students, jobs, payments,
 } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { hashPassword } from "../middleware/auth";
 import { createPlatformSession, requirePlatformAuth, verifyPassword } from "../middleware/platform-auth";
 import { validate } from "../utils/validate";
@@ -45,6 +45,29 @@ router.get("/auth/me", requirePlatformAuth, async (req, res, next) => {
 router.post("/auth/logout", requirePlatformAuth, async (req, res) => {
   res.clearCookie("platform_session_token");
   res.json({ success: true });
+});
+
+router.get("/stats", requirePlatformAuth, async (_req, res, next) => {
+  try {
+    const [tenantsCount] = await db.select({ count: sql<number>`count(*)` }).from(tenants);
+    const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [studentsCount] = await db.select({ count: sql<number>`count(*)` }).from(students);
+    const [jobsCount] = await db.select({ count: sql<number>`count(*)` }).from(jobs);
+    const [failedJobsCount] = await db.select({ count: sql<number>`count(*)` }).from(jobs).where(eq(jobs.status, "failed"));
+    const [paymentsSum] = await db.select({ sum: sql<number>`sum(amount)` }).from(payments);
+
+    res.json({
+      success: true,
+      data: {
+        totalTenants: Number(tenantsCount?.count ?? 0),
+        totalUsers: Number(usersCount?.count ?? 0),
+        totalStudents: Number(studentsCount?.count ?? 0),
+        totalJobs: Number(jobsCount?.count ?? 0),
+        failedJobs: Number(failedJobsCount?.count ?? 0),
+        totalRevenue: Number(paymentsSum?.sum ?? 0),
+      }
+    });
+  } catch (err) { next(err); }
 });
 
 router.get("/plans", requirePlatformAuth, async (_req, res, next) => {

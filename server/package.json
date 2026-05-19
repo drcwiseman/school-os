@@ -12,7 +12,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "ts-node src/db/migrate.ts",
     "db:seed": "ts-node src/db/seed.ts",
-    "db:build-full-migration": "ts-node scripts/build-full-migration.ts"
+    "db:build-full-migration": "ts-node scripts/build-full-migration.ts",
+    "db:up": "node scripts/embedded-pg.mjs",
+    "dev:setup": "ts-node scripts/wait-for-pg.ts && npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -35,8 +37,10 @@
     "@types/pg": "^8.11.6",
     "@types/supertest": "^6.0.2",
     "drizzle-kit": "^0.21.4",
+    "embedded-postgres": "^18.3.0-beta.17",
     "supertest": "^7.0.0",
     "ts-node": "^10.9.2",
+    "embedded-postgres": "^3.2.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"

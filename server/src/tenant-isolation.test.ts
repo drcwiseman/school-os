@@ -13,14 +13,6 @@ describe("Tenant isolation", () => {
   let sessionCookieA: string;
 
   beforeAll(async () => {
-    if (!process.env.DATABASE_URL) return;
-    try {
-      await db.select().from(tenants).limit(1);
-      dbAvailable = true;
-    } catch {
-      dbAvailable = false;
-      return;
-    }
     const [a] = await db.select().from(tenants).where(eq(tenants.slug, "school-a")).limit(1);
     const [b] = await db.select().from(tenants).where(eq(tenants.slug, "school-b")).limit(1);
     if (!a || !b) throw new Error("Run npm run db:seed before tenant isolation tests");
@@ -38,21 +30,21 @@ describe("Tenant isolation", () => {
     sessionCookieA = Array.isArray(cookie) ? cookie[0] : cookie;
   });
 
-  it.skipIf(() => !dbAvailable)("blocks school-a session from school-b routes", async () => {
+  it("blocks school-a session from school-b routes", async () => {
     const res = await request(app)
       .get("/s/school-b/api/students")
       .set("Cookie", sessionCookieA);
     expect(res.status).toBe(403);
   });
 
-  it.skipIf(() => !dbAvailable)("cannot read school-b student while authenticated on school-a", async () => {
+  it("cannot read school-b student while authenticated on school-a", async () => {
     const res = await request(app)
       .get(`/s/school-a/api/students/${tenantBStudentId}`)
       .set("Cookie", sessionCookieA);
     expect(res.status).toBe(404);
   });
 
-  it.skipIf(() => !dbAvailable)("allows school-a user to read own tenant student", async () => {
+  it("allows school-a user to read own tenant student", async () => {
     const res = await request(app)
       .get(`/s/school-a/api/students/${tenantAStudentId}`)
       .set("Cookie", sessionCookieA);

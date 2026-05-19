@@ -52,9 +52,13 @@ npm run dev
 ```
 
 ### 4. Logging In
-Navigate to the web application:
+
+**Development:** use the Vite app on port **5173** (not 5000):
+
 - **Tenant A:** `http://localhost:5173/s/school-a/login` (admin@school-a.com / Password123!)
 - **Tenant B:** `http://localhost:5173/s/school-b/login` (admin@school-b.com / Password123!)
+
+Port 5000 is the API only in dev. After `npm run build`, a single server on 5000 serves both UI and API.
 
 ---
 
@@ -101,6 +105,10 @@ npm run db:seed      # demo tenants, roles, students, classes
 ### Deployment & hosting
 
 See **[docs/HOSTING.md](docs/HOSTING.md)** for the full migration strategy, Docker Compose, PaaS/VPS options, and production checklist.
+
+**InMotion VPS (SSH):** see **[docs/INMOTION.md](docs/INMOTION.md)** and run `scripts/deploy-inmotion.sh` on the server.
+
+**CWP subdomain `school.bclimaxtech.com` (bishopcl):** see **[docs/CWP-SCHOOL-BCLIMax.md](docs/CWP-SCHOOL-BCLIMax.md)**.
 
 Quick commands:
 

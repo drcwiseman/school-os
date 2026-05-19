@@ -6,7 +6,18 @@ import { NotFoundError, ForbiddenError } from "./error";
 
 export async function resolveTenant(req: Request, res: Response, next: NextFunction) {
   try {
-    const slug = req.params.schoolSlug as string | undefined;
+    let slug = req.params.schoolSlug as string | undefined;
+
+    // Easy Switch: Extract school slug from subdomain if USE_SUBDOMAIN is enabled
+    if (process.env.USE_SUBDOMAIN === "true") {
+      const host = req.headers.host || "";
+      const parts = host.split(".");
+      // If host is e.g. school-a.schoolos.com or school-a.localhost:5000
+      if (parts.length >= 2 && parts[0] !== "www" && parts[0] !== "localhost") {
+        slug = parts[0];
+      }
+    }
+
     if (!slug) return next(new NotFoundError("School slug is required"));
 
     const [tenant] = await db

@@ -7,8 +7,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Platform API only
       "/api": { target: "http://localhost:5000", changeOrigin: true },
-      "/s": { target: "http://localhost:5000", changeOrigin: true },
+      // School API only: /s/:slug/api/* — NOT /s/:slug/login (React routes)
+      "^/s/[^/]+/api": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
     },
   },
 })

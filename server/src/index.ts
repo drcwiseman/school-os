@@ -3,10 +3,15 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import path from "path";
+import fs from "fs";
 import { errorHandler } from "./middleware/error";
 import routes from "./routes/index";
 import { rateLimit } from "./middleware/rate-limit";
 import { tick as processJobs } from "./services/queue";
+
+function isApiPath(url: string) {
+  return url.startsWith("/api") || /^\/s\/[^/]+\/api(\/|$)/.test(url);
+}
 
 // Load environment variables
 dotenv.config();
@@ -45,13 +50,17 @@ app.use("/s", rateLimit);
 // All API routes
 app.use(routes);
 
-// Production: serve built React app (API routes registered above take precedence)
-if (isProd) {
-  const clientDist = path.join(__dirname, "../../client/dist");
+// Serve built React SPA when dist exists (production or single-port deploy)
+const clientDist = path.join(__dirname, "../../client/dist");
+const indexHtml = path.join(clientDist, "index.html");
+if (fs.existsSync(indexHtml)) {
   app.use(express.static(clientDist));
-  app.get("*", (_req, res) => {
-    res.sendFile(path.join(clientDist, "index.html"));
+  app.get("*", (req, res, next) => {
+    if (isApiPath(req.path)) return next();
+    res.sendFile(indexHtml);
   });
+} else if (isProd) {
+  console.warn("⚠️  client/dist not found — run: npm run build --prefix client");
 }
 
 // Centralized error handler (must be last)
