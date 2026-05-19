@@ -23,7 +23,7 @@ export const PlanManager: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Layers size={22} className="text-blue-400" /> SaaS plans & geo pricing
           </h2>
           <p className="text-xs text-slate-400 mt-1">Prices resolve by country → currency → global fallback. FX conversions use frankfurter.app (free).</p>
@@ -44,9 +44,9 @@ export const PlanManager: React.FC = () => {
           const resolved = p.resolvedPrice ?? { priceMonthly: p.priceMonthly, currency, source: "base" };
           const features = (p.featuresJson ?? {}) as Record<string, boolean>;
           return (
-            <div key={p.id} className="bg-[#090f1c] border border-slate-900 rounded-xl p-6">
+            <div key={p.id} className="rounded-xl border border-slate-200 bg-white shadow-sm rounded-xl p-6">
               <span className="text-[10px] uppercase text-blue-400 font-bold">{p.code}</span>
-              <h3 className="text-lg font-bold text-white mt-1">{p.name}</h3>
+              <h3 className="text-lg font-bold text-slate-900 mt-1">{p.name}</h3>
               <p className="text-2xl font-extrabold text-emerald-400 mt-2">
                 {formatMoneyMinor(resolved.priceMonthly, resolved.currency)}
                 <span className="text-xs text-slate-500 font-normal"> / mo</span>

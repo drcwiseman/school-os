@@ -53,13 +53,13 @@ export const TenantHub: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <h2 className="text-xl font-bold text-white">Schools (tenants)</h2>
-      <p className="text-xs text-slate-400">A tenant is one school. Provision a <strong className="text-slate-300">school administrator</strong> ERP account — teachers and secretaries are added later under HR → Staff.</p>
+      <h1 className="text-2xl font-semibold text-slate-900">Schools</h1>
+      <p className="mt-1 text-sm text-slate-500">Each tenant is one school. Provision a <strong>school administrator</strong> account; staff are added in HR later.</p>
 
       <ul className="flex flex-wrap gap-2 text-xs">
         {tenants.map((t) => (
           <li key={t.id}>
-            <Link to={`/platform/tenants/${t.slug}`} className="text-blue-400 hover:underline">
+            <Link to={`/platform/tenants/${t.slug}`} className="text-indigo-600 hover:underline font-medium">
               {t.name}
             </Link>
           </li>
@@ -67,8 +67,8 @@ export const TenantHub: React.FC = () => {
       </ul>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <form onSubmit={provision} className="bg-[#090f1c] border border-slate-900 rounded-xl p-6 space-y-3">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Plus size={16} /> Provision school + administrator</h3>
+        <form onSubmit={provision} className="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Plus size={16} /> Provision school</h3>
           <div className="grid sm:grid-cols-2 gap-3">
             <input className="input text-sm" placeholder="slug" required value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} />
             <input className="input text-sm" placeholder="School name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -84,22 +84,26 @@ export const TenantHub: React.FC = () => {
               {plans.map((p) => <option key={p.id} value={p.code}>{p.name}</option>)}
             </select>
           </div>
-          <button type="submit" className="btn-primary w-full text-sm">Provision</button>
+          <button type="submit" className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-700">Provision</button>
         </form>
 
-        <div className="bg-[#090f1c] border border-slate-900 rounded-xl p-6 space-y-3">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Settings size={16} /> Module flags</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Settings size={16} /> Module flags</h3>
           <select className="input text-sm" value={selectedSlug} onChange={(e) => loadFeatures(e.target.value)}>
             <option value="">Select school…</option>
             {tenants.map((t) => <option key={t.id} value={t.slug}>{t.name}</option>)}
           </select>
           {features.map((f) => (
-            <label key={f.code} className="flex justify-between text-xs text-slate-300 border border-slate-800 rounded-lg px-3 py-2">
+            <label key={f.code} className="flex justify-between text-sm text-slate-700 border border-slate-100 rounded-lg px-3 py-2">
               {f.name}
               <input type="checkbox" checked={f.enabled} onChange={(e) => setFeatures((prev) => prev.map((x) => x.code === f.code ? { ...x, enabled: e.target.checked } : x))} />
             </label>
           ))}
-          {selectedSlug && <button type="button" className="btn-primary w-full text-sm" onClick={saveFeatures}>Save flags</button>}
+          {selectedSlug && (
+            <button type="button" className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-700" onClick={saveFeatures}>
+              Save flags
+            </button>
+          )}
         </div>
       </div>
     </div>

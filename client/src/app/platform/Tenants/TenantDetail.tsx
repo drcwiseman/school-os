@@ -82,7 +82,7 @@ export const TenantDetail: React.FC = () => {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
       </div>
     );
   }
@@ -94,20 +94,20 @@ export const TenantDetail: React.FC = () => {
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
-        <Link to="/platform/tenants" className="text-slate-400 hover:text-white">
+        <Link to="/platform/tenants" className="text-slate-400 hover:text-slate-900">
           <ArrowLeft size={18} />
         </Link>
         <div>
-          <h2 className="text-xl font-bold text-white">{tenant.name}</h2>
+          <h2 className="text-xl font-bold text-slate-900">{tenant.name}</h2>
           <p className="text-xs text-slate-500 font-mono">/s/{tenant.slug} · {plan?.name ?? "—"}</p>
         </div>
-        <button type="button" onClick={shadow} className="ml-auto text-xs bg-blue-600/20 border border-blue-500/30 text-blue-300 px-3 py-2 rounded-lg">
+        <button type="button" onClick={shadow} className="ml-auto text-xs rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg">
           Shadow (read-only)
         </button>
       </div>
 
-      <section className="bg-[#090f1c] border border-slate-900 rounded-xl p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm rounded-xl p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
           <Globe size={16} /> Domains & routing
         </h3>
         <p className="text-xs text-slate-400">
@@ -123,7 +123,7 @@ export const TenantDetail: React.FC = () => {
             value={customDomain}
             onChange={(e) => setCustomDomain(e.target.value)}
           />
-          <button type="button" className="btn-primary text-sm" onClick={saveDomain}>Save domain</button>
+          <button type="button" className="rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700" onClick={saveDomain}>Save domain</button>
           <button type="button" className="text-sm border border-slate-700 px-3 py-2 rounded-lg text-slate-300" onClick={verifyDomain}>
             Mark verified
           </button>
@@ -137,14 +137,14 @@ export const TenantDetail: React.FC = () => {
         )}
       </section>
 
-      <section className="bg-[#090f1c] border border-slate-900 rounded-xl p-6 space-y-3">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm rounded-xl p-6 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
           <Package size={16} /> Add-on marketplace
         </h3>
         {addons?.map((a: any) => (
           <label key={a.code} className="flex justify-between items-center text-xs text-slate-300 border border-slate-800 rounded-lg px-3 py-2">
             <span>
-              <strong className="text-white">{a.name}</strong>
+              <strong className="text-slate-900">{a.name}</strong>
               <span className="text-slate-500 ml-2">{a.code}</span>
             </span>
             <input
@@ -156,12 +156,12 @@ export const TenantDetail: React.FC = () => {
         ))}
       </section>
 
-      <section className="bg-[#090f1c] border border-slate-900 rounded-xl p-6 space-y-3">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm rounded-xl p-6 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
             <BarChart3 size={16} /> Usage billing — {billingCycle}
           </h3>
-          <button type="button" className="btn-primary text-xs" onClick={generateLines}>
+          <button type="button" className="rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700" onClick={generateLines}>
             Generate overage lines
           </button>
         </div>
@@ -169,7 +169,7 @@ export const TenantDetail: React.FC = () => {
           {usage?.map((u: any) => (
             <div key={u.metric} className="border border-slate-800 rounded-lg p-3">
               <p className="text-[10px] uppercase text-slate-500">{u.metric}</p>
-              <p className="text-lg font-bold text-white">{u.quantityUsed}</p>
+              <p className="text-lg font-bold text-slate-900">{u.quantityUsed}</p>
             </div>
           ))}
         </div>

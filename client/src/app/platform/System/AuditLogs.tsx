@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Database, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { api } from "../../api/client";
 
 type Row = {
@@ -7,7 +7,6 @@ type Row = {
   source: string;
   action: string;
   entity_type: string;
-  tenant_id?: string;
   tenant_name?: string;
   actor?: string;
   created_at: string;
@@ -24,49 +23,49 @@ export const AuditLogs: React.FC = () => {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold text-white flex items-center gap-2">
-        <Database size={20} className="text-slate-500" /> Global audit trail
-      </h2>
-      <p className="text-xs text-slate-400">
-        School ERP events plus platform actions (provision, domain, impersonation, add-ons).
-      </p>
+    <div className="space-y-6 max-w-6xl">
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">Audit log</h1>
+        <p className="mt-1 text-sm text-slate-500">School ERP events and platform operator actions.</p>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
         </div>
       ) : (
-        <div className="bg-[#090f1c] border border-slate-900 rounded-xl overflow-hidden">
-          <table className="w-full text-xs">
-            <thead className="text-slate-500 border-b border-slate-900">
-              <tr>
-                <th className="text-left py-3 px-4">Time</th>
-                <th className="text-left py-3 px-4">Source</th>
-                <th className="text-left py-3 px-4">School</th>
-                <th className="text-left py-3 px-4">Action</th>
-                <th className="text-left py-3 px-4">Actor</th>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <th className="px-5 py-3">Time</th>
+                <th className="px-5 py-3">Source</th>
+                <th className="px-5 py-3">School</th>
+                <th className="px-5 py-3">Action</th>
+                <th className="px-5 py-3">Actor</th>
               </tr>
             </thead>
-            <tbody className="text-slate-300 divide-y divide-slate-900/60">
+            <tbody className="divide-y divide-slate-100">
               {rows.map((r) => (
-                <tr key={`${r.source}-${r.id}`} className="hover:bg-slate-900/30">
-                  <td className="py-2.5 px-4 whitespace-nowrap text-slate-500">
+                <tr key={`${r.source}-${r.id}`} className="hover:bg-slate-50/80">
+                  <td className="px-5 py-3 whitespace-nowrap text-slate-500">
                     {new Date(r.created_at).toLocaleString()}
                   </td>
-                  <td className="py-2.5 px-4">
-                    <span className={r.source === "platform" ? "text-purple-400" : "text-blue-400"}>
+                  <td className="px-5 py-3">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                      r.source === "platform" ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-700"
+                    }`}>
                       {r.source}
                     </span>
                   </td>
-                  <td className="py-2.5 px-4">{r.tenant_name ?? "—"}</td>
-                  <td className="py-2.5 px-4 font-mono text-[11px]">{r.action}</td>
-                  <td className="py-2.5 px-4 text-slate-500">{r.actor ?? "—"}</td>
+                  <td className="px-5 py-3 text-slate-700">{r.tenant_name ?? "—"}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-slate-600">{r.action}</td>
+                  <td className="px-5 py-3 text-slate-500">{r.actor ?? "—"}</td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-500">No audit events yet</td>
+                  <td colSpan={5} className="px-5 py-12 text-center text-slate-500">No events yet</td>
                 </tr>
               )}
             </tbody>
