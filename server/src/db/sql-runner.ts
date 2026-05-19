@@ -1,9 +1,22 @@
-/** Strip leading line comments so blocks are not skipped when the file starts with `--`. */
+/** Remove full-line and trailing `--` comments (keeps SQL inside strings untouched). */
+export function stripSqlComments(sql: string): string {
+  return sql
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("--")) return "";
+      const idx = line.indexOf("--");
+      if (idx === -1) return line;
+      return line.slice(0, idx).trimEnd();
+    })
+    .filter((line) => line.trim().length > 0)
+    .join("\n")
+    .trim();
+}
+
+/** @deprecated use stripSqlComments */
 export function stripLeadingSqlComments(sql: string): string {
-  const lines = sql.split("\n");
-  let i = 0;
-  while (i < lines.length && /^\s*--/.test(lines[i])) i++;
-  return lines.slice(i).join("\n").trim();
+  return stripSqlComments(sql);
 }
 
 /** Split Drizzle migration SQL into executable statements. */
