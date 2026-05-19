@@ -22,7 +22,7 @@ In development, use port **5173** for the React app. Port **5000** is API-only u
 | Who | Login URL | After login |
 |-----|-----------|-------------|
 | **Platform operator** (SaaS) | `/platform/login` | `/platform/dashboard` |
-| **School staff** (tenant ERP) | `/s/{schoolSlug}/login` | `/s/{schoolSlug}/dashboard` |
+| **School administrators & ERP users** (not all employees) | `/s/{schoolSlug}/login` | `/s/{schoolSlug}/dashboard` |
 | **Parent or student** (portal) | `/s/{schoolSlug}/portal/login` | `/s/{schoolSlug}/portal/dashboard` |
 
 Replace `{schoolSlug}` with `school-a` or `school-b`.
@@ -34,8 +34,10 @@ Replace `{schoolSlug}` with `school-a` or `school-b`.
 | Role | Email | Password | Tenant |
 |------|-------|----------|--------|
 | Platform admin | `platform@schoolos.local` | `Platform123!` | — |
-| School admin (Greenfield) | `admin@school-a.com` | `Password123!` | `school-a` |
-| School admin (Sunridge) | `admin@school-b.com` | `Password123!` | `school-b` |
+| School administrator (Greenfield, Uganda demo) | `admin@school-a.com` | `Password123!` | `school-a` |
+| School administrator (Sunridge) | `admin@school-b.com` | `Password123!` | `school-b` |
+
+**Staff (headteacher, teachers, secretaries)** are stored under **HR → Staff** in the ERP. They only use `/s/.../login` if you create a linked ERP account and role for them.
 | Parent portal | `parent@school-a.com` | `Parent123!` | `school-a` only |
 | Student portal | `student@school-a.com` | `Student123!` | `school-a` only |
 

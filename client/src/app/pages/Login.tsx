@@ -40,8 +40,8 @@ export const Login: React.FC = () => {
           <div className="w-12 h-12 bg-primary-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
             <span className="text-white font-bold text-xl">{schoolSlug?.charAt(0).toUpperCase()}</span>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-1">Welcome Back</h2>
-          <p className="text-slate-400 text-sm">Sign in to your {schoolSlug} portal</p>
+          <h2 className="text-2xl font-bold text-white mb-1">School ERP sign in</h2>
+          <p className="text-slate-400 text-sm">Administrator or delegated staff account for <span className="text-slate-300">{schoolSlug}</span> — not the parent/student portal</p>
         </div>
 
         {error && (

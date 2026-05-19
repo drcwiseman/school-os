@@ -5,7 +5,7 @@ import { db } from "./index";
 import {
   tenants, tenantSettings, users, permissions, roles, rolePermissions, userRoles,
   students, classes, studentClassHistory, academicYears, terms,
-  guardians, studentGuardians, platformAdmins, plans, planRegionalPrices, tenantPlans,
+  guardians, studentGuardians, platformAdmins, plans, planRegionalPrices, tenantPlans, staff,
   parentAccounts, studentAccounts, messageTemplates, announcements, campaigns,
   features, tenantFeatures,
 } from "./schema";
@@ -123,6 +123,8 @@ async function seed() {
   const regionalDefs: { code: string; countryCode: string; currency: string; priceMonthly: number }[] = [
     { code: "starter", countryCode: "*", currency: "USD", priceMonthly: 0 },
     { code: "pro", countryCode: "*", currency: "USD", priceMonthly: 9900 },
+    { code: "starter", countryCode: "UG", currency: "UGX", priceMonthly: 0 },
+    { code: "pro", countryCode: "UG", currency: "UGX", priceMonthly: 18000000 },
     { code: "starter", countryCode: "KE", currency: "KES", priceMonthly: 0 },
     { code: "pro", countryCode: "KE", currency: "KES", priceMonthly: 499900 },
     { code: "starter", countryCode: "NG", currency: "NGN", priceMonthly: 0 },
@@ -152,7 +154,7 @@ async function seed() {
 
   // 2. Seed two demo tenants
   const demos = [
-    { slug: "school-a", name: "Greenfield Academy", adminEmail: "admin@school-a.com", adminFirst: "Alice", adminLast: "Admin" },
+    { slug: "school-a", name: "Greenfield Academy (Uganda)", adminEmail: "admin@school-a.com", adminFirst: "Alice", adminLast: "Admin" },
     { slug: "school-b", name: "Sunridge High School", adminEmail: "admin@school-b.com", adminFirst: "Bob", adminLast: "Admin" },
   ];
 
@@ -171,16 +173,16 @@ async function seed() {
     if (!existingSettings) {
       await db.insert(tenantSettings).values({
         tenantId: resolvedTenant.id,
-        country: demo.slug === "school-a" ? "KE" : "US",
-        currency: demo.slug === "school-a" ? "KES" : "USD",
-        timezone: demo.slug === "school-a" ? "Africa/Nairobi" : "UTC",
+        country: demo.slug === "school-a" ? "UG" : "US",
+        currency: demo.slug === "school-a" ? "UGX" : "USD",
+        timezone: demo.slug === "school-a" ? "Africa/Kampala" : "UTC",
       });
     }
 
     // Admin role with all permissions
     let [adminRole] = await db.select().from(roles).where(eq2(roles.tenantId, resolvedTenant.id)).limit(1);
     if (!adminRole) {
-      [adminRole] = await db.insert(roles).values({ tenantId: resolvedTenant.id, name: "Tenant Admin", isSystem: true }).returning();
+      [adminRole] = await db.insert(roles).values({ tenantId: resolvedTenant.id, name: "School Administrator", isSystem: true }).returning();
       await db.insert(rolePermissions).values(allPerms.map((p: any) => ({ roleId: adminRole.id, permissionId: p.id })));
     }
 
@@ -194,6 +196,11 @@ async function seed() {
     await seedTenantRole(resolvedTenant.id, "Nurse", allPerms.filter((p: any) => p.module === "health"));
     await seedTenantRole(resolvedTenant.id, "Transport Officer", allPerms.filter((p: any) => p.module === "transport"));
     await seedTenantRole(resolvedTenant.id, "Boarding Master", allPerms.filter((p: any) => p.module === "boarding"));
+    await seedTenantRole(resolvedTenant.id, "Headteacher",
+      allPerms.filter((p: any) =>
+        ["students", "admissions", "attendance", "academics", "exams", "messaging", "reports", "settings"].includes(p.module)
+        && !p.code.startsWith("rbac."),
+      ));
     await seedTenantRole(resolvedTenant.id, "Deputy Admin",
       allPerms.filter((p: any) =>
         ["students", "admissions", "attendance", "academics", "exams", "messaging", "reports", "settings"].includes(p.module)
@@ -221,6 +228,19 @@ async function seed() {
         firstName: demo.adminFirst, lastName: demo.adminLast, status: "active",
       }).returning();
       await db.insert(userRoles).values({ userId: adminUser.id, roleId: adminRole.id, tenantId: resolvedTenant.id }).onConflictDoNothing();
+    }
+
+    // Demo employees (HR) — headteacher, teachers, secretaries (Uganda-style school)
+    if (demo.slug === "school-a") {
+      const employees = [
+        { employeeNo: "EMP-001", firstName: "Sarah", lastName: "Nabukenya", department: "Headteacher", email: "headteacher@school-a.com" },
+        { employeeNo: "EMP-002", firstName: "John", lastName: "Okello", department: "Teacher", email: "john.okello@school-a.com" },
+        { employeeNo: "EMP-003", firstName: "Mary", lastName: "Auma", department: "Secretary", email: "secretary@school-a.com" },
+        { employeeNo: "EMP-004", firstName: "Peter", lastName: "Mukasa", department: "Teacher", email: "peter.mukasa@school-a.com" },
+      ];
+      for (const e of employees) {
+        await db.insert(staff).values({ tenantId: resolvedTenant.id, ...e, status: "active" }).onConflictDoNothing();
+      }
     }
 
     // Demo students

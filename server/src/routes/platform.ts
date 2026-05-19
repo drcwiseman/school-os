@@ -3,9 +3,9 @@ import { z } from "zod";
 import { db } from "../db";
 import {
   tenants, tenantSettings, users, roles, rolePermissions, permissions,
-  plans, tenantPlans, platformAdmins, students, jobs, payments,
+  plans, tenantPlans, platformAdmins, students, jobs, payments, staff, userRoles,
 } from "../db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, isNull } from "drizzle-orm";
 import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry } from "../lib/currencies";
 import { getExchangeRates, convertMinor } from "../services/currency-exchange";
 import { getPlatformDefaults, setPlatformDefaults } from "../services/platform-settings";
@@ -104,7 +104,8 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
     const [tenantsCount] = await db.select({ count: sql<number>`count(*)` }).from(tenants);
     const [activeTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "active"));
     const [suspendedTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "suspended"));
-    const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users).where(isNull(users.deletedAt));
+    const [staffCount] = await db.select({ count: sql<number>`count(*)` }).from(staff).where(isNull(staff.deletedAt));
     const [studentsCount] = await db.select({ count: sql<number>`count(*)` }).from(students);
     const [jobsCount] = await db.select({ count: sql<number>`count(*)` }).from(jobs);
     const [failedJobsCount] = await db.select({ count: sql<number>`count(*)` }).from(jobs).where(eq(jobs.status, "failed"));
@@ -201,7 +202,7 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
       if (plan) await db.insert(tenantPlans).values({ tenantId: tenant.id, planId: plan.id });
     }
 
-    const [adminRole] = await db.insert(roles).values({ tenantId: tenant.id, name: "Tenant Admin", isSystem: true }).returning();
+    const [adminRole] = await db.insert(roles).values({ tenantId: tenant.id, name: "School Administrator", isSystem: true }).returning();
     const allPerms = await db.select().from(permissions);
     if (allPerms.length > 0) {
       await db.insert(rolePermissions).values(allPerms.map((p) => ({ roleId: adminRole.id, permissionId: p.id })));
@@ -212,6 +213,7 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
       tenantId: tenant.id, email: adminEmail, passwordHash,
       firstName: adminFirstName, lastName: adminLastName, status: "active",
     }).returning();
+    await db.insert(userRoles).values({ userId: adminUser.id, roleId: adminRole.id, tenantId: tenant.id });
 
     res.status(201).json({
       success: true,
@@ -234,7 +236,8 @@ router.get("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.r
         planCode: plans.code,
         planName: plans.name,
         studentCount: sql<number>`(SELECT count(*)::int FROM students s WHERE s.tenant_id = ${tenants.id})`,
-        userCount: sql<number>`(SELECT count(*)::int FROM users u WHERE u.tenant_id = ${tenants.id} AND u.deleted_at IS NULL)`,
+        staffCount: sql<number>`(SELECT count(*)::int FROM staff st WHERE st.tenant_id = ${tenants.id} AND st.deleted_at IS NULL)`,
+        erpUserCount: sql<number>`(SELECT count(*)::int FROM users u WHERE u.tenant_id = ${tenants.id} AND u.deleted_at IS NULL)`,
       })
       .from(tenants)
       .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))

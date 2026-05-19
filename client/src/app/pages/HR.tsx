@@ -7,7 +7,7 @@ import { ModuleCrud } from "../components/ModuleCrud";
 import { Download, Upload } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const STAFF_CSV_TEMPLATE = "employeeNo,firstName,lastName,email,department\nE001,Jane,Doe,jane@school.com,Admin";
+const STAFF_CSV_TEMPLATE = "employeeNo,firstName,lastName,email,department\nE001,Jane,Nabukenya,jane@school.com,Headteacher\nE002,John,Okello,john@school.com,Teacher\nE003,Mary,Auma,mary@school.com,Secretary";
 
 export const HR: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
@@ -73,15 +73,15 @@ export const HR: React.FC = () => {
           </div>
           {showImport && hasPermission("hr.manage") && (
             <form onSubmit={importCsv} className="card p-6 space-y-3">
-              <h3 className="font-semibold text-white">Import staff from CSV</h3>
-              <p className="text-sm text-slate-400">Header: employeeNo, firstName, lastName, email, department</p>
+              <h3 className="font-semibold text-white">Import employees from CSV</h3>
+              <p className="text-sm text-slate-400">Header: employeeNo, firstName, lastName, email, department (e.g. Headteacher, Teacher, Secretary)</p>
               <textarea className="input font-mono text-xs min-h-[120px]" value={csvText} onChange={(e) => setCsvText(e.target.value)} />
               <button type="submit" className="btn-primary" disabled={importing}>
                 {importing ? "Importing…" : "Run import"}
               </button>
             </form>
           )}
-          <ModuleCrud key={staffKey} title="Staff" apiPath="hr/staff" allowDelete deletePermission="hr.manage"
+          <ModuleCrud key={staffKey} title="Employees" apiPath="hr/staff" allowDelete deletePermission="hr.manage"
             columns={[{ key: "employeeNo", label: "Emp #" }, { key: "firstName", label: "First" }, { key: "lastName", label: "Last" }, { key: "department", label: "Dept" }]}
             fields={[
               { name: "employeeNo", label: "Employee No", required: true },
@@ -103,7 +103,7 @@ function HRHeader() {
     <div className="page-header">
       <div>
         <h1 className="page-title">Human Resources</h1>
-        <p className="text-slate-400 mt-1">Staff directory and leave management</p>
+        <p className="text-slate-400 mt-1">Employees — headteachers, teachers, secretaries (separate from ERP login accounts)</p>
       </div>
     </div>
   );
@@ -112,7 +112,7 @@ function HRHeader() {
 function HRTabs({ tab, setTab, tabCls }: { tab: string; setTab: (t: "staff" | "leave") => void; tabCls: (a: boolean) => string }) {
   return (
     <div className="flex gap-2">
-      <button type="button" onClick={() => setTab("staff")} className={tabCls(tab === "staff")}>Staff</button>
+      <button type="button" onClick={() => setTab("staff")} className={tabCls(tab === "staff")}>Employees</button>
       <button type="button" onClick={() => setTab("leave")} className={tabCls(tab === "leave")}>Leave</button>
     </div>
   );

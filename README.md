@@ -60,7 +60,7 @@ SchoolOS has **three separate security domains** (different tables, cookies, and
 | Who | URL | Demo login |
 |-----|-----|------------|
 | **Platform operator** (SaaS) | `/platform/login` → `/platform/dashboard` | `platform@schoolos.local` / `Platform123!` |
-| **School staff** (tenant) | `/s/school-a/login` | `admin@school-a.com` / `Password123!` |
+| **School administrator** (ERP — tenant = school) | `/s/school-a/login` | `admin@school-a.com` / `Password123!` |
 | **Parent portal** | `/s/school-a/portal/login` | `parent@school-a.com` / `Parent123!` |
 | **Student portal** | `/s/school-a/portal/login` | `student@school-a.com` / `Student123!` |
 

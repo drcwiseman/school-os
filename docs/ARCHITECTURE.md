@@ -5,11 +5,22 @@ SchoolOS is a **multi-tenant education ERP SaaS**. Three **separate security dom
 | Domain | Who | Database identity | Session cookie | Login URL |
 |--------|-----|-------------------|----------------|-----------|
 | **Platform** | SchoolOS company (SaaS operator) | `platform_admins` — **no `tenant_id`** | `platform_session_token` | `/platform/login` → `/platform/dashboard` |
-| **Tenant staff** | School employees (admin, teacher, bursar, …) | `users` — **always has `tenant_id`** | `session_token` | `/s/:schoolSlug/login` → `/s/:schoolSlug/dashboard` |
+| **School ERP users** | School **administrators** and delegated operators (bursar, deputy, HR manager with login) — **not** every teacher | `users` — **always has `tenant_id`** | `session_token` | `/s/:schoolSlug/login` → `/s/:schoolSlug/dashboard` |
 | **Portal** | Parents & students only | `parent_accounts` / `student_accounts` — **tenant-scoped, not staff** | `portal_session_token` | `/s/:schoolSlug/portal/login` → `/s/:schoolSlug/portal/dashboard` |
 
-> **Platform users ≠ Tenant users ≠ Portal users.**  
+> **Platform users ≠ School ERP users ≠ Portal users.**  
 > They use different tables, cookies, middleware, and authorization models.
+
+### Terminology (schools in Uganda & East Africa)
+
+| Term in SchoolOS | Meaning | Database |
+|------------------|---------|----------|
+| **Tenant** | One **school** (organisation), e.g. *St. Mary's SS Kampala* | `tenants` |
+| **School administrator** | Person who runs the ERP (often bursar or IT; may be headteacher) | `users` + role e.g. *School Administrator* |
+| **Employee / staff** | People employed by the school: **headteacher, teachers, secretaries**, drivers, etc. | `staff` (HR) — may have **no** login |
+| **Teacher (with login)** | Employee who is also given an ERP account for attendance/marks | `staff` + optional `users.user_id` link |
+
+**Important:** `/s/:schoolSlug/login` is for **school ERP accounts** (`users`), not for every employee. Teachers and secretaries appear in **HR → Staff**; only assign a `users` account when they need system access.
 
 ---
 
@@ -35,11 +46,12 @@ SchoolOS is a **multi-tenant education ERP SaaS**. Three **separate security dom
 
 ## B. Tenant layer (one school)
 
-**Purpose:** All school operations — students, finance, exams, HR, etc.
+**Purpose:** All school operations — students, finance, exams, HR, etc.  
+In product language: **tenant = school**; **tenant admin = school administrator** (ERP operator), not the whole teaching staff.
 
 **Rule:** Every business row includes `tenant_id UUID NOT NULL`.
 
-**Staff auth:**
+**School ERP login** (administrators & delegated operators — not every employee):
 
 ```
 /s/:slug/login → resolveTenant → users (tenant_id) → RBAC → dashboard
@@ -55,7 +67,8 @@ Roles are **permission bundles only**. Example bundles:
 
 | Role | Typical permissions |
 |------|---------------------|
-| **Tenant Admin** | Broad school ops + `rbac.manage.*` + `settings.manage` — **not** platform access |
+| **School Administrator** | Broad school ops + `rbac.manage.*` + `settings.manage` — **not** platform access (legacy role name: *Tenant Admin*) |
+| **Headteacher** | School leadership: wide ops, typically no `rbac.*` (same bundle as Deputy Admin in seed) |
 | **Bursar** | `finance.*`, `reports.view` |
 | **Teacher** | `attendance.*`, `exams.enter_marks`, `students.view`, `academics.view` |
 | **HR Manager** | `hr.*`, `payroll.view` |
@@ -65,7 +78,7 @@ Roles are **permission bundles only**. Example bundles:
 | **Deputy Admin** | School ops modules, no `rbac.*` |
 | **Receptionist** | `admissions.*`, `students.view`, `messaging.*` |
 
-**Tenant Admin cannot:**
+**School Administrator cannot:**
 
 - Access platform console
 - Bypass `tenant_id` filters
@@ -182,13 +195,13 @@ Never a shared flat upload root across tenants.
 PLATFORM
 └── Super Admin (platform_admins)
 
-TENANT (staff — users table)
-├── Tenant Admin
+TENANT (school — ERP users table, not all employees)
+├── School Administrator
+├── Headteacher
 ├── Deputy Admin
-├── Academic Head
 ├── Bursar
 ├── HR Manager
-├── Teacher
+├── Teacher (ERP login when assigned)
 ├── Librarian
 ├── Nurse
 ├── Transport Officer

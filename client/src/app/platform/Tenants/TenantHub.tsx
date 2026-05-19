@@ -52,11 +52,12 @@ export const TenantHub: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <h2 className="text-xl font-bold text-white">School management</h2>
+      <h2 className="text-xl font-bold text-white">Schools (tenants)</h2>
+      <p className="text-xs text-slate-400">A tenant is one school. Provision a <strong className="text-slate-300">school administrator</strong> ERP account — teachers and secretaries are added later under HR → Staff.</p>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <form onSubmit={provision} className="bg-[#090f1c] border border-slate-900 rounded-xl p-6 space-y-3">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Plus size={16} /> Provision campus</h3>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Plus size={16} /> Provision school + administrator</h3>
           <div className="grid sm:grid-cols-2 gap-3">
             <input className="input text-sm" placeholder="slug" required value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} />
             <input className="input text-sm" placeholder="School name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />

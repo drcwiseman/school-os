@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Server, Users, GraduationCap, CreditCard, Shield, Search, Ban, Eye, RefreshCw,
+  Server, Users, GraduationCap, CreditCard, Shield, Search, Ban, Eye, RefreshCw, Briefcase,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
@@ -18,7 +18,8 @@ type TenantRow = {
   planCode?: string;
   planName?: string;
   studentCount?: number;
-  userCount?: number;
+  staffCount?: number;
+  erpUserCount?: number;
 };
 
 type Stats = {
@@ -26,6 +27,7 @@ type Stats = {
   activeTenants: number;
   suspendedTenants: number;
   totalUsers: number;
+  totalStaff?: number;
   totalStudents: number;
   totalJobs: number;
   failedJobs: number;
@@ -130,17 +132,18 @@ export const PlatformDashboard: React.FC = () => {
         </div>
       </div>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         <Bento title="Schools provisioned" value={String(stats?.totalTenants ?? 0)} sub={`${stats?.activeTenants ?? 0} active nodes`} icon={Server} accent="blue" />
-        <Bento title="Total staff users" value={String(stats?.totalUsers ?? 0)} sub="Across all tenants" icon={Users} accent="purple" />
-        <Bento title="Isolated students" value={String(stats?.totalStudents ?? 0)} sub="Portal + core ERP" icon={GraduationCap} accent="emerald" />
+        <Bento title="ERP user accounts" value={String(stats?.totalUsers ?? 0)} sub="School admins & operators (not all employees)" icon={Users} accent="purple" />
+        <Bento title="Employees (HR)" value={String(stats?.totalStaff ?? 0)} sub="Teachers, headteachers, secretaries…" icon={Briefcase} accent="blue" />
+        <Bento title="Students enrolled" value={String(stats?.totalStudents ?? 0)} sub="Portal + core ERP" icon={GraduationCap} accent="emerald" />
         <Bento title="MRR consolidated" value={fmt(stats?.mrr ?? 0)} sub={`ARR ${fmt(stats?.totalRevenue ?? 0)}`} icon={CreditCard} accent="emerald" highlight />
       </section>
 
       <div className="bg-blue-950/20 border border-blue-500/20 text-blue-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
           <Shield size={16} className="text-blue-400 shrink-0" />
-          <span><strong>Platform ≠ Tenant:</strong> You govern the ecosystem; school admins run their castles. Row-level <code className="text-blue-200">tenant_id</code> isolation enforced on every query.</span>
+          <span><strong>Platform ≠ School:</strong> Tenants are schools. <strong>Employees</strong> (HR) ≠ <strong>ERP accounts</strong> (school administrators). Row-level <code className="text-blue-200">tenant_id</code> on every query.</span>
         </div>
         <div className="flex gap-4 text-slate-400">
           <span>Jobs: <strong className="text-white">{stats?.totalJobs ?? 0}</strong></span>
@@ -152,8 +155,8 @@ export const PlatformDashboard: React.FC = () => {
       <div className="bg-[#090f1c]/80 backdrop-blur-md border border-slate-900 rounded-xl overflow-hidden">
         <div className="p-6 border-b border-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-white">Active tenant cluster</h3>
-            <p className="text-xs text-slate-400">Plan tier, locale, and operational status</p>
+            <h3 className="text-base font-bold text-white">Registered schools</h3>
+            <p className="text-xs text-slate-400">Employees (HR) vs ERP accounts (school administrators)</p>
           </div>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -173,6 +176,8 @@ export const PlatformDashboard: React.FC = () => {
                 <th className="py-4 px-6">Route</th>
                 <th className="py-4 px-6">Country / Currency</th>
                 <th className="py-4 px-6">Plan</th>
+                <th className="py-4 px-6">Employees</th>
+                <th className="py-4 px-6">ERP users</th>
                 <th className="py-4 px-6">Students</th>
                 <th className="py-4 px-6">Status</th>
                 <th className="py-4 px-6 text-right">Actions</th>
@@ -188,6 +193,8 @@ export const PlatformDashboard: React.FC = () => {
                   <td className="py-4 px-6 font-mono text-blue-400">/s/{t.slug}</td>
                   <td className="py-4 px-6">{t.country || "—"} / {t.currency || "USD"}</td>
                   <td className="py-4 px-6">{t.planName ?? t.planCode ?? "—"}</td>
+                  <td className="py-4 px-6">{t.staffCount ?? 0}</td>
+                  <td className="py-4 px-6">{t.erpUserCount ?? 0}</td>
                   <td className="py-4 px-6">{t.studentCount ?? 0}</td>
                   <td className="py-4 px-6">{statusBadge(t.status)}</td>
                   <td className="py-4 px-6 text-right space-x-2">
