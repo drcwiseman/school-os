@@ -1,0 +1,79 @@
+import { Router } from "express";
+import { z } from "zod";
+import { db } from "../db";
+import { libraryBooks, libraryCopies, libraryLoans, libraryFines } from "../db/schema";
+import { eq, and, desc } from "drizzle-orm";
+import { requireAuth } from "../middleware/auth";
+import { requireTenantMatch } from "../middleware/tenant";
+import { requirePermission } from "../middleware/rbac";
+import { validate } from "../utils/validate";
+import { NotFoundError } from "../middleware/error";
+
+const router = Router();
+const guard = [requireAuth, requireTenantMatch];
+
+router.get("/books", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(libraryBooks).where(eq(libraryBooks.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/books", ...guard, requirePermission("library.manage"),
+  validate({ body: z.object({ title: z.string(), author: z.string().optional(), isbn: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [book] = await db.insert(libraryBooks).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: book });
+    } catch (e) { next(e); }
+  }
+);
+
+router.post("/books/:id/copies", ...guard, requirePermission("library.manage"),
+  validate({ body: z.object({ barcode: z.string() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [copy] = await db.insert(libraryCopies).values({ tenantId: tenant.id, bookId: req.params.id, barcode: req.body.barcode }).returning();
+      res.status(201).json({ success: true, data: copy });
+    } catch (e) { next(e); }
+  }
+);
+
+router.post("/loans", ...guard, requirePermission("library.manage"),
+  validate({ body: z.object({ copyId: z.string().uuid(), studentId: z.string().uuid(), dueAt: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [copy] = await db.select().from(libraryCopies).where(and(eq(libraryCopies.id, req.body.copyId), eq(libraryCopies.tenantId, tenant.id))).limit(1);
+      if (!copy) throw new NotFoundError("Copy not found");
+      await db.update(libraryCopies).set({ status: "loaned" }).where(eq(libraryCopies.id, copy.id));
+      const [loan] = await db.insert(libraryLoans).values({
+        tenantId: tenant.id, copyId: copy.id, studentId: req.body.studentId,
+        dueAt: req.body.dueAt ? new Date(req.body.dueAt) : undefined,
+      }).returning();
+      res.status(201).json({ success: true, data: loan });
+    } catch (e) { next(e); }
+  }
+);
+
+router.post("/loans/:id/return", ...guard, requirePermission("library.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [loan] = await db.select().from(libraryLoans).where(and(eq(libraryLoans.id, req.params.id), eq(libraryLoans.tenantId, tenant.id))).limit(1);
+    if (!loan) throw new NotFoundError("Loan not found");
+    await db.update(libraryLoans).set({ returnedAt: new Date() }).where(eq(libraryLoans.id, loan.id));
+    await db.update(libraryCopies).set({ status: "available" }).where(eq(libraryCopies.id, loan.copyId));
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
+router.get("/fines", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(libraryFines).where(eq(libraryFines.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+export default router;

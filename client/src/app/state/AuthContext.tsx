@@ -1,0 +1,77 @@
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { api } from "../api/client";
+
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  permissions: string[];
+  roles: { id: string; name: string }[];
+  loading: boolean;
+  schoolSlug: string | null;
+  setAuth: (user: User | null, slug: string | null, permissions?: string[], roles?: { id: string; name: string }[]) => void;
+  hasPermission: (code: string) => boolean;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+  const [schoolSlug, setSchoolSlug] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Extract slug from URL if present (e.g. /s/school-a/...)
+    const match = window.location.pathname.match(/^\/s\/([^\/]+)/);
+    const slug = match ? match[1] : null;
+    
+    if (slug) {
+      setSchoolSlug(slug);
+      api.get(`/s/${slug}/api/auth/me`)
+        .then((res) => {
+          if (res.success && res.user) {
+            setUser(res.user);
+            setPermissions(res.permissions || []);
+            setRoles(res.roles || []);
+          }
+        })
+        .catch(() => setUser(null))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const setAuth = (newUser: User | null, slug: string | null, perms: string[] = [], userRoles: { id: string; name: string }[] = []) => {
+    setUser(newUser);
+    setSchoolSlug(slug);
+    setPermissions(perms);
+    setRoles(userRoles);
+  };
+
+  const hasPermission = (code: string) => permissions.includes(code);
+
+  const logout = async () => {
+    if (schoolSlug) {
+      await api.post(`/s/${schoolSlug}/api/auth/logout`);
+    }
+    setUser(null);
+    window.location.href = schoolSlug ? `/s/${schoolSlug}/login` : "/";
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, permissions, roles, loading, schoolSlug, setAuth, hasPermission, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);

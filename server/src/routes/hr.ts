@@ -1,0 +1,82 @@
+import { Router } from "express";
+import { z } from "zod";
+import { db } from "../db";
+import { staff, staffContracts, leaveRequests } from "../db/schema";
+import { eq, and, desc } from "drizzle-orm";
+import { requireAuth } from "../middleware/auth";
+import { requireTenantMatch } from "../middleware/tenant";
+import { requirePermission } from "../middleware/rbac";
+import { validate } from "../utils/validate";
+import { NotFoundError } from "../middleware/error";
+
+const router = Router();
+const guard = [requireAuth, requireTenantMatch];
+
+router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(staff).where(eq(staff.tenantId, tenant.id)).orderBy(desc(staff.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/staff", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ employeeNo: z.string(), firstName: z.string(), lastName: z.string(), email: z.string().optional(), department: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(staff).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.post("/staff/:id/contracts", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ salary: z.number().int(), startDate: z.string(), endDate: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [s] = await db.select().from(staff).where(and(eq(staff.id, req.params.id), eq(staff.tenantId, tenant.id))).limit(1);
+      if (!s) throw new NotFoundError("Staff not found");
+      const [row] = await db.insert(staffContracts).values({
+        tenantId: tenant.id, staffId: s.id, salary: req.body.salary,
+        startDate: new Date(req.body.startDate), endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/leave", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(leaveRequests).where(eq(leaveRequests.tenantId, tenant.id)).orderBy(desc(leaveRequests.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/leave", ...guard, requirePermission("hr.view"),
+  validate({ body: z.object({ staffId: z.string().uuid(), startDate: z.string(), endDate: z.string(), reason: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(leaveRequests).values({
+        tenantId: tenant.id, staffId: req.body.staffId,
+        startDate: new Date(req.body.startDate), endDate: new Date(req.body.endDate), reason: req.body.reason,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.patch("/leave/:id", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ status: z.enum(["approved", "rejected", "cancelled"]) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.update(leaveRequests).set({ status: req.body.status }).where(and(eq(leaveRequests.id, req.params.id), eq(leaveRequests.tenantId, tenant.id))).returning();
+      if (!row) throw new NotFoundError("Leave request not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+export default router;

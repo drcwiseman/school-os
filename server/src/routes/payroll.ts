@@ -1,0 +1,72 @@
+import { Router } from "express";
+import { z } from "zod";
+import { db } from "../db";
+import { payrollRuns, payrollItems, payslips, staff, staffContracts } from "../db/schema";
+import { eq, and, desc } from "drizzle-orm";
+import { requireAuth } from "../middleware/auth";
+import { requireTenantMatch } from "../middleware/tenant";
+import { requirePermission } from "../middleware/rbac";
+import { validate } from "../utils/validate";
+import { NotFoundError } from "../middleware/error";
+import { createAuditLog } from "../services/audit";
+
+const router = Router();
+const guard = [requireAuth, requireTenantMatch];
+
+router.get("/runs", ...guard, requirePermission("payroll.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(payrollRuns).where(eq(payrollRuns.tenantId, tenant.id)).orderBy(desc(payrollRuns.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/runs", ...guard, requirePermission("payroll.run"),
+  validate({ body: z.object({ period: z.string() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [run] = await db.insert(payrollRuns).values({ tenantId: tenant.id, period: req.body.period, status: "draft" }).returning();
+      const staffList = await db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.status, "active")));
+      const items = [];
+      for (const s of staffList) {
+        const [contract] = await db.select().from(staffContracts).where(and(eq(staffContracts.staffId, s.id), eq(staffContracts.tenantId, tenant.id))).orderBy(desc(staffContracts.startDate)).limit(1);
+        const gross = contract?.salary ?? 0;
+        const deductions = Math.round(gross * 0.1);
+        const net = gross - deductions;
+        const [item] = await db.insert(payrollItems).values({ tenantId: tenant.id, payrollRunId: run.id, staffId: s.id, grossPay: gross, deductions, netPay: net }).returning();
+        items.push(item);
+      }
+      res.status(201).json({ success: true, data: { run, items } });
+    } catch (e) { next(e); }
+  }
+);
+
+router.post("/runs/:id/approve", ...guard, requirePermission("payroll.approve"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [run] = await db.update(payrollRuns).set({ status: "approved", approvedBy: user.id }).where(and(eq(payrollRuns.id, req.params.id), eq(payrollRuns.tenantId, tenant.id))).returning();
+    if (!run) throw new NotFoundError("Payroll run not found");
+    const items = await db.select().from(payrollItems).where(and(eq(payrollItems.payrollRunId, run.id), eq(payrollItems.tenantId, tenant.id)));
+    const slips = [];
+    for (const item of items) {
+      const [s] = await db.select().from(staff).where(eq(staff.id, item.staffId)).limit(1);
+      const [slip] = await db.insert(payslips).values({
+        tenantId: tenant.id, payrollItemId: item.id, staffId: item.staffId,
+        dataJson: { period: run.period, gross: item.grossPay, deductions: item.deductions, net: item.netPay, employee: s?.employeeNo },
+      }).returning();
+      slips.push(slip);
+    }
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "payroll.approve", entityType: "payroll_run", entityId: run.id, after: run, ip: req.ip });
+    res.json({ success: true, data: { run, payslips: slips } });
+  } catch (e) { next(e); }
+});
+
+router.get("/payslips", ...guard, requirePermission("payroll.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(payslips).where(eq(payslips.tenantId, tenant.id)).orderBy(desc(payslips.issuedAt)) });
+  } catch (e) { next(e); }
+});
+
+export default router;

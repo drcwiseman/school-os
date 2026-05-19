@@ -116,4 +116,3 @@ npm run docker:up                   # Postgres + API (after setting SESSION_SECR
 - `/server/src/middleware`: Auth, Tenancy, RBAC, and Error Handling.
 - `/client/src/app`: React UI layout, context state, and pages.
 - `/client/src/styles`: Custom Tailwind configuration and glassmorphism design tokens.
-# school-os

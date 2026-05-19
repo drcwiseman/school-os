@@ -1,0 +1,39 @@
+# School OS — local / staging stack
+# Usage: cp server/.env.example server/.env && docker compose up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: school_os
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d school_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgres://postgres:postgres@db:5432/school_os
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5000}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npm run db:migrate && npm run db:seed && npm run start"
+
+volumes:
+  pgdata:

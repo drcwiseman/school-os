@@ -1,0 +1,34 @@
+import { db } from "../db";
+import { jobs } from "../db/schema";
+import { eq } from "drizzle-orm";
+import { processCampaignJob } from "./campaign-worker";
+
+let processing = false;
+
+export async function enqueueJob(tenantId: string | null, type: string, payload: Record<string, unknown>) {
+  const [job] = await db.insert(jobs).values({ tenantId: tenantId ?? undefined, type, payload, status: "pending" }).returning();
+  tick();
+  return job;
+}
+
+export async function tick() {
+  if (processing) return;
+  processing = true;
+  try {
+    const pending = await db.select().from(jobs).where(eq(jobs.status, "pending")).limit(5);
+    for (const job of pending) {
+      await db.update(jobs).set({ status: "running", updatedAt: new Date() }).where(eq(jobs.id, job.id));
+      try {
+        let result: unknown = null;
+        if (job.type === "campaign.send") {
+          result = await processCampaignJob(job.tenantId!, job.payload as { campaignId: string });
+        }
+        await db.update(jobs).set({ status: "done", result: result as object, updatedAt: new Date() }).where(eq(jobs.id, job.id));
+      } catch (err: any) {
+        await db.update(jobs).set({ status: "failed", error: err.message, updatedAt: new Date() }).where(eq(jobs.id, job.id));
+      }
+    }
+  } finally {
+    processing = false;
+  }
+}
