@@ -202,3 +202,5 @@ If you use **InMotion managed VPS**, ask support to confirm: Node 20, PostgreSQL
 | Platform | `https://your-domain.com/platform/login` |
 
 Default demo logins exist only if you ran `db:seed` — change passwords immediately in production.
+
+**Full credential and link list:** [DEMO.md](./DEMO.md)

@@ -53,7 +53,7 @@ npm run dev
 
 ### 4. Logging In
 
-SchoolOS has **three separate security domains** (different tables, cookies, and login URLs). See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+SchoolOS has **three separate security domains** (different tables, cookies, and login URLs). See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** and **[docs/DEMO.md](docs/DEMO.md)** (all demo logins and URL paths).
 
 **Development:** use the Vite app on port **5173** (not 5000):
 
