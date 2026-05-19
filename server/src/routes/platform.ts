@@ -6,6 +6,10 @@ import {
   plans, tenantPlans, platformAdmins, students, jobs, payments,
 } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
+import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry } from "../lib/currencies";
+import { getExchangeRates, convertMinor } from "../services/currency-exchange";
+import { getPlatformDefaults, setPlatformDefaults } from "../services/platform-settings";
+import { getPlansWithRegionalPricing } from "../services/plan-pricing";
 import {
   setTenantFeature,
   listFeatureCatalog,
@@ -31,6 +35,8 @@ const createTenantSchema = z.object({
   adminFirstName: z.string().min(1),
   adminLastName: z.string().min(1),
   planCode: z.string().optional(),
+  country: z.string().length(2).optional(),
+  currency: z.string().length(3).optional(),
 });
 
 router.post("/auth/login", validate({ body: z.object({ email: z.string().email(), password: z.string() }) }), async (req, res, next) => {
@@ -60,8 +66,41 @@ router.post("/auth/logout", requirePlatformAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+router.get("/currencies", requirePlatformAuth, async (_req, res) => {
+  res.json({ success: true, data: SUPPORTED_CURRENCIES });
+});
+
+router.get("/exchange-rates", requirePlatformAuth, async (req, res, next) => {
+  try {
+    const base = String(req.query.base ?? "USD").toUpperCase();
+    if (!CURRENCY_CODES.has(base)) return res.status(400).json({ success: false, message: "Unsupported base currency" });
+    const rates = await getExchangeRates(base);
+    res.json({ success: true, data: { base, rates, provider: "frankfurter.app" } });
+  } catch (err) { next(err); }
+});
+
+router.get("/settings", requirePlatformAuth, async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformDefaults() });
+  } catch (err) { next(err); }
+});
+
+router.patch("/settings", requirePlatformAuth, requirePlatformPermission("stats.read"),
+  validate({ body: z.object({ displayCurrency: z.string().length(3) }) }),
+  async (req, res, next) => {
+    try {
+      const code = req.body.displayCurrency.toUpperCase();
+      if (!CURRENCY_CODES.has(code)) return res.status(400).json({ success: false, message: "Unsupported currency" });
+      res.json({ success: true, data: await setPlatformDefaults({ displayCurrency: code }) });
+    } catch (err) { next(err); }
+  },
+);
+
 router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
   try {
+    const defaults = await getPlatformDefaults();
+    const displayCurrency = defaults.displayCurrency;
+
     const [tenantsCount] = await db.select({ count: sql<number>`count(*)` }).from(tenants);
     const [activeTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "active"));
     const [suspendedTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "suspended"));
@@ -69,7 +108,25 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
     const [studentsCount] = await db.select({ count: sql<number>`count(*)` }).from(students);
     const [jobsCount] = await db.select({ count: sql<number>`count(*)` }).from(jobs);
     const [failedJobsCount] = await db.select({ count: sql<number>`count(*)` }).from(jobs).where(eq(jobs.status, "failed"));
-    const [paymentsSum] = await db.select({ sum: sql<number>`sum(amount)` }).from(payments);
+    const [pendingJobs] = await db.select({ count: sql<number>`count(*)` }).from(jobs).where(eq(jobs.status, "pending"));
+    const [runningJobs] = await db.select({ count: sql<number>`count(*)` }).from(jobs).where(eq(jobs.status, "running"));
+
+    const revenueRows = await db.execute<{ tenant_id: string; currency: string; total: string }>(sql`
+      SELECT p.tenant_id, COALESCE(ts.currency, 'USD') AS currency, SUM(p.amount)::text AS total
+      FROM payments p
+      LEFT JOIN tenant_settings ts ON ts.tenant_id = p.tenant_id
+      WHERE p.deleted_at IS NULL
+      GROUP BY p.tenant_id, ts.currency
+    `);
+
+    let totalRevenueMinor = 0;
+    for (const row of revenueRows.rows) {
+      const amt = Number(row.total ?? 0);
+      const cur = (row.currency ?? "USD").toUpperCase();
+      totalRevenueMinor += await convertMinor(amt, cur, displayCurrency);
+    }
+
+    const mrrMinor = Math.round(totalRevenueMinor / 12);
 
     res.json({
       success: true,
@@ -81,8 +138,13 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
         totalStudents: Number(studentsCount?.count ?? 0),
         totalJobs: Number(jobsCount?.count ?? 0),
         failedJobs: Number(failedJobsCount?.count ?? 0),
-        totalRevenue: Number(paymentsSum?.sum ?? 0),
-      }
+        pendingJobs: Number(pendingJobs?.count ?? 0),
+        runningJobs: Number(runningJobs?.count ?? 0),
+        totalRevenue: totalRevenueMinor,
+        mrr: mrrMinor,
+        displayCurrency,
+        fxProvider: "frankfurter.app",
+      },
     });
   } catch (err) { next(err); }
 });
@@ -113,21 +175,25 @@ router.patch("/tenants/:slug/features", requirePlatformAuth, requirePlatformPerm
   },
 );
 
-router.get("/plans", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
+router.get("/plans", requirePlatformAuth, requirePlatformPermission("plans.read"), async (req, res, next) => {
   try {
-    res.json({ success: true, data: await db.select().from(plans) });
+    const country = typeof req.query.country === "string" ? req.query.country : undefined;
+    const currency = typeof req.query.currency === "string" ? req.query.currency : undefined;
+    res.json({ success: true, data: await getPlansWithRegionalPricing(country, currency) });
   } catch (err) { next(err); }
 });
 
 router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.provision"), validate({ body: createTenantSchema }), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { slug, name, adminEmail, adminPassword, adminFirstName, adminLastName, planCode } = req.body;
+    const { slug, name, adminEmail, adminPassword, adminFirstName, adminLastName, planCode, country, currency } = req.body;
 
     const [existing] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
     if (existing) throw new ConflictError("School slug already taken");
 
     const [tenant] = await db.insert(tenants).values({ slug, name, status: "active" }).returning();
-    await db.insert(tenantSettings).values({ tenantId: tenant.id });
+    const cc = (country ?? "").toUpperCase();
+    const cur = (currency?.toUpperCase() ?? (cc ? defaultCurrencyForCountry(cc) : "USD"));
+    await db.insert(tenantSettings).values({ tenantId: tenant.id, country: cc, currency: cur });
     await enableDefaultFeaturesForTenant(tenant.id);
 
     if (planCode) {
@@ -156,12 +222,53 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
 
 router.get("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.read"), async (_req, res, next) => {
   try {
-    const rows = await db.select({
-      id: tenants.id, slug: tenants.slug, name: tenants.name, status: tenants.status, createdAt: tenants.createdAt,
-    }).from(tenants);
+    const rows = await db
+      .select({
+        id: tenants.id,
+        slug: tenants.slug,
+        name: tenants.name,
+        status: tenants.status,
+        createdAt: tenants.createdAt,
+        country: tenantSettings.country,
+        currency: tenantSettings.currency,
+        planCode: plans.code,
+        planName: plans.name,
+        studentCount: sql<number>`(SELECT count(*)::int FROM students s WHERE s.tenant_id = ${tenants.id})`,
+        userCount: sql<number>`(SELECT count(*)::int FROM users u WHERE u.tenant_id = ${tenants.id} AND u.deleted_at IS NULL)`,
+      })
+      .from(tenants)
+      .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
+      .leftJoin(tenantPlans, eq(tenantPlans.tenantId, tenants.id))
+      .leftJoin(plans, eq(plans.id, tenantPlans.planId));
     res.json({ success: true, data: rows });
   } catch (err) { next(err); }
 });
+
+router.patch("/tenants/:slug/settings", requirePlatformAuth, requirePlatformPermission("tenants.read"),
+  validate({
+    body: z.object({
+      country: z.string().length(2).optional(),
+      currency: z.string().length(3).optional(),
+      timezone: z.string().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+      if (req.body.country !== undefined) patch.country = req.body.country.toUpperCase();
+      if (req.body.currency !== undefined) {
+        const c = req.body.currency.toUpperCase();
+        if (!CURRENCY_CODES.has(c)) return res.status(400).json({ success: false, message: "Unsupported currency" });
+        patch.currency = c;
+      }
+      if (req.body.timezone !== undefined) patch.timezone = req.body.timezone;
+      const [updated] = await db.update(tenantSettings).set(patch).where(eq(tenantSettings.tenantId, tenant.id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("tenants.read"), async (req, res, next) => {
   try {

@@ -47,6 +47,7 @@ export const tenantSettings = pgTable("tenant_settings", {
   brandingJson:     jsonb("branding_json").$type<Record<string, string>>().default({}),
   /** @deprecated Prefer tenant_features — kept for backward compatibility */
   featureFlagsJson: jsonb("feature_flags_json").$type<Record<string, boolean>>().default({}),
+  country:          text("country").notNull().default(""),
   currency:         text("currency").notNull().default("USD"),
   timezone:         text("timezone").notNull().default("UTC"),
   updatedAt:        timestamp("updated_at").notNull().defaultNow(),
@@ -1018,6 +1019,12 @@ export const platformSessions = pgTable("platform_sessions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tokenIdx: uniqueIndex("platform_sessions_token_idx").on(t.token) }));
 
+export const platformSettings = pgTable("platform_settings", {
+  key:       text("key").primaryKey(),
+  value:     jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const plans = pgTable("plans", {
   id:           uuid("id").primaryKey().defaultRandom(),
   code:         text("code").notNull().unique(),
@@ -1026,6 +1033,18 @@ export const plans = pgTable("plans", {
   featuresJson: jsonb("features_json").$type<Record<string, boolean>>().default({}),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
 });
+
+export const planRegionalPrices = pgTable("plan_regional_prices", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  planId:       uuid("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
+  countryCode:  text("country_code").notNull().default("*"),
+  currency:     text("currency").notNull(),
+  priceMonthly: integer("price_monthly").notNull(),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  uniq: uniqueIndex("plan_regional_prices_plan_country_currency_idx").on(t.planId, t.countryCode, t.currency),
+  planIdx: index("plan_regional_prices_plan_idx").on(t.planId),
+}));
 
 export const tenantPlans = pgTable("tenant_plans", {
   tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),

@@ -5,7 +5,7 @@ import { db } from "./index";
 import {
   tenants, tenantSettings, users, permissions, roles, rolePermissions, userRoles,
   students, classes, studentClassHistory, academicYears, terms,
-  guardians, studentGuardians, platformAdmins, plans, tenantPlans,
+  guardians, studentGuardians, platformAdmins, plans, planRegionalPrices, tenantPlans,
   parentAccounts, studentAccounts, messageTemplates, announcements, campaigns,
   features, tenantFeatures,
 } from "./schema";
@@ -119,6 +119,29 @@ async function seed() {
   for (const p of planDefs) {
     await db.insert(plans).values(p).onConflictDoNothing();
   }
+  const seededPlans = await db.select().from(plans);
+  const regionalDefs: { code: string; countryCode: string; currency: string; priceMonthly: number }[] = [
+    { code: "starter", countryCode: "*", currency: "USD", priceMonthly: 0 },
+    { code: "pro", countryCode: "*", currency: "USD", priceMonthly: 9900 },
+    { code: "starter", countryCode: "KE", currency: "KES", priceMonthly: 0 },
+    { code: "pro", countryCode: "KE", currency: "KES", priceMonthly: 499900 },
+    { code: "starter", countryCode: "NG", currency: "NGN", priceMonthly: 0 },
+    { code: "pro", countryCode: "NG", currency: "NGN", priceMonthly: 4500000 },
+    { code: "starter", countryCode: "GB", currency: "GBP", priceMonthly: 0 },
+    { code: "pro", countryCode: "GB", currency: "GBP", priceMonthly: 7900 },
+    { code: "starter", countryCode: "EU", currency: "EUR", priceMonthly: 0 },
+    { code: "pro", countryCode: "*", currency: "EUR", priceMonthly: 8900 },
+  ];
+  for (const r of regionalDefs) {
+    const plan = seededPlans.find((p) => p.code === r.code);
+    if (!plan) continue;
+    await db.insert(planRegionalPrices).values({
+      planId: plan.id,
+      countryCode: r.countryCode,
+      currency: r.currency,
+      priceMonthly: r.priceMonthly,
+    }).onConflictDoNothing();
+  }
   const [platformAdmin] = await db.select().from(platformAdmins).where((await import("drizzle-orm")).eq(platformAdmins.email, "platform@schoolos.local")).limit(1);
   if (!platformAdmin) {
     const passwordHash = await hashPassword("Platform123!");
@@ -146,7 +169,12 @@ async function seed() {
     const { eq: eq2 } = await import("drizzle-orm");
     const [existingSettings] = await db.select().from(tenantSettings).where(eq2(tenantSettings.tenantId, resolvedTenant.id)).limit(1);
     if (!existingSettings) {
-      await db.insert(tenantSettings).values({ tenantId: resolvedTenant.id, currency: "USD", timezone: "UTC" });
+      await db.insert(tenantSettings).values({
+        tenantId: resolvedTenant.id,
+        country: demo.slug === "school-a" ? "KE" : "US",
+        currency: demo.slug === "school-a" ? "KES" : "USD",
+        timezone: demo.slug === "school-a" ? "Africa/Nairobi" : "UTC",
+      });
     }
 
     // Admin role with all permissions

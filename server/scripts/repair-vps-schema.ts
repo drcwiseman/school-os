@@ -64,6 +64,7 @@ async function main() {
   await runSqlFile("0006_phase3_soft_delete_audit.sql");
   await runSqlFile("0007_phase4_soft_delete_plans.sql");
   await runSqlFile("0008_phase15_announcement_schedule.sql");
+  await runSqlFile("0009_platform_geo_currency.sql");
 
   console.log("\n✅ Repair applied.");
   console.log("Next:");

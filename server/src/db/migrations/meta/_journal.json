@@ -64,6 +64,13 @@
       "when": 1779187600000,
       "tag": "0008_phase15_announcement_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1779188000000,
+      "tag": "0009_platform_geo_currency",
+      "breakpoints": true
     }
   ]
 }

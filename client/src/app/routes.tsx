@@ -24,7 +24,14 @@ import { Reports } from "./pages/Reports";
 import { PortalLogin } from "./pages/PortalLogin";
 import { PortalDashboard } from "./pages/PortalDashboard";
 import { PlatformLogin } from "./pages/PlatformLogin";
-import { PlatformConsole } from "./pages/PlatformConsole";
+import { PlatformLayout } from "./platform/PlatformLayout";
+import { PlatformDashboard } from "./platform/Dashboard";
+import { TenantHub } from "./platform/Tenants/TenantHub";
+import { PlanManager } from "./platform/Subscriptions/PlanManager";
+import { RevenueLedger } from "./platform/Subscriptions/Ledger";
+import { SupportHub } from "./platform/Support/SupportHub";
+import { QueueMonitor } from "./platform/System/QueueMonitor";
+import { AuditLogs } from "./platform/System/AuditLogs";
 import { Settings } from "./pages/Settings";
 
 export const AppRoutes = () => {
@@ -43,9 +50,16 @@ export const AppRoutes = () => {
       <Route path="/s/:schoolSlug/portal/dashboard" element={<PortalDashboard />} />
 
       <Route path="/platform/login" element={<PlatformLogin />} />
-      <Route path="/platform/dashboard" element={<PlatformConsole />} />
-      <Route path="/platform/tenants" element={<Navigate to="/platform/dashboard" replace />} />
-      <Route path="/platform" element={<Navigate to="/platform/login" replace />} />
+      <Route path="/platform" element={<PlatformLayout />}>
+        <Route path="dashboard" element={<PlatformDashboard />} />
+        <Route path="tenants" element={<TenantHub />} />
+        <Route path="subscriptions/plans" element={<PlanManager />} />
+        <Route path="subscriptions/ledger" element={<RevenueLedger />} />
+        <Route path="support" element={<SupportHub />} />
+        <Route path="system/queue" element={<QueueMonitor />} />
+        <Route path="system/audit" element={<AuditLogs />} />
+        <Route index element={<Navigate to="dashboard" replace />} />
+      </Route>
 
       <Route path="/s/:schoolSlug/*" element={<DashboardLayout />}>
         <Route path="dashboard" element={<Dashboard />} />

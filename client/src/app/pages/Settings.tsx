@@ -3,12 +3,14 @@ import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { Loader2, Save } from "lucide-react";
+import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from "../../lib/currencies";
 
 export const Settings: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [country, setCountry] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [timezone, setTimezone] = useState("UTC");
   const [schoolName, setSchoolName] = useState("");
@@ -21,6 +23,7 @@ export const Settings: React.FC = () => {
       try {
         const res = await api.get(`/s/${schoolSlug}/api/settings`);
         const s = res.data;
+        setCountry(s.country ?? "");
         setCurrency(s.currency ?? "USD");
         setTimezone(s.timezone ?? "UTC");
         const branding = (s.brandingJson ?? {}) as Record<string, string>;
@@ -41,6 +44,7 @@ export const Settings: React.FC = () => {
     setSaving(true);
     try {
       await api.patch(`/s/${schoolSlug}/api/settings`, {
+        country: country || undefined,
         currency,
         timezone,
         brandingJson: { logoText: schoolName, footer },
@@ -74,8 +78,17 @@ export const Settings: React.FC = () => {
       <div className="card p-6 space-y-4">
         <h3 className="text-white font-semibold">General</h3>
         <div>
-          <label className="label">Currency (ISO)</label>
-          <input className="input" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} />
+          <label className="label">Country</label>
+          <select className="input" value={country} onChange={(e) => setCountry(e.target.value)}>
+            <option value="">—</option>
+            {COUNTRY_OPTIONS.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Default currency</label>
+          <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {CURRENCY_OPTIONS.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="label">Timezone</label>
