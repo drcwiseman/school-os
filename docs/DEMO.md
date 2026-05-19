@@ -124,16 +124,19 @@ If seed was never run: `npm run db:seed` (demo logins only).
 
 ### Platform login shows "Internal Server Error"
 
-Usually the database is missing tables or the platform admin was never seeded.
+Logs often show `column "role" does not exist` on `platform_admins`. Migrations **0004–0005** did not finish (PostgreSQL blocks `ALTER TYPE … ADD VALUE` inside a transaction on older PG).
 
 ```bash
 cd /root/school-os
-pm2 logs school-os --lines 40 --nostream    # read the real Postgres error
-npm run db:migrate
-npm run db:ensure-platform   # creates platform@schoolos.local if missing
-# or full demo data:
+git pull
+npm install
+npm run db:repair          # adds platform_admins.role + enum values (safe to re-run)
+npm run db:migrate         # should complete 0004–0008 after repair + fixed 0005
+npm run db:ensure-platform
 npm run db:seed
 pm2 restart school-os --update-env
 ```
+
+If `db:migrate` still fails on an enum value “already exists”, that is OK — continue with `db:seed`.
 
 Then sign in at `/platform/login` with `platform@schoolos.local` / `Platform123!`.

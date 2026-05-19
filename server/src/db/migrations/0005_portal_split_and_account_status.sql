@@ -1,8 +1,11 @@
--- Extended account lifecycle (staff + portal accounts; PG10-safe)
-DO $$ BEGIN ALTER TYPE "user_status" ADD VALUE 'suspended'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN ALTER TYPE "user_status" ADD VALUE 'disabled'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN ALTER TYPE "user_status" ADD VALUE 'pending'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
+-- Extended account lifecycle — each ALTER TYPE must commit separately (PG10/CWP).
+-- Drizzle runs statements between breakpoints in their own transaction.
+ALTER TYPE "user_status" ADD VALUE 'suspended';
+--> statement-breakpoint
+ALTER TYPE "user_status" ADD VALUE 'disabled';
+--> statement-breakpoint
+ALTER TYPE "user_status" ADD VALUE 'pending';
+--> statement-breakpoint
 -- Portal: separate parent vs student identity (ownership-based access, not staff RBAC)
 CREATE TABLE IF NOT EXISTS "parent_accounts" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

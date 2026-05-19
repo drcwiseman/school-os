@@ -13,6 +13,7 @@
     "db:migrate": "ts-node src/db/migrate.ts",
     "db:seed": "ts-node src/db/seed.ts",
     "db:ensure-platform": "ts-node scripts/ensure-platform-admin.ts",
+    "db:repair": "ts-node scripts/repair-vps-schema.ts",
     "db:build-full-migration": "ts-node scripts/build-full-migration.ts",
     "db:up": "node scripts/embedded-pg.mjs",
     "dev:setup": "ts-node scripts/wait-for-pg.ts && npm run db:migrate && npm run db:seed"
