@@ -60,6 +60,12 @@ export async function deleteSession(token: string) {
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
+    if (req.cookies?.portal_session_token && !req.cookies?.session_token) {
+      throw new UnauthorizedError("Staff login required — parents/students use the portal login");
+    }
+    if (req.cookies?.platform_session_token && !req.cookies?.session_token) {
+      throw new UnauthorizedError("Staff login required — platform admins cannot use school staff APIs");
+    }
     const token = req.cookies?.session_token as string | undefined;
     if (!token) throw new UnauthorizedError("No session token provided");
 

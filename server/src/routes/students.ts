@@ -3,7 +3,7 @@ import { db } from "../db";
 import { students, studentGuardians, guardians, studentClassHistory, studentDocuments, classes } from "../db/schema";
 import fs from "fs";
 import path from "path";
-import { eq, and, ilike, or, desc, sql } from "drizzle-orm";
+import { eq, and, ilike, or, desc, sql, isNull } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -36,7 +36,7 @@ router.get("/", ...guard, requirePermission("students.view"), async (req: Reques
     const q      = await paginationSchema.merge(z.object({ search: z.string().optional(), status: z.string().optional() })).parseAsync(req.query);
     const { limit, offset } = paginate(q.page, q.limit);
 
-    const conditions = [eq(students.tenantId, tenant.id)];
+    const conditions = [eq(students.tenantId, tenant.id), isNull(students.deletedAt)];
     if (q.status) conditions.push(eq(students.status, q.status as any));
     if (q.search) {
       const s = `%${q.search}%`;

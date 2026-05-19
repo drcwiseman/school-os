@@ -27,11 +27,11 @@ export const PublicFooter: React.FC = () => (
           </ul>
         </div>
         <div className="md:col-span-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-marketing-accent/80">Sign in</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-marketing-accent/80">Sign in (3 separate systems)</p>
           <ul className="mt-5 space-y-3 text-sm text-white/60">
-            <li><Link to="/s/school-a/login" className="transition-colors hover:text-white">Staff portal</Link></li>
-            <li><Link to="/s/school-a/portal/login" className="transition-colors hover:text-white">Parent / student</Link></li>
-            <li><Link to="/platform/login" className="transition-colors hover:text-white">Platform console</Link></li>
+            <li><Link to="/s/school-a/login" className="transition-colors hover:text-white">School staff (admin, teacher, bursar…)</Link></li>
+            <li><Link to="/s/school-a/portal/login" className="transition-colors hover:text-white">Parent / student portal</Link></li>
+            <li><Link to="/platform/login" className="transition-colors hover:text-white">Platform operator (SaaS)</Link></li>
           </ul>
         </div>
       </div>

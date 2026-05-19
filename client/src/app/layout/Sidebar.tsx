@@ -4,7 +4,18 @@ import { useAuth } from "../state/AuthContext";
 import {
   LayoutDashboard, Users, UserCog, LogOut, Settings, GraduationCap, DollarSign,
   CalendarCheck, BookOpen, ClipboardList, Briefcase, Wallet, Bus, Megaphone, FileBarChart,
+  ShieldAlert, HeartPulse, Library, Package, Home,
 } from "lucide-react";
+import { OPERATIONS_MODULES } from "../pages/operations-modules";
+
+const OPS_ICONS: Record<string, React.ElementType> = {
+  discipline: ShieldAlert,
+  health: HeartPulse,
+  library: Library,
+  inventory: Package,
+  transport: Bus,
+  boarding: Home,
+};
 
 export const Sidebar: React.FC = () => {
   const { schoolSlug, logout, user, hasPermission } = useAuth();
@@ -20,7 +31,12 @@ export const Sidebar: React.FC = () => {
     { name: "Finance", path: `/s/${schoolSlug}/finance`, icon: DollarSign, perm: "finance.view" },
     { name: "HR", path: `/s/${schoolSlug}/hr`, icon: Briefcase, perm: "hr.view" },
     { name: "Payroll", path: `/s/${schoolSlug}/payroll`, icon: Wallet, perm: "payroll.view" },
-    { name: "Operations", path: `/s/${schoolSlug}/operations`, icon: Bus, perm: "discipline.view" },
+    ...OPERATIONS_MODULES.map((m) => ({
+      name: m.label,
+      path: `/s/${schoolSlug}/ops/${m.id}`,
+      icon: OPS_ICONS[m.id] ?? Bus,
+      perm: m.perm,
+    })),
     { name: "Messaging", path: `/s/${schoolSlug}/messaging`, icon: Megaphone, perm: "messaging.view" },
     { name: "Reports", path: `/s/${schoolSlug}/reports`, icon: FileBarChart, perm: "reports.view" },
     { name: "Users & Roles", path: `/s/${schoolSlug}/admin`, icon: Users, perm: "rbac.manage.roles" },

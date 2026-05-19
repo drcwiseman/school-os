@@ -16,7 +16,7 @@ export const PlatformLogin: React.FC = () => {
     setLoading(true);
     try {
       const res = await api.post("/api/platform/auth/login", { email, password });
-      if (res.success) navigate("/platform/tenants");
+      if (res.success) navigate("/platform/dashboard");
     } catch (err: any) {
       setError(err.message || "Invalid credentials");
     } finally {

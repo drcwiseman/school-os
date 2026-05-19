@@ -45,7 +45,7 @@ export const PublicHeader: React.FC = () => {
 
           <div className="hidden items-center gap-2 lg:flex">
             <Link to="/s/school-a/portal/login" className="btn-mkt-ghost text-sm" onClick={closeAll}>
-              Parent Login
+              Parent / Student
             </Link>
             <Link to="/contact" className="btn-mkt-primary text-sm" onClick={closeAll}>
               Request Demo

@@ -7,6 +7,7 @@ import {
   students, classes, studentClassHistory, academicYears, terms,
   guardians, studentGuardians, platformAdmins, plans, tenantPlans,
   portalAccounts, messageTemplates, announcements, campaigns,
+  features, tenantFeatures,
 } from "./schema";
 import { hashPassword } from "../middleware/auth";
 
@@ -83,6 +84,16 @@ const PERMISSION_DEFS = [
   { code: "audit.view",              module: "audit",       description: "View audit logs" },
 ];
 
+async function seedTenantRole(tenantId: string, name: string, perms: { id: string }[]) {
+  const { eq, and } = await import("drizzle-orm");
+  const [existing] = await db.select().from(roles).where(and(eq(roles.tenantId, tenantId), eq(roles.name, name))).limit(1);
+  if (existing) return;
+  const [role] = await db.insert(roles).values({ tenantId, name }).returning();
+  if (role && perms.length) {
+    await db.insert(rolePermissions).values(perms.map((p) => ({ roleId: role.id, permissionId: p.id }))).onConflictDoNothing();
+  }
+}
+
 async function seed() {
   console.log("🌱 Seeding database...");
 
@@ -139,20 +150,23 @@ async function seed() {
       await db.insert(rolePermissions).values(allPerms.map((p: any) => ({ roleId: adminRole.id, permissionId: p.id })));
     }
 
-    // Bursar role (finance perms only)
-    const bursarPerms = allPerms.filter((p: any) => p.module === "finance" || p.code === "reports.view");
-    const [bursarRole] = await db.insert(roles).values({ tenantId: resolvedTenant.id, name: "Bursar" }).returning()
-      .onConflictDoNothing() as any;
-    if (bursarRole) {
-      await db.insert(rolePermissions).values(bursarPerms.map((p: any) => ({ roleId: bursarRole.id, permissionId: p.id }))).onConflictDoNothing();
-    }
+    await seedTenantRole(resolvedTenant.id, "Bursar",
+      allPerms.filter((p: any) => p.module === "finance" || p.code === "reports.view"));
+    await seedTenantRole(resolvedTenant.id, "Teacher",
+      allPerms.filter((p: any) => ["attendance.view","attendance.take","academics.view","exams.view","exams.enter_marks","students.view"].includes(p.code)));
+    await seedTenantRole(resolvedTenant.id, "HR Manager",
+      allPerms.filter((p: any) => p.module === "hr" || p.code === "payroll.view"));
+    await seedTenantRole(resolvedTenant.id, "Librarian", allPerms.filter((p: any) => p.module === "library"));
+    await seedTenantRole(resolvedTenant.id, "Nurse", allPerms.filter((p: any) => p.module === "health"));
+    await seedTenantRole(resolvedTenant.id, "Transport Officer", allPerms.filter((p: any) => p.module === "transport"));
+    await seedTenantRole(resolvedTenant.id, "Boarding Master", allPerms.filter((p: any) => p.module === "boarding"));
 
-    // Teacher role
-    const teacherPerms = allPerms.filter((p: any) => ["attendance.view","attendance.take","academics.view","exams.view","exams.enter_marks","students.view"].includes(p.code));
-    const [teacherRole] = await db.insert(roles).values({ tenantId: resolvedTenant.id, name: "Teacher" }).returning()
-      .onConflictDoNothing() as any;
-    if (teacherRole) {
-      await db.insert(rolePermissions).values(teacherPerms.map((p: any) => ({ roleId: teacherRole.id, permissionId: p.id }))).onConflictDoNothing();
+    // Default tenant features (relational)
+    const featureRows = await db.select().from(features);
+    for (const f of featureRows) {
+      await db.insert(tenantFeatures).values({
+        tenantId: resolvedTenant.id, featureId: f.id, enabled: true,
+      }).onConflictDoNothing();
     }
 
     // Admin user

@@ -29,6 +29,13 @@
       "when": 1779185600000,
       "tag": "0003_phases_11_15",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1779186000000,
+      "tag": "0004_architecture_hardening",
+      "breakpoints": true
     }
   ]
 }

@@ -53,10 +53,16 @@ npm run dev
 
 ### 4. Logging In
 
+SchoolOS has **three separate security domains** (different tables, cookies, and login URLs). See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
 **Development:** use the Vite app on port **5173** (not 5000):
 
-- **Tenant A:** `http://localhost:5173/s/school-a/login` (admin@school-a.com / Password123!)
-- **Tenant B:** `http://localhost:5173/s/school-b/login` (admin@school-b.com / Password123!)
+| Who | URL | Demo login |
+|-----|-----|------------|
+| **Platform operator** (SaaS) | `/platform/login` → `/platform/dashboard` | `platform@schoolos.local` / `Platform123!` |
+| **School staff** (tenant) | `/s/school-a/login` | `admin@school-a.com` / `Password123!` |
+| **Parent portal** | `/s/school-a/portal/login` | `parent@school-a.com` / `Parent123!` |
+| **Student portal** | `/s/school-a/portal/login` | `student@school-a.com` / `Student123!` |
 
 Port 5000 is the API only in dev. After `npm run build`, a single server on 5000 serves both UI and API.
 

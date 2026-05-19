@@ -23,6 +23,9 @@ export async function validatePlatformSession(token: string) {
 
 export async function requirePlatformAuth(req: Request, res: Response, next: NextFunction) {
   try {
+    if (req.cookies?.session_token && !req.cookies?.platform_session_token) {
+      throw new UnauthorizedError("Platform login required — use /platform/login");
+    }
     const token = req.cookies?.platform_session_token as string | undefined;
     if (!token) throw new UnauthorizedError("Platform login required");
     const result = await validatePlatformSession(token);

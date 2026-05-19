@@ -84,8 +84,8 @@ export const Admin: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Tenant Admin</h1>
-          <p className="text-slate-400 mt-1">Manage users, roles, and audit trail</p>
+          <h1 className="page-title">Users &amp; Roles</h1>
+          <p className="text-slate-400 mt-1">Staff accounts, RBAC, and audit trail (school-scoped only)</p>
         </div>
       </div>
 

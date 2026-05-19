@@ -17,7 +17,7 @@ import { Academics } from "./pages/Academics";
 import { Exams } from "./pages/Exams";
 import { HR } from "./pages/HR";
 import { Payroll } from "./pages/Payroll";
-import { Operations } from "./pages/Operations";
+import { OperationModulePage } from "./pages/OperationModulePage";
 import { Messaging } from "./pages/Messaging";
 import { Reports } from "./pages/Reports";
 import { PortalLogin } from "./pages/PortalLogin";
@@ -42,7 +42,8 @@ export const AppRoutes = () => {
       <Route path="/s/:schoolSlug/portal/dashboard" element={<PortalDashboard />} />
 
       <Route path="/platform/login" element={<PlatformLogin />} />
-      <Route path="/platform/tenants" element={<PlatformConsole />} />
+      <Route path="/platform/dashboard" element={<PlatformConsole />} />
+      <Route path="/platform/tenants" element={<Navigate to="/platform/dashboard" replace />} />
       <Route path="/platform" element={<Navigate to="/platform/login" replace />} />
 
       <Route path="/s/:schoolSlug/*" element={<DashboardLayout />}>
@@ -55,7 +56,13 @@ export const AppRoutes = () => {
         <Route path="finance" element={<Finance />} />
         <Route path="hr" element={<HR />} />
         <Route path="payroll" element={<Payroll />} />
-        <Route path="operations" element={<Operations />} />
+        <Route path="ops/discipline" element={<OperationModulePage moduleId="discipline" />} />
+        <Route path="ops/health" element={<OperationModulePage moduleId="health" />} />
+        <Route path="ops/library" element={<OperationModulePage moduleId="library" />} />
+        <Route path="ops/inventory" element={<OperationModulePage moduleId="inventory" />} />
+        <Route path="ops/transport" element={<OperationModulePage moduleId="transport" />} />
+        <Route path="ops/boarding" element={<OperationModulePage moduleId="boarding" />} />
+        <Route path="operations" element={<Navigate to="ops/discipline" replace />} />
         <Route path="messaging" element={<Messaging />} />
         <Route path="reports" element={<Reports />} />
         <Route path="admin" element={<Admin />} />

@@ -2,6 +2,8 @@
 
 This document is the operational plan for running School OS in production.
 
+> **System design:** [ARCHITECTURE.md](./ARCHITECTURE.md) — platform vs tenant staff vs portal (three security domains).
+
 ## Architecture overview
 
 ```mermaid

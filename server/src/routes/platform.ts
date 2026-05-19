@@ -6,6 +6,7 @@ import {
   plans, tenantPlans, platformAdmins, students, jobs, payments,
 } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
+import { setTenantFeature } from "../services/tenant-features";
 import { hashPassword } from "../middleware/auth";
 import { createPlatformSession, requirePlatformAuth, verifyPassword } from "../middleware/platform-auth";
 import { validate } from "../utils/validate";
@@ -139,7 +140,10 @@ router.patch("/tenants/:slug/feature-flags", requirePlatformAuth,
       if (!tenant) throw new NotFoundError("Tenant not found");
       const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
       const merged = { ...(settings?.featureFlagsJson ?? {}), ...req.body.flags };
-      await db.update(tenantSettings).set({ featureFlagsJson: merged }).where(eq(tenantSettings.tenantId, tenant.id));
+      await db.update(tenantSettings).set({ featureFlagsJson: merged, updatedAt: new Date() }).where(eq(tenantSettings.tenantId, tenant.id));
+      for (const [code, enabled] of Object.entries(req.body.flags)) {
+        await setTenantFeature(tenant.id, code, Boolean(enabled));
+      }
       res.json({ success: true, data: merged });
     } catch (err) { next(err); }
   }

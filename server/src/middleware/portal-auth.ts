@@ -23,6 +23,9 @@ export async function validatePortalSession(token: string) {
 
 export async function requirePortalAuth(req: Request, res: Response, next: NextFunction) {
   try {
+    if (req.cookies?.session_token && !req.cookies?.portal_session_token) {
+      throw new UnauthorizedError("Portal login required — staff cannot use parent/student portal APIs");
+    }
     const token = req.cookies?.portal_session_token as string | undefined;
     if (!token) throw new UnauthorizedError("Portal login required");
     const result = await validatePortalSession(token);

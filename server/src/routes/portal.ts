@@ -2,13 +2,15 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import {
-  portalAccounts, students, studentGuardians, invoices,
-  reportCards, announcements, assignments, tenantSettings,
+  portalAccounts, students, invoices,
+  reportCards, announcements, assignments,
 } from "../db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { requirePortalAuth, createPortalSession, verifyPassword } from "../middleware/portal-auth";
 import { validate } from "../utils/validate";
 import { UnauthorizedError, NotFoundError } from "../middleware/error";
+import { filterStudentsForPortal } from "../services/portal-access";
+import { getTenantFeatureFlags } from "../services/tenant-features";
 const router = Router();
 
 router.post("/login", validate({ body: z.object({ email: z.string().email(), password: z.string() }) }), async (req, res, next) => {
@@ -41,17 +43,13 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
     const account = (req as any).portalAccount;
-    const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
-    const flags = (settings?.featureFlagsJson ?? {}) as Record<string, boolean>;
+    const flags = await getTenantFeatureFlags(tenant.id);
     const resultsVisible = flags.results_visible !== false;
     const feesMustBeClear = flags.fees_must_be_clear === true;
 
     if (account.type === "parent") {
-      const links = await db.select({ studentId: studentGuardians.studentId }).from(studentGuardians).where(eq(studentGuardians.guardianId, account.guardianId!));
-      const studentIds = links.map((l) => l.studentId);
-      const children = studentIds.length
-        ? await db.select().from(students).where(and(eq(students.tenantId, tenant.id), inArray(students.id, studentIds)))
-        : [];
+      const children = await filterStudentsForPortal(account, tenant.id);
+      const studentIds = children.map((c) => c.id);
       let statements: any[] = [];
       if (studentIds.length) {
         statements = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenant.id), inArray(invoices.studentId, studentIds)));

@@ -19,10 +19,33 @@ export const tenants = pgTable("tenants", {
   slugIdx: uniqueIndex("tenants_slug_idx").on(t.slug),
 }));
 
+/** Global feature catalog — enable per tenant via tenant_features */
+export const features = pgTable("features", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  code:        text("code").notNull().unique(),
+  name:        text("name").notNull(),
+  description: text("description").notNull().default(""),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  codeIdx: uniqueIndex("features_code_idx").on(t.code),
+}));
+
+export const tenantFeatures = pgTable("tenant_features", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  featureId: uuid("feature_id").notNull().references(() => features.id, { onDelete: "cascade" }),
+  enabled:   boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantFeatureIdx: uniqueIndex("tenant_features_tenant_feature_idx").on(t.tenantId, t.featureId),
+  tenantIdx:        index("tenant_features_tenant_idx").on(t.tenantId),
+}));
+
 export const tenantSettings = pgTable("tenant_settings", {
   id:               uuid("id").primaryKey().defaultRandom(),
   tenantId:         uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   brandingJson:     jsonb("branding_json").$type<Record<string, string>>().default({}),
+  /** @deprecated Prefer tenant_features — kept for backward compatibility */
   featureFlagsJson: jsonb("feature_flags_json").$type<Record<string, boolean>>().default({}),
   currency:         text("currency").notNull().default("USD"),
   timezone:         text("timezone").notNull().default("UTC"),
@@ -41,6 +64,8 @@ export const users = pgTable("users", {
   firstName:    text("first_name").notNull().default(""),
   lastName:     text("last_name").notNull().default(""),
   status:       userStatusEnum("status").notNull().default("active"),
+  deletedAt:    timestamp("deleted_at"),
+  deletedBy:    uuid("deleted_by").references((): any => users.id, { onDelete: "set null" }),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
   updatedAt:    timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
@@ -138,6 +163,8 @@ export const students = pgTable("students", {
   religion:        text("religion"),
   photoUrl:        text("photo_url"),
   status:          studentStatusEnum("status").notNull().default("active"),
+  deletedAt:       timestamp("deleted_at"),
+  deletedBy:       uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   enrolledAt:      timestamp("enrolled_at").notNull().defaultNow(),
   createdAt:       timestamp("created_at").notNull().defaultNow(),
   updatedAt:       timestamp("updated_at").notNull().defaultNow(),
@@ -267,6 +294,8 @@ export const invoices = pgTable("invoices", {
   paidAmount:  integer("paid_amount").notNull().default(0),
   status:      text("status").notNull().default("unpaid"),
   dueDate:     timestamp("due_date"),
+  deletedAt:   timestamp("deleted_at"),
+  deletedBy:   uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   createdAt:   timestamp("created_at").notNull().defaultNow(),
   updatedAt:   timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
@@ -286,6 +315,8 @@ export const payments = pgTable("payments", {
   receiptNo:   text("receipt_no"),
   paidAt:      timestamp("paid_at").notNull().defaultNow(),
   createdBy:   uuid("created_by").references(() => users.id),
+  deletedAt:   timestamp("deleted_at"),
+  deletedBy:   uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   createdAt:   timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   tenantIdx:  index("payments_tenant_idx").on(t.tenantId),
@@ -900,10 +931,11 @@ export const deliveryLogs = pgTable("delivery_logs", {
   createdAt:    timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("delivery_logs_tenant_idx").on(t.tenantId) }));
 
-// ─── Phase 13: Portal accounts ───────────────────────────────────────────────
+// ─── Phase 13: Portal accounts (NOT staff users — ownership-based access) ───
 
 export const portalTypeEnum = pgEnum("portal_type", ["parent", "student"]);
 
+/** Parent and student logins only. Staff use `users`. */
 export const portalAccounts = pgTable("portal_accounts", {
   id:           uuid("id").primaryKey().defaultRandom(),
   tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
@@ -932,11 +964,13 @@ export const portalSessions = pgTable("portal_sessions", {
 
 // ─── Phase 14: Platform SaaS ─────────────────────────────────────────────────
 
+/** SaaS operator accounts — no tenant_id */
 export const platformAdmins = pgTable("platform_admins", {
   id:           uuid("id").primaryKey().defaultRandom(),
   email:        text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name:         text("name").notNull().default("Platform Admin"),
+  role:         text("role").notNull().default("super_admin"),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
 });
 
