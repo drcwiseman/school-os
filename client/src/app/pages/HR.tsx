@@ -89,6 +89,7 @@ export const HR: React.FC = () => {
               { name: "lastName", label: "Last name", required: true },
               { name: "department", label: "Department" },
             ]} />
+          <StaffContractsPanel schoolSlug={schoolSlug!} hasPermission={hasPermission} toast={toast} />
         </>
       ) : (
         <LeaveRequestsPanel schoolSlug={schoolSlug!} hasPermission={hasPermission} toast={toast} />
@@ -132,6 +133,7 @@ type LeaveRow = {
 function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: string; hasPermission: (p: string) => boolean; toast: (m: string, t?: "success" | "error") => void }) {
   const [rows, setRows] = useState<LeaveRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ staffId: "", startDate: "", endDate: "", reason: "" });
 
@@ -173,7 +175,11 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-between gap-2">
+        <div className="flex gap-2">
+          <button type="button" className={viewMode === "list" ? "btn-primary text-sm" : "btn-ghost text-sm"} onClick={() => setViewMode("list")}>List</button>
+          <button type="button" className={viewMode === "calendar" ? "btn-primary text-sm" : "btn-ghost text-sm"} onClick={() => setViewMode("calendar")}>Calendar</button>
+        </div>
         {hasPermission("hr.view") && (
           <button type="button" className="btn-primary" onClick={() => setShowForm((v) => !v)}>
             {showForm ? "Cancel" : "New request"}
@@ -191,6 +197,9 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
           </div>
         </form>
       )}
+      {viewMode === "calendar" ? (
+        <LeaveCalendar rows={rows} />
+      ) : (
       <div className="card overflow-hidden">
         <table className="table">
           <thead>
@@ -225,6 +234,148 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
             ))}
           </tbody>
         </table>
+      </div>
+      )}
+    </div>
+  );
+}
+
+type StaffMember = { id: string; employeeNo: string; firstName: string; lastName: string };
+type ContractRow = { id: string; salary: number; startDate: string; endDate?: string | null };
+
+function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: string; hasPermission: (p: string) => boolean; toast: (m: string, t?: "success" | "error") => void }) {
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [selectedStaff, setSelectedStaff] = useState("");
+  const [contracts, setContracts] = useState<ContractRow[]>([]);
+  const [form, setForm] = useState({ salary: "", startDate: "", endDate: "" });
+
+  useEffect(() => {
+    api.get(`/s/${schoolSlug}/api/hr/staff`).then((r) => setStaffList(r.data ?? [])).catch(() => {});
+  }, [schoolSlug]);
+
+  useEffect(() => {
+    if (!selectedStaff) { setContracts([]); return; }
+    api.get(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts`).then((r) => setContracts(r.data ?? [])).catch((err: any) => toast(err.message, "error"));
+  }, [selectedStaff, schoolSlug]);
+
+  const addContract = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaff) return;
+    const cents = Math.round(parseFloat(form.salary) * 100);
+    if (!Number.isFinite(cents) || cents <= 0) { toast("Enter a valid salary", "error"); return; }
+    try {
+      await api.post(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts`, {
+        salary: cents,
+        startDate: form.startDate,
+        endDate: form.endDate || undefined,
+      });
+      toast("Contract added", "success");
+      setForm({ salary: "", startDate: "", endDate: "" });
+      const r = await api.get(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts`);
+      setContracts(r.data ?? []);
+    } catch (err: any) { toast(err.message, "error"); }
+  };
+
+  if (!hasPermission("hr.view")) return null;
+
+  return (
+    <div className="card p-6 space-y-4">
+      <h3 className="font-semibold text-white">Employment contracts</h3>
+      <div>
+        <label className="label">Staff member</label>
+        <select className="input" value={selectedStaff} onChange={(e) => setSelectedStaff(e.target.value)}>
+          <option value="">Select staff…</option>
+          {staffList.map((s) => (
+            <option key={s.id} value={s.id}>{s.employeeNo} — {s.firstName} {s.lastName}</option>
+          ))}
+        </select>
+      </div>
+      {selectedStaff && (
+        <>
+          <ul className="text-sm space-y-1 text-slate-300">
+            {contracts.length === 0 ? (
+              <li className="text-slate-500">No contracts on file.</li>
+            ) : contracts.map((c) => (
+              <li key={c.id}>
+                ${(c.salary / 100).toFixed(2)} / yr — {new Date(c.startDate).toLocaleDateString()}
+                {c.endDate ? ` – ${new Date(c.endDate).toLocaleDateString()}` : " (open)"}
+              </li>
+            ))}
+          </ul>
+          {hasPermission("hr.manage") && (
+            <form onSubmit={addContract} className="grid md:grid-cols-4 gap-3 items-end border-t border-slate-800 pt-4">
+              <div>
+                <label className="label">Annual salary (USD)</label>
+                <input className="input" type="number" step="0.01" required value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Start date</label>
+                <input className="input" type="date" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">End date (optional)</label>
+                <input className="input" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+              </div>
+              <button type="submit" className="btn-primary">Add contract</button>
+            </form>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function LeaveCalendar({ rows }: { rows: LeaveRow[] }) {
+  const [month, setMonth] = useState(() => new Date());
+  const approved = rows.filter((r) => r.status === "approved");
+  const year = month.getFullYear();
+  const monthIdx = month.getMonth();
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+  const startPad = new Date(year, monthIdx, 1).getDay();
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateStr = (day: number) => `${year}-${pad(monthIdx + 1)}-${pad(day)}`;
+
+  const onLeave = (day: number) => {
+    const d = dateStr(day);
+    return approved.filter((l) => {
+      const s = l.startDate.slice(0, 10);
+      const e = l.endDate.slice(0, 10);
+      return d >= s && d <= e;
+    });
+  };
+
+  const prev = () => setMonth(new Date(year, monthIdx - 1, 1));
+  const next = () => setMonth(new Date(year, monthIdx + 1, 1));
+
+  const cells: (number | null)[] = [...Array(startPad).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+
+  return (
+    <div className="card p-5 space-y-4">
+      <div className="flex justify-between items-center">
+        <button type="button" className="btn-ghost text-sm" onClick={prev}>← Prev</button>
+        <h3 className="font-semibold text-white">{month.toLocaleString("default", { month: "long", year: "numeric" })}</h3>
+        <button type="button" className="btn-ghost text-sm" onClick={next}>Next →</button>
+      </div>
+      <p className="text-xs text-slate-500">Approved leave only</p>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d}>{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, i) => {
+          if (day === null) return <div key={`e-${i}`} className="min-h-[72px]" />;
+          const leaves = onLeave(day);
+          return (
+            <div key={day} className={`min-h-[72px] rounded border p-1 text-left ${leaves.length ? "border-emerald-500/40 bg-emerald-500/10" : "border-slate-800"}`}>
+              <span className="text-xs text-slate-400">{day}</span>
+              {leaves.map((l) => (
+                <p key={l.id} className="text-[10px] text-emerald-300 truncate mt-0.5" title={`${l.staffFirstName} ${l.staffLastName}`}>
+                  {l.staffFirstName?.[0]}{l.staffLastName}
+                </p>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

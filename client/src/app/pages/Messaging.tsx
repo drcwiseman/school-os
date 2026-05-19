@@ -15,6 +15,7 @@ export const Messaging: React.FC = () => {
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [announcementAudience, setAnnouncementAudience] = useState<"all" | "parents" | "staff">("all");
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     audience: "parents",
@@ -45,11 +46,21 @@ export const Messaging: React.FC = () => {
     api.get(`/s/${schoolSlug}/api/academics/classes`).then((res) => setClasses(res.data ?? [])).catch(() => {});
   }, [schoolSlug]);
 
-  const postAnnouncement = async () => {
+  const postAnnouncement = async (publish: boolean) => {
     try {
-      await api.post(`/s/${schoolSlug}/api/messaging/announcements`, { title, body, audience: "all" });
-      toast("Announcement created", "success");
+      await api.post(`/s/${schoolSlug}/api/messaging/announcements`, {
+        title, body, audience: announcementAudience, published: publish,
+      });
+      toast(publish ? "Announcement published" : "Draft saved", "success");
       setTitle(""); setBody("");
+      load();
+    } catch (err: any) { toast(err.message, "error"); }
+  };
+
+  const publishAnnouncement = async (id: string) => {
+    try {
+      await api.patch(`/s/${schoolSlug}/api/messaging/announcements/${id}`, { published: true });
+      toast("Published to portal", "success");
       load();
     } catch (err: any) { toast(err.message, "error"); }
   };
@@ -107,14 +118,36 @@ export const Messaging: React.FC = () => {
                 <h3 className="font-semibold text-white flex items-center gap-2"><Megaphone className="w-4 h-4" /> New announcement</h3>
                 <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
                 <textarea className="input min-h-[100px]" placeholder="Body" value={body} onChange={(e) => setBody(e.target.value)} />
-                <button type="button" className="btn-primary" onClick={postAnnouncement}>Publish</button>
+                <div>
+                  <label className="label">Audience</label>
+                  <select className="input" value={announcementAudience} onChange={(e) => setAnnouncementAudience(e.target.value as "all" | "parents" | "staff")}>
+                    <option value="all">Everyone (portal)</option>
+                    <option value="parents">Parents</option>
+                    <option value="staff">Staff</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" className="btn-ghost flex-1" onClick={() => postAnnouncement(false)}>Save draft</button>
+                  <button type="button" className="btn-primary flex-1" onClick={() => postAnnouncement(true)}>Publish now</button>
+                </div>
               </div>
               <div className="card p-5">
                 <h3 className="font-semibold text-white mb-3">Recent</h3>
-                <ul className="space-y-2 text-sm text-slate-300">
+                <ul className="space-y-3 text-sm text-slate-300">
                   {announcements.map((a) => (
                     <li key={a.id} className="border-b border-slate-800 pb-2">
-                      <strong>{a.title}</strong> — {a.body.slice(0, 80)}
+                      <div className="flex justify-between gap-2">
+                        <strong>{a.title}</strong>
+                        <span className={`text-xs ${a.published ? "text-emerald-400" : "text-amber-400"}`}>
+                          {a.published ? "published" : "draft"} · {a.audience}
+                        </span>
+                      </div>
+                      <p className="text-slate-500 mt-1">{a.body.slice(0, 80)}</p>
+                      {!a.published && (
+                        <button type="button" className="btn-ghost text-xs mt-2 text-primary-400" onClick={() => publishAnnouncement(a.id)}>
+                          Publish to portal
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

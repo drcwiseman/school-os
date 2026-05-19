@@ -235,6 +235,7 @@ See [README](../README.md#logging-in).
 | **10** | Student guardians, CSV import/export, admissions enroll UI, fee structure line preview |
 | **11** | Applicant timeline, student documents, parent portal linking, HR CSV import/export |
 | **12** | Leave approve/reject, student portal accounts, applicant documents, campaign audience picker |
+| **13** | Leave calendar, announcement audience + publish, applicant doc verify/reject, staff contracts UI |
 
 ### Phase 4 details
 
@@ -411,3 +412,21 @@ See [README](../README.md#logging-in).
 
 - Campaign create form: audience **parents**, **parents_of_class** (with class picker), or **staff**
 - Worker respects `audienceFilter.classId` for class-scoped parent campaigns
+
+### Phase 13 details
+
+**HR**
+
+- **Leave calendar** — month grid of approved leave on the Leave tab (list/calendar toggle)
+- **Staff contracts** — `GET/POST /hr/staff/:id/contracts`; UI to list and add contracts (salary in cents)
+
+**Messaging announcements**
+
+- `POST /announcements` — `audience` (`all` | `parents` | `staff`), optional `published` (draft vs publish)
+- `PATCH /announcements/:id` — publish draft or change audience
+- Announcements tab: audience picker, save draft / publish now, publish button on drafts
+
+**Admissions documents**
+
+- `PATCH /admissions/:id/documents/:docId` — set status `pending` | `verified` | `rejected`
+- Verify / Reject actions in applicant Timeline panel

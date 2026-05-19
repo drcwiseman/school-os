@@ -119,6 +119,18 @@ export const Admissions: React.FC = () => {
     reader.readAsDataURL(appDocForm.file);
   };
 
+  const updateApplicantDocStatus = async (docId: string, status: "verified" | "rejected") => {
+    if (!timelineTarget) return;
+    try {
+      await api.patch(`/s/${schoolSlug}/api/admissions/${timelineTarget.id}/documents/${docId}`, { status });
+      toast(`Document ${status}`, "success");
+      const docs = await api.get(`/s/${schoolSlug}/api/admissions/${timelineTarget.id}/documents`);
+      setApplicantDocs(docs.data ?? []);
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
   const addNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!timelineTarget || !noteText.trim()) return;
@@ -230,9 +242,17 @@ export const Admissions: React.FC = () => {
             ) : (
               <ul className="text-sm space-y-1">
                 {applicantDocs.map((d) => (
-                  <li key={d.id} className="flex justify-between">
-                    <span className="text-slate-300">{d.documentType} — {d.status}</span>
-                    <a className="text-primary-400 text-xs" href={`${API_BASE}/s/${schoolSlug}/api/admissions/${timelineTarget.id}/documents/${d.id}/file`} target="_blank" rel="noreferrer">Download</a>
+                  <li key={d.id} className="flex flex-wrap justify-between items-center gap-2">
+                    <span className="text-slate-300">{d.documentType} — <span className="capitalize">{d.status}</span></span>
+                    <div className="flex gap-2 items-center">
+                      {d.status === "pending" && hasPermission("admissions.edit") && (
+                        <>
+                          <button type="button" className="btn-ghost text-xs text-emerald-400" onClick={() => updateApplicantDocStatus(d.id, "verified")}>Verify</button>
+                          <button type="button" className="btn-ghost text-xs text-red-400" onClick={() => updateApplicantDocStatus(d.id, "rejected")}>Reject</button>
+                        </>
+                      )}
+                      <a className="text-primary-400 text-xs" href={`${API_BASE}/s/${schoolSlug}/api/admissions/${timelineTarget.id}/documents/${d.id}/file`} target="_blank" rel="noreferrer">Download</a>
+                    </div>
                   </li>
                 ))}
               </ul>

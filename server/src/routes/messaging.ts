@@ -7,6 +7,7 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
+import { NotFoundError } from "../middleware/error";
 import { enqueueJob } from "../services/queue";
 import { requireTenantFeature } from "../middleware/require-feature";
 
@@ -39,13 +40,46 @@ router.get("/announcements", ...guard, requirePermission("messaging.view"), asyn
 });
 
 router.post("/announcements", ...guard, requirePermission("messaging.send"),
-  validate({ body: z.object({ title: z.string(), body: z.string(), audience: z.string().default("all") }) }),
+  validate({ body: z.object({
+    title: z.string(),
+    body: z.string(),
+    audience: z.enum(["all", "parents", "staff"]).default("all"),
+    published: z.boolean().optional(),
+  }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
       const user = (req as any).user;
-      const [row] = await db.insert(announcements).values({ tenantId: tenant.id, ...req.body, createdBy: user.id }).returning();
+      const [row] = await db.insert(announcements).values({
+        tenantId: tenant.id,
+        title: req.body.title,
+        body: req.body.body,
+        audience: req.body.audience,
+        published: req.body.published ?? false,
+        createdBy: user.id,
+      }).returning();
       res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.patch("/announcements/:id", ...guard, requirePermission("messaging.send"),
+  validate({ body: z.object({
+    published: z.boolean().optional(),
+    audience: z.enum(["all", "parents", "staff"]).optional(),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const updates: Record<string, unknown> = {};
+      if (req.body.published !== undefined) updates.published = req.body.published;
+      if (req.body.audience !== undefined) updates.audience = req.body.audience;
+      const [row] = await db.update(announcements).set(updates).where(and(
+        eq(announcements.id, req.params.id),
+        eq(announcements.tenantId, tenant.id),
+      )).returning();
+      if (!row) throw new NotFoundError("Announcement not found");
+      res.json({ success: true, data: row });
     } catch (e) { next(e); }
   }
 );

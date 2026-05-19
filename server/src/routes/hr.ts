@@ -81,6 +81,19 @@ router.delete("/staff/:id", ...guard, requirePermission("hr.manage"), async (req
   } catch (e) { next(e); }
 });
 
+router.get("/staff/:id/contracts", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [s] = await db.select().from(staff).where(and(eq(staff.id, req.params.id), eq(staff.tenantId, tenant.id), isNull(staff.deletedAt))).limit(1);
+    if (!s) throw new NotFoundError("Staff not found");
+    const rows = await db.select().from(staffContracts).where(and(
+      eq(staffContracts.staffId, s.id),
+      eq(staffContracts.tenantId, tenant.id),
+    )).orderBy(desc(staffContracts.startDate));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
 router.post("/staff/:id/contracts", ...guard, requirePermission("hr.manage"),
   validate({ body: z.object({ salary: z.number().int(), startDate: z.string(), endDate: z.string().optional() }) }),
   async (req, res, next) => {
@@ -100,6 +113,9 @@ router.post("/staff/:id/contracts", ...guard, requirePermission("hr.manage"),
 router.get("/leave", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+    const conditions = [eq(leaveRequests.tenantId, tenant.id)];
+    if (statusFilter) conditions.push(eq(leaveRequests.status, statusFilter as any));
     const rows = await db
       .select({
         id: leaveRequests.id,
@@ -115,7 +131,7 @@ router.get("/leave", ...guard, requirePermission("hr.view"), async (req, res, ne
       })
       .from(leaveRequests)
       .innerJoin(staff, eq(leaveRequests.staffId, staff.id))
-      .where(eq(leaveRequests.tenantId, tenant.id))
+      .where(and(...conditions))
       .orderBy(desc(leaveRequests.createdAt));
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }

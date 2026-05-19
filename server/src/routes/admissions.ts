@@ -146,6 +146,23 @@ admissionsRouter.post("/:id/documents", requirePermission("admissions.edit"),
   }
 );
 
+admissionsRouter.patch("/:id/documents/:docId", requirePermission("admissions.edit"),
+  validate({ body: z.object({ status: z.enum(["pending", "verified", "rejected"]) }) }),
+  async (req, res, next) => {
+    try {
+      const tenantId = (req as any).tenant!.id;
+      const { id, docId } = req.params;
+      const [doc] = await db.update(applicantDocuments).set({ status: req.body.status }).where(and(
+        eq(applicantDocuments.id, docId),
+        eq(applicantDocuments.applicantId, id),
+        eq(applicantDocuments.tenantId, tenantId),
+      )).returning();
+      if (!doc) throw new NotFoundError("Document not found");
+      res.json({ success: true, data: doc });
+    } catch (error) { next(error); }
+  }
+);
+
 admissionsRouter.get("/:id/documents/:docId/file", requirePermission("admissions.view"), async (req, res, next) => {
   try {
     const tenantId = (req as any).tenant!.id;
