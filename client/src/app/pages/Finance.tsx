@@ -49,6 +49,8 @@ export const Finance: React.FC = () => {
     classId: "",
     items: [{ feeHeadId: "", amount: "" }],
   });
+  const [expandedStructureId, setExpandedStructureId] = useState<string | null>(null);
+  const [structureDetail, setStructureDetail] = useState<{ name: string; items: { feeHeadName: string; amount: number }[]; total: number } | null>(null);
 
   useEffect(() => { load(); }, [schoolSlug, tab]);
 
@@ -171,6 +173,21 @@ export const Finance: React.FC = () => {
       toast("Fee head added", "success");
       setFeeHeadForm({ name: "", description: "" });
       load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const loadStructureLines = async (id: string) => {
+    if (expandedStructureId === id) {
+      setExpandedStructureId(null);
+      setStructureDetail(null);
+      return;
+    }
+    try {
+      const res = await api.get(`/s/${schoolSlug}/api/finance/fee-structures/${id}`);
+      setStructureDetail(res.data);
+      setExpandedStructureId(id);
     } catch (err: any) {
       toast(err.message, "error");
     }
@@ -454,27 +471,44 @@ export const Finance: React.FC = () => {
         <div className="card overflow-hidden">
           <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Fee structures</h3></div>
           <table className="table">
-            <thead><tr><th>Name</th><th>Active</th>{hasPermission("finance.invoice.create") && <th>Actions</th>}</tr></thead>
+            <thead><tr><th>Name</th><th>Active</th><th>Actions</th></tr></thead>
             <tbody>
               {feeStructures.length === 0 ? (
-                <tr><td colSpan={hasPermission("finance.invoice.create") ? 3 : 2} className="text-center py-8 text-slate-400">No fee structures.</td></tr>
+                <tr><td colSpan={3} className="text-center py-8 text-slate-400">No fee structures.</td></tr>
               ) : feeStructures.map((fs) => (
                 <tr key={fs.id}>
                   <td>{fs.name}</td>
                   <td>{fs.isActive ? "Yes" : "No"}</td>
-                  {hasPermission("finance.invoice.create") && (
-                    <td>
+                  <td className="space-x-2">
+                    <button type="button" className="btn-ghost text-xs" onClick={() => loadStructureLines(fs.id)}>
+                      {expandedStructureId === fs.id ? "Hide lines" : "View lines"}
+                    </button>
+                    {hasPermission("finance.invoice.create") && (
                       <ConfirmAction
                         label="Remove"
                         confirmMessage={`Remove fee structure "${fs.name}"?`}
                         onConfirm={() => deleteFeeStructure(fs.id)}
                       />
-                    </td>
-                  )}
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {structureDetail && expandedStructureId && (
+            <div className="p-4 border-t border-slate-700/50 bg-slate-900/30">
+              <h4 className="text-sm font-medium text-white mb-2">{structureDetail.name} — line items</h4>
+              <ul className="text-sm space-y-1">
+                {structureDetail.items.map((item, i) => (
+                  <li key={i} className="flex justify-between text-slate-300">
+                    <span>{item.feeHeadName}</span>
+                    <span>{formatMoney(item.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-sm font-semibold text-white mt-2">Total: {formatMoney(structureDetail.total)}</p>
+            </div>
+          )}
           </div>
         </div>
       )}

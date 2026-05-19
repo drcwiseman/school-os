@@ -82,6 +82,30 @@ router.get("/fee-structures", ...guard, requirePermission("finance.view"), async
   } catch (e) { next(e); }
 });
 
+router.get("/fee-structures/:id", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [fs] = await db.select().from(feeStructures).where(and(
+      eq(feeStructures.id, req.params.id),
+      eq(feeStructures.tenantId, tenant.id),
+      isNull(feeStructures.deletedAt),
+    )).limit(1);
+    if (!fs) throw new NotFoundError("Fee structure not found");
+    const items = await db
+      .select({
+        id: feeStructureItems.id,
+        amount: feeStructureItems.amount,
+        feeHeadId: feeStructureItems.feeHeadId,
+        feeHeadName: feeHeads.name,
+      })
+      .from(feeStructureItems)
+      .innerJoin(feeHeads, eq(feeStructureItems.feeHeadId, feeHeads.id))
+      .where(and(eq(feeStructureItems.feeStructureId, fs.id), eq(feeStructureItems.tenantId, tenant.id)));
+    const total = items.reduce((s, i) => s + i.amount, 0);
+    res.json({ success: true, data: { ...fs, items, total } });
+  } catch (e) { next(e); }
+});
+
 router.post("/fee-structures", ...guard, requirePermission("finance.invoice.create"),
   validate({ body: z.object({ name: z.string(), termId: z.string().uuid().optional(), classId: z.string().uuid().optional(), items: z.array(z.object({ feeHeadId: z.string().uuid(), amount: z.number().int() })) }) }),
   async (req, res, next) => {

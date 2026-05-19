@@ -23,6 +23,10 @@ export const StudentDetail: React.FC = () => {
   const [promote, setPromote] = useState({ classId: "", termId: "" });
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [terms, setTerms] = useState<{ id: string; name: string }[]>([]);
+  const [guardians, setGuardians] = useState<{ guardian: { id: string; firstName: string; lastName: string; relationship: string; phone?: string; email?: string }; isPrimary: boolean }[]>([]);
+  const [guardianForm, setGuardianForm] = useState({
+    firstName: "", lastName: "", relationship: "", phone: "", email: "", isPrimary: false,
+  });
 
   useEffect(() => {
     if (!schoolSlug || !studentId) return;
@@ -31,8 +35,9 @@ export const StudentDetail: React.FC = () => {
       api.get(`/s/${schoolSlug}/api/students/${studentId}`),
       api.get(`/s/${schoolSlug}/api/academics/classes`),
       api.get(`/s/${schoolSlug}/api/academics/terms`),
+      api.get(`/s/${schoolSlug}/api/students/${studentId}/guardians`),
     ])
-      .then(([stu, cls, trm]) => {
+      .then(([stu, cls, trm, g]) => {
         const s = stu.data;
         setForm({
           admissionNumber: s.admissionNumber ?? "",
@@ -45,6 +50,7 @@ export const StudentDetail: React.FC = () => {
         });
         setClasses(cls.data ?? []);
         setTerms(trm.data ?? []);
+        setGuardians(g.data ?? []);
       })
       .catch((err: any) => toast(err.message, "error"))
       .finally(() => setLoading(false));
@@ -69,6 +75,26 @@ export const StudentDetail: React.FC = () => {
       toast(err.message, "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addGuardian = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/s/${schoolSlug}/api/students/${studentId}/guardians`, {
+        firstName: guardianForm.firstName,
+        lastName: guardianForm.lastName,
+        relationship: guardianForm.relationship,
+        phone: guardianForm.phone || undefined,
+        email: guardianForm.email || undefined,
+        isPrimary: guardianForm.isPrimary,
+      });
+      toast("Guardian added", "success");
+      setGuardianForm({ firstName: "", lastName: "", relationship: "", phone: "", email: "", isPrimary: false });
+      const g = await api.get(`/s/${schoolSlug}/api/students/${studentId}/guardians`);
+      setGuardians(g.data ?? []);
+    } catch (err: any) {
+      toast(err.message, "error");
     }
   };
 
@@ -159,6 +185,44 @@ export const StudentDetail: React.FC = () => {
           <div><span className="text-slate-500">Gender</span><p className="text-white capitalize">{form.gender || "—"}</p></div>
         </div>
       )}
+
+      <div className="card p-6 space-y-4">
+        <h3 className="font-semibold text-white">Guardians</h3>
+        {guardians.length === 0 ? (
+          <p className="text-sm text-slate-500">No guardians linked.</p>
+        ) : (
+          <ul className="space-y-2">
+            {guardians.map((row) => (
+              <li key={row.guardian.id} className="flex items-center justify-between text-sm border border-slate-700/50 rounded-lg px-3 py-2">
+                <span className="text-white">
+                  {row.guardian.firstName} {row.guardian.lastName}
+                  <span className="text-slate-500"> · {row.guardian.relationship}</span>
+                </span>
+                <span className="text-slate-400 text-xs">
+                  {row.isPrimary && <span className="badge-green mr-2">Primary</span>}
+                  {row.guardian.phone || row.guardian.email || ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {hasPermission("students.edit") && (
+          <form onSubmit={addGuardian} className="grid md:grid-cols-3 gap-3 pt-2 border-t border-slate-700/50">
+            <input className="input" required placeholder="First name" value={guardianForm.firstName} onChange={(e) => setGuardianForm({ ...guardianForm, firstName: e.target.value })} />
+            <input className="input" required placeholder="Last name" value={guardianForm.lastName} onChange={(e) => setGuardianForm({ ...guardianForm, lastName: e.target.value })} />
+            <input className="input" required placeholder="Relationship" value={guardianForm.relationship} onChange={(e) => setGuardianForm({ ...guardianForm, relationship: e.target.value })} />
+            <input className="input" placeholder="Phone" value={guardianForm.phone} onChange={(e) => setGuardianForm({ ...guardianForm, phone: e.target.value })} />
+            <input className="input" type="email" placeholder="Email" value={guardianForm.email} onChange={(e) => setGuardianForm({ ...guardianForm, email: e.target.value })} />
+            <label className="flex items-center gap-2 text-sm text-slate-400">
+              <input type="checkbox" checked={guardianForm.isPrimary} onChange={(e) => setGuardianForm({ ...guardianForm, isPrimary: e.target.checked })} />
+              Primary contact
+            </label>
+            <div className="md:col-span-3">
+              <button type="submit" className="btn-primary">Add guardian</button>
+            </div>
+          </form>
+        )}
+      </div>
 
       {hasPermission("students.edit") && (
         <form onSubmit={promoteStudent} className="card p-6 space-y-4 max-w-xl">

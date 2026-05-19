@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../state/AuthContext";
 import { Plus, CheckCircle, Clock, XCircle, Search, UserPlus } from "lucide-react";
 
 const PIPELINE_STAGES = ["inquiry", "interview", "offered", "rejected", "enrolled"] as const;
@@ -19,10 +20,15 @@ interface Applicant {
 export const Admissions: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newApplicant, setNewApplicant] = useState({ firstName: "", lastName: "", email: "" });
+  const [enrollTarget, setEnrollTarget] = useState<Applicant | null>(null);
+  const [enrollAdmNo, setEnrollAdmNo] = useState("");
+  const [enrolledStudentId, setEnrolledStudentId] = useState<string | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
 
   useEffect(() => {
     fetchApplicants();
@@ -46,9 +52,10 @@ export const Admissions: React.FC = () => {
       await api.post(`/s/${schoolSlug}/api/admissions`, newApplicant);
       setShowAdd(false);
       setNewApplicant({ firstName: "", lastName: "", email: "" });
+      toast("Applicant added", "success");
       fetchApplicants();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      toast(err.message, "error");
     }
   };
 
@@ -62,15 +69,28 @@ export const Admissions: React.FC = () => {
     }
   };
 
-  const handleEnroll = async (id: string) => {
-    const admissionNumber = prompt("Enter admission number for the new student:");
-    if (!admissionNumber) return;
+  const openEnroll = (app: Applicant) => {
+    setEnrollTarget(app);
+    setEnrollAdmNo("");
+    setEnrolledStudentId(null);
+  };
 
+  const submitEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrollTarget || !enrollAdmNo.trim()) return;
+    setEnrolling(true);
     try {
-      await api.post(`/s/${schoolSlug}/api/admissions/${id}/enroll`, { admissionNumber });
+      const res = await api.post(`/s/${schoolSlug}/api/admissions/${enrollTarget.id}/enroll`, {
+        admissionNumber: enrollAdmNo.trim(),
+      });
+      const studentId = res.data?.student?.id;
+      setEnrolledStudentId(studentId ?? null);
+      toast("Applicant enrolled as student", "success");
       fetchApplicants();
     } catch (err: any) {
-      alert("Failed to enroll: " + err.message);
+      toast(err.message, "error");
+    } finally {
+      setEnrolling(false);
     }
   };
 
@@ -87,7 +107,7 @@ export const Admissions: React.FC = () => {
           <h1 className="page-title">Admissions Pipeline</h1>
           <p className="text-slate-400 mt-1">Manage inquiries and enroll new students</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary">
+        <button type="button" onClick={() => setShowAdd(true)} className="btn-primary">
           <Plus className="w-4 h-4" /> New Inquiry
         </button>
       </div>
@@ -96,14 +116,50 @@ export const Admissions: React.FC = () => {
         <div className="card p-6 mb-6 border-blue-500/30">
           <h3 className="font-semibold text-white mb-4">Add New Applicant</h3>
           <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input required className="input" placeholder="First Name" value={newApplicant.firstName} onChange={e => setNewApplicant({...newApplicant, firstName: e.target.value})} />
-            <input required className="input" placeholder="Last Name" value={newApplicant.lastName} onChange={e => setNewApplicant({...newApplicant, lastName: e.target.value})} />
-            <input type="email" className="input" placeholder="Email (Optional)" value={newApplicant.email} onChange={e => setNewApplicant({...newApplicant, email: e.target.value})} />
+            <input required className="input" placeholder="First Name" value={newApplicant.firstName} onChange={(e) => setNewApplicant({ ...newApplicant, firstName: e.target.value })} />
+            <input required className="input" placeholder="Last Name" value={newApplicant.lastName} onChange={(e) => setNewApplicant({ ...newApplicant, lastName: e.target.value })} />
+            <input type="email" className="input" placeholder="Email (Optional)" value={newApplicant.email} onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })} />
             <div className="md:col-span-3 flex justify-end gap-3 mt-2">
               <button type="button" onClick={() => setShowAdd(false)} className="btn-ghost">Cancel</button>
               <button type="submit" className="btn-primary">Save Applicant</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {enrollTarget && (
+        <div className="card p-6 border-emerald-500/30 space-y-4">
+          <h3 className="font-semibold text-white">
+            Enroll {enrollTarget.firstName} {enrollTarget.lastName}
+          </h3>
+          {enrolledStudentId ? (
+            <div className="space-y-3">
+              <p className="text-sm text-emerald-400">Student record created successfully.</p>
+              <div className="flex gap-3">
+                <Link to={`/s/${schoolSlug}/students/${enrolledStudentId}`} className="btn-primary">
+                  View student
+                </Link>
+                <button type="button" className="btn-ghost" onClick={() => setEnrollTarget(null)}>Close</button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={submitEnroll} className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-[200px]">
+                <label className="label">Admission number</label>
+                <input
+                  className="input"
+                  required
+                  placeholder="e.g. 2026-001"
+                  value={enrollAdmNo}
+                  onChange={(e) => setEnrollAdmNo(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="btn-primary" disabled={enrolling}>
+                {enrolling ? "Enrolling…" : "Create student"}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setEnrollTarget(null)}>Cancel</button>
+            </form>
+          )}
         </div>
       )}
 
@@ -131,7 +187,7 @@ export const Admissions: React.FC = () => {
                 <tr><td colSpan={5} className="text-center py-8">Loading...</td></tr>
               ) : applicants.length === 0 ? (
                 <tr><td colSpan={5} className="text-center py-8 text-slate-400">No applicants in the pipeline.</td></tr>
-              ) : applicants.map(app => (
+              ) : applicants.map((app) => (
                 <tr key={app.id}>
                   <td>
                     <div className="flex items-center gap-3">
@@ -155,13 +211,18 @@ export const Admissions: React.FC = () => {
                       <div className="flex items-center gap-2">
                         {getStageIcon(app.stage, app.convertedTo)}
                         <span className="capitalize">{app.stage}</span>
+                        {app.convertedTo && (
+                          <Link to={`/s/${schoolSlug}/students/${app.convertedTo}`} className="text-xs text-primary-400 hover:text-primary-300">
+                            View student
+                          </Link>
+                        )}
                       </div>
                     )}
                   </td>
                   <td className="text-slate-400">{new Date(app.createdAt).toLocaleDateString()}</td>
                   <td className="text-right">
-                    {!app.convertedTo && (
-                      <button onClick={() => handleEnroll(app.id)} className="btn-ghost text-emerald-400 hover:text-emerald-300 hover:bg-emerald-900/20">
+                    {!app.convertedTo && hasPermission("admissions.enroll") && (
+                      <button type="button" onClick={() => openEnroll(app)} className="btn-ghost text-emerald-400 hover:text-emerald-300 hover:bg-emerald-900/20">
                         <UserPlus className="w-4 h-4" /> Enroll
                       </button>
                     )}

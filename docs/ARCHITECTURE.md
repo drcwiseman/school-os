@@ -232,6 +232,7 @@ See [README](../README.md#logging-in).
 | **7** | Finance collect payment, admissions pipeline stages, exam class roster, audit filter, platform tenant audit |
 | **8** | Live tenant dashboard API, finance billing UI, report card generation UI, add-student form |
 | **9** | Permission-scoped dashboard, student detail/edit, fee heads & structures UI, platform stats enrichment |
+| **10** | Student guardians, CSV import/export, admissions enroll UI, fee structure line preview |
 
 ### Phase 4 details
 
@@ -355,3 +356,18 @@ See [README](../README.md#logging-in).
 **Platform analytics**
 
 - `GET /api/platform/stats` — adds `activeTenants`, `suspendedTenants`; console shows staff users and tenant status summary
+
+### Phase 10 details
+
+**Students**
+
+- **Guardians** on student detail: list + add (`GET/POST /students/:id/guardians`)
+- **CSV export** (`GET /students/export/csv`) and **import** (`POST /students/import/csv`) UI on students list
+
+**Admissions**
+
+- **Enroll** panel with admission number (replaces browser prompt); link to new student record; enrolled rows link to student profile
+
+**Finance**
+
+- `GET /finance/fee-structures/:id` — structure with line items and total; **View lines** on fee structures tab

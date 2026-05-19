@@ -86,7 +86,7 @@ router.post("/import/csv", ...guard, requirePermission("students.create"),
         imported++;
       }
       await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "students.import", entityType: "student", after: { imported }, ip: req.ip });
-      res.json({ success: true, imported });
+      res.json({ success: true, data: { imported } });
     } catch (err) { next(err); }
   }
 );

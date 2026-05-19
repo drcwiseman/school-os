@@ -4,7 +4,10 @@ import { api } from "../api/client";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
-import { Search, Plus, Filter, Loader2 } from "lucide-react";
+import { Search, Plus, Filter, Loader2, Download, Upload } from "lucide-react";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const CSV_TEMPLATE = "admissionNumber,firstName,lastName,status,gender\n2026-001,Jane,Doe,active,female";
 
 interface Student {
   id: string;
@@ -31,6 +34,9 @@ export const StudentsList: React.FC = () => {
     dob: "",
   });
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [csvText, setCsvText] = useState(CSV_TEMPLATE);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -71,6 +77,39 @@ export const StudentsList: React.FC = () => {
     }
   };
 
+  const exportCsv = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/s/${schoolSlug}/api/students/export/csv`, { credentials: "include" });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "students.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Export downloaded", "success");
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const importCsv = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImporting(true);
+    try {
+      const res = await api.post(`/s/${schoolSlug}/api/students/import/csv`, { csv: csvText });
+      const count = res.data?.imported ?? res.imported ?? 0;
+      toast(`Imported ${count} students`, "success");
+      setShowImport(false);
+      fetchStudents();
+    } catch (err: any) {
+      toast(err.message, "error");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const removeStudent = async (id: string, name: string) => {
     try {
       await api.delete(`/s/${schoolSlug}/api/students/${id}`);
@@ -94,12 +133,35 @@ export const StudentsList: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <h1 className="page-title">Students</h1>
-        {hasPermission("students.create") && (
-          <button type="button" className="btn-primary" onClick={() => setShowAdd((v) => !v)}>
-            <Plus className="w-4 h-4" /> {showAdd ? "Cancel" : "Add Student"}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {hasPermission("students.view") && (
+            <button type="button" className="btn-ghost" onClick={exportCsv}>
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
+          )}
+          {hasPermission("students.create") && (
+            <>
+              <button type="button" className="btn-ghost" onClick={() => setShowImport((v) => !v)}>
+                <Upload className="w-4 h-4" /> {showImport ? "Cancel import" : "Import CSV"}
+              </button>
+              <button type="button" className="btn-primary" onClick={() => setShowAdd((v) => !v)}>
+                <Plus className="w-4 h-4" /> {showAdd ? "Cancel" : "Add Student"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
+
+      {showImport && hasPermission("students.create") && (
+        <form onSubmit={importCsv} className="card p-6 space-y-3">
+          <h3 className="font-semibold text-white">Import students from CSV</h3>
+          <p className="text-sm text-slate-400">Header row required: admissionNumber, firstName, lastName, status, gender</p>
+          <textarea className="input font-mono text-xs min-h-[120px]" value={csvText} onChange={(e) => setCsvText(e.target.value)} />
+          <button type="submit" className="btn-primary" disabled={importing}>
+            {importing ? "Importing…" : "Run import"}
+          </button>
+        </form>
+      )}
 
       {showAdd && hasPermission("students.create") && (
         <form onSubmit={createStudent} className="card p-6 grid md:grid-cols-3 gap-4">
