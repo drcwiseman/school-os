@@ -10,8 +10,20 @@ import { validate } from "../utils/validate";
 import { NotFoundError } from "../middleware/error";
 import { enqueueJob } from "../services/queue";
 import { requireTenantFeature } from "../middleware/require-feature";
+import { promoteScheduledAnnouncements } from "../services/announcements";
 
 const router = Router();
+
+function resolvePublishFields(published?: boolean, publishAtRaw?: string | null) {
+  const publishAt = publishAtRaw ? new Date(publishAtRaw) : null;
+  if (publishAt && publishAt.getTime() > Date.now()) {
+    return { published: false, publishAt };
+  }
+  if (published === true || (publishAt && publishAt.getTime() <= Date.now())) {
+    return { published: true, publishAt: publishAt ?? null };
+  }
+  return { published: false, publishAt };
+}
 const guard = [requireAuth, requireTenantMatch, requireTenantFeature("messaging_enabled")];
 
 router.get("/templates", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
@@ -35,6 +47,7 @@ router.post("/templates", ...guard, requirePermission("messaging.send"),
 router.get("/announcements", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    await promoteScheduledAnnouncements(tenant.id);
     res.json({ success: true, data: await db.select().from(announcements).where(eq(announcements.tenantId, tenant.id)).orderBy(desc(announcements.createdAt)) });
   } catch (e) { next(e); }
 });
@@ -45,17 +58,20 @@ router.post("/announcements", ...guard, requirePermission("messaging.send"),
     body: z.string(),
     audience: z.enum(["all", "parents", "staff"]).default("all"),
     published: z.boolean().optional(),
+    publishAt: z.string().nullable().optional(),
   }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
       const user = (req as any).user;
+      const pub = resolvePublishFields(req.body.published, req.body.publishAt);
       const [row] = await db.insert(announcements).values({
         tenantId: tenant.id,
         title: req.body.title,
         body: req.body.body,
         audience: req.body.audience,
-        published: req.body.published ?? false,
+        published: pub.published,
+        publishAt: pub.publishAt,
         createdBy: user.id,
       }).returning();
       res.status(201).json({ success: true, data: row });
@@ -69,6 +85,7 @@ router.patch("/announcements/:id", ...guard, requirePermission("messaging.send")
     body: z.string().optional(),
     published: z.boolean().optional(),
     audience: z.enum(["all", "parents", "staff"]).optional(),
+    publishAt: z.string().nullable().optional(),
   }) }),
   async (req, res, next) => {
     try {
@@ -76,8 +93,12 @@ router.patch("/announcements/:id", ...guard, requirePermission("messaging.send")
       const updates: Record<string, unknown> = {};
       if (req.body.title !== undefined) updates.title = req.body.title;
       if (req.body.body !== undefined) updates.body = req.body.body;
-      if (req.body.published !== undefined) updates.published = req.body.published;
       if (req.body.audience !== undefined) updates.audience = req.body.audience;
+      if (req.body.published !== undefined || req.body.publishAt !== undefined) {
+        const pub = resolvePublishFields(req.body.published, req.body.publishAt);
+        updates.published = pub.published;
+        updates.publishAt = pub.publishAt;
+      }
       const [row] = await db.update(announcements).set(updates).where(and(
         eq(announcements.id, req.params.id),
         eq(announcements.tenantId, tenant.id),

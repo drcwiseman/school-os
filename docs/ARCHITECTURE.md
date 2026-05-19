@@ -237,6 +237,7 @@ See [README](../README.md#logging-in).
 | **12** | Leave approve/reject, student portal accounts, applicant documents, campaign audience picker |
 | **13** | Leave calendar, announcement audience + publish, applicant doc verify/reject, staff contracts UI |
 | **14** | Payroll run detail, announcement edit/delete, contract end-date, leave conflict checks |
+| **15** | Payslip PDF, mark payroll paid, announcement scheduling, contract salary edit |
 
 ### Phase 4 details
 
@@ -455,3 +456,22 @@ See [README](../README.md#logging-in).
 - `GET /hr/leave/check?staffId&startDate&endDate` — overlap detection
 - POST leave and PATCH approve reject overlapping pending/approved leave
 - Calendar highlights days with same-staff overlaps; leave form uses staff picker + live warning
+
+### Phase 15 details
+
+**Payroll**
+
+- `POST /payroll/runs/:id/mark-paid` — approved runs → `paid` (audit: `payroll.mark_paid`)
+- `GET /payroll/payslips/:id/pdf` — payslip PDF download (`payroll.view`)
+- Payroll UI: **Mark paid** on approved runs; **PDF** per payslip row
+
+**Announcements scheduling**
+
+- Migration `0008`: `announcements.publish_at`
+- `POST/PATCH` accept optional `publishAt`; future time keeps draft until due
+- `promoteScheduledAnnouncements()` on staff list + portal dashboard reads
+- UI: datetime picker, **Schedule** button, scheduled status badge
+
+**HR contracts**
+
+- UI: **Update salary** on open contracts (uses existing `PATCH` salary field)

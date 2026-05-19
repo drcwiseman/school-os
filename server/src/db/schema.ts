@@ -913,6 +913,7 @@ export const announcements = pgTable("announcements", {
   body:      text("body").notNull(),
   audience:  text("audience").notNull().default("all"),
   published: boolean("published").notNull().default(false),
+  publishAt: timestamp("publish_at"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("announcements_tenant_idx").on(t.tenantId) }));

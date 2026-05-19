@@ -294,6 +294,7 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [form, setForm] = useState({ salary: "", startDate: "", endDate: "" });
   const [closeDates, setCloseDates] = useState<Record<string, string>>({});
+  const [salaryEdits, setSalaryEdits] = useState<Record<string, string>>({});
 
   useEffect(() => {
     api.get(`/s/${schoolSlug}/api/hr/staff`).then((r) => setStaffList(r.data ?? [])).catch(() => {});
@@ -317,6 +318,18 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
       });
       toast("Contract added", "success");
       setForm({ salary: "", startDate: "", endDate: "" });
+      const r = await api.get(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts`);
+      setContracts(r.data ?? []);
+    } catch (err: any) { toast(err.message, "error"); }
+  };
+
+  const updateSalary = async (contractId: string) => {
+    if (!selectedStaff) return;
+    const cents = Math.round(parseFloat(salaryEdits[contractId]) * 100);
+    if (!Number.isFinite(cents) || cents <= 0) { toast("Enter a valid salary", "error"); return; }
+    try {
+      await api.patch(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts/${contractId}`, { salary: cents });
+      toast("Salary updated", "success");
       const r = await api.get(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts`);
       setContracts(r.data ?? []);
     } catch (err: any) { toast(err.message, "error"); }
@@ -354,13 +367,22 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
             {contracts.length === 0 ? (
               <li className="text-slate-500">No contracts on file.</li>
             ) : contracts.map((c) => (
-              <li key={c.id} className="flex flex-wrap justify-between items-center gap-2 py-1">
+              <li key={c.id} className="flex flex-wrap justify-between items-center gap-2 py-2 border-b border-slate-800/50">
                 <span>
                   ${(c.salary / 100).toFixed(2)} / yr — {new Date(c.startDate).toLocaleDateString()}
                   {c.endDate ? ` – ${new Date(c.endDate).toLocaleDateString()}` : " (open)"}
                 </span>
                 {!c.endDate && hasPermission("hr.manage") && (
-                  <div className="flex gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <input
+                      className="input text-xs w-28"
+                      type="number"
+                      step="0.01"
+                      placeholder="New salary"
+                      value={salaryEdits[c.id] ?? ""}
+                      onChange={(e) => setSalaryEdits({ ...salaryEdits, [c.id]: e.target.value })}
+                    />
+                    <button type="button" className="btn-ghost text-xs" onClick={() => updateSalary(c.id)}>Update salary</button>
                     <input
                       className="input text-xs w-36"
                       type="date"

@@ -8,8 +8,15 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
-import { NotFoundError } from "../middleware/error";
+import { NotFoundError, BadRequestError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
+import { generatePayslipPdf } from "../services/pdf";
+
+function sendPdf(res: any, bytes: Uint8Array, filename: string) {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(Buffer.from(bytes));
+}
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
@@ -94,6 +101,28 @@ router.post("/runs/:id/approve", ...guard, requirePermission("payroll.approve"),
   } catch (e) { next(e); }
 });
 
+router.post("/runs/:id/mark-paid", ...guard, requirePermission("payroll.approve"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(payrollRuns).where(and(
+      eq(payrollRuns.id, req.params.id),
+      eq(payrollRuns.tenantId, tenant.id),
+      isNull(payrollRuns.deletedAt),
+    )).limit(1);
+    if (!before) throw new NotFoundError("Payroll run not found");
+    if (before.status !== "approved") {
+      throw new BadRequestError("Only approved payroll runs can be marked paid");
+    }
+    const [run] = await db.update(payrollRuns).set({ status: "paid" }).where(eq(payrollRuns.id, before.id)).returning();
+    await createAuditLog({
+      tenantId: tenant.id, actorUserId: user.id, action: "payroll.mark_paid",
+      entityType: "payroll_run", entityId: run!.id, before, after: run, ip: req.ip,
+    });
+    res.json({ success: true, data: run });
+  } catch (e) { next(e); }
+});
+
 router.delete("/runs/:id", ...guard, requirePermission("payroll.run"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -124,6 +153,19 @@ router.get("/payslips", ...guard, requirePermission("payroll.view"), async (req,
       .where(eq(payslips.tenantId, tenant.id))
       .orderBy(desc(payslips.issuedAt));
     res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.get("/payslips/:id/pdf", ...guard, requirePermission("payroll.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [slip] = await db.select().from(payslips).where(and(
+      eq(payslips.id, req.params.id),
+      eq(payslips.tenantId, tenant.id),
+    )).limit(1);
+    if (!slip) throw new NotFoundError("Payslip not found");
+    const bytes = await generatePayslipPdf(tenant.id, slip.id);
+    sendPdf(res, bytes, `payslip-${slip.id.slice(0, 8)}.pdf`);
   } catch (e) { next(e); }
 });
 

@@ -16,6 +16,7 @@ export const Messaging: React.FC = () => {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [announcementAudience, setAnnouncementAudience] = useState<"all" | "parents" | "staff">("all");
+  const [publishAt, setPublishAt] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: "", body: "", audience: "all" as "all" | "parents" | "staff" });
   const [campaignForm, setCampaignForm] = useState({
@@ -54,9 +55,30 @@ export const Messaging: React.FC = () => {
         title, body, audience: announcementAudience, published: publish,
       });
       toast(publish ? "Announcement published" : "Draft saved", "success");
-      setTitle(""); setBody("");
+      setTitle(""); setBody(""); setPublishAt("");
       load();
     } catch (err: any) { toast(err.message, "error"); }
+  };
+
+  const scheduleAnnouncement = async () => {
+    if (!publishAt) return toast("Pick a publish date and time", "error");
+    try {
+      await api.post(`/s/${schoolSlug}/api/messaging/announcements`, {
+        title, body, audience: announcementAudience,
+        publishAt: new Date(publishAt).toISOString(),
+      });
+      toast("Announcement scheduled", "success");
+      setTitle(""); setBody(""); setPublishAt("");
+      load();
+    } catch (err: any) { toast(err.message, "error"); }
+  };
+
+  const announcementLabel = (a: { published: boolean; publishAt?: string | null }) => {
+    if (a.published) return { text: "published", cls: "text-emerald-400" };
+    if (a.publishAt && new Date(a.publishAt) > new Date()) {
+      return { text: `scheduled · ${new Date(a.publishAt).toLocaleString()}`, cls: "text-sky-400" };
+    }
+    return { text: "draft", cls: "text-amber-400" };
   };
 
   const publishAnnouncement = async (id: string) => {
@@ -152,20 +174,27 @@ export const Messaging: React.FC = () => {
                     <option value="staff">Staff</option>
                   </select>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" className="btn-ghost flex-1" onClick={() => postAnnouncement(false)}>Save draft</button>
-                  <button type="button" className="btn-primary flex-1" onClick={() => postAnnouncement(true)}>Publish now</button>
+                <div>
+                  <label className="label">Schedule publish (optional)</label>
+                  <input className="input" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn-ghost flex-1 min-w-[100px]" onClick={() => postAnnouncement(false)}>Save draft</button>
+                  <button type="button" className="btn-ghost flex-1 min-w-[100px]" onClick={scheduleAnnouncement}>Schedule</button>
+                  <button type="button" className="btn-primary flex-1 min-w-[100px]" onClick={() => postAnnouncement(true)}>Publish now</button>
                 </div>
               </div>
               <div className="card p-5">
                 <h3 className="font-semibold text-white mb-3">Recent</h3>
                 <ul className="space-y-3 text-sm text-slate-300">
-                  {announcements.map((a) => (
+                  {announcements.map((a) => {
+                    const label = announcementLabel(a);
+                    return (
                     <li key={a.id} className="border-b border-slate-800 pb-2">
                       <div className="flex justify-between gap-2">
                         <strong>{a.title}</strong>
-                        <span className={`text-xs ${a.published ? "text-emerald-400" : "text-amber-400"}`}>
-                          {a.published ? "published" : "draft"} · {a.audience}
+                        <span className={`text-xs ${label.cls}`}>
+                          {label.text} · {a.audience}
                         </span>
                       </div>
                       {editingId === a.id ? (
@@ -199,7 +228,7 @@ export const Messaging: React.FC = () => {
                         )}
                       </div>
                     </li>
-                  ))}
+                  );})}
                 </ul>
               </div>
             </div>

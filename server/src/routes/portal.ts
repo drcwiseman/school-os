@@ -6,6 +6,7 @@ import {
   reportCards, announcements, assignments, attendanceRecords, attendanceSessions,
 } from "../db/schema";
 import { generateReportCardPdf, generateReceiptPdf } from "../services/pdf";
+import { promoteScheduledAnnouncements } from "../services/announcements";
 import { assertPortalCanAccessStudent } from "../services/portal-access";
 import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import {
@@ -138,6 +139,7 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
           .orderBy(desc(receipts.issuedAt))
           .limit(20)
         : [];
+      await promoteScheduledAnnouncements(tenant.id);
       const msgs = await db.select().from(announcements).where(and(eq(announcements.tenantId, tenant.id), eq(announcements.published, true))).orderBy(desc(announcements.createdAt)).limit(10);
       res.json({ success: true, data: { children, statements, receipts: receiptRows, reportCards: publishedCards, attendance, announcements: msgs } });
     } else {

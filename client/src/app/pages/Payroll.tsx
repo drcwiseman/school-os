@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, downloadPdf } from "../api/client";
 import { useToast } from "../components/Toast";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react";
 
 const fmtMoney = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
@@ -115,6 +115,24 @@ export const Payroll: React.FC = () => {
     }
   };
 
+  const markPaid = async (id: string) => {
+    try {
+      await api.post(`/s/${schoolSlug}/api/payroll/runs/${id}/mark-paid`, {});
+      toast("Payroll run marked paid", "success");
+      load();
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
+  const downloadPayslip = async (id: string) => {
+    try {
+      await downloadPdf(`/s/${schoolSlug}/api/payroll/payslips/${id}/pdf`);
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -160,6 +178,9 @@ export const Payroll: React.FC = () => {
               <td className="flex gap-2">
                 {r.status === "draft" && hasPermission("payroll.approve") && (
                   <button type="button" className="btn-ghost text-xs" onClick={() => approve(r.id)}>Approve</button>
+                )}
+                {r.status === "approved" && hasPermission("payroll.approve") && (
+                  <button type="button" className="btn-ghost text-xs text-emerald-400" onClick={() => markPaid(r.id)}>Mark paid</button>
                 )}
                 {r.status === "draft" && hasPermission("payroll.run") && (
                   <ConfirmAction
@@ -210,9 +231,9 @@ export const Payroll: React.FC = () => {
         ))}
       </SectionTable>
 
-      <SectionTable title="Payslips" headers={["Employee", "Period", "Net pay", "Issued"]}>
+      <SectionTable title="Payslips" headers={["Employee", "Period", "Net pay", "Issued", ""]}>
         {payslips.length === 0 ? (
-          <tr><td colSpan={4} className="text-center py-8 text-slate-400">No payslips yet.</td></tr>
+          <tr><td colSpan={5} className="text-center py-8 text-slate-400">No payslips yet.</td></tr>
         ) : payslips.map((p) => {
           const data = (p.dataJson ?? {}) as Record<string, unknown>;
           return (
@@ -221,6 +242,11 @@ export const Payroll: React.FC = () => {
               <td>{String(data.period ?? "—")}</td>
               <td>{typeof data.net === "number" ? fmtMoney(data.net) : "—"}</td>
               <td>{new Date(p.issuedAt).toLocaleDateString()}</td>
+              <td>
+                <button type="button" className="btn-ghost text-xs text-primary-400" onClick={() => downloadPayslip(p.id)}>
+                  <Download className="w-3 h-3 inline" /> PDF
+                </button>
+              </td>
             </tr>
           );
         })}
