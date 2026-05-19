@@ -24,6 +24,7 @@ import portalRoutes from "./portal";
 import settingsRoutes from "./settings";
 import dashboardRoutes from "./dashboard";
 import publicRoutes from "./public";
+import saasRoutes from "./saas-features";
 
 const router = Router();
 
@@ -63,5 +64,6 @@ router.use("/s/:schoolSlug/api/reports",     ...schoolApi, reportsRoutes);
 router.use("/s/:schoolSlug/api/portal",      resolveTenant, portalRoutes);
 router.use("/s/:schoolSlug/api/settings",    ...schoolApi, settingsRoutes);
 router.use("/s/:schoolSlug/api/dashboard",   ...schoolApi, dashboardRoutes);
+router.use("/s/:schoolSlug/api/saas",        ...schoolApi, saasRoutes);
 
 export default router;

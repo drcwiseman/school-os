@@ -4,6 +4,8 @@ This document captures the **expanded product architecture** (Antigravity / plat
 
 `docs/ARCHITECTURE.md` remains the source of truth for **security domains**, **tenant isolation**, and **Phases 1–15** (school ERP). This file is the **SaaS platform & ecosystem roadmap**.
 
+For the full enterprise blueprint (competitive positioning, DNS/SSL pipeline, metered billing, AI agents), see **[enterprise_saas_blueprint.md](../enterprise_saas_blueprint.md)** at the repo root.
+
 ---
 
 ## Positioning
