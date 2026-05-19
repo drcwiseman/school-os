@@ -2,8 +2,6 @@ import React, { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { PublicHeader } from "../components/PublicHeader";
 import { PublicFooter } from "../components/PublicFooter";
-import "../../../styles/marketing.css";
-
 export const PublicLayout: React.FC = () => {
   useEffect(() => {
     document.body.classList.add("marketing-active");
