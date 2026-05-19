@@ -8,6 +8,14 @@ export default {
   theme: {
     extend: {
       colors: {
+        marketing: {
+          navy: "#0f1c2e",
+          "navy-deep": "#0a1220",
+          sage: "#5c7a62",
+          burgundy: "#6b2d3e",
+          cream: "#f7f4ef",
+          "cream-dark": "#ebe6dc",
+        },
         primary: {
           50:  "#eff6ff",
           100: "#dbeafe",
@@ -29,14 +37,17 @@ export default {
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+        display: ["Playfair Display", "Georgia", "serif"],
         mono: ["JetBrains Mono", "monospace"],
+      },
+      boxShadow: {
+        marketing: "0 8px 32px -8px rgba(15, 28, 46, 0.12)",
+        "marketing-lg": "0 24px 64px -16px rgba(15, 28, 46, 0.18)",
+        glass: "0 4px 24px -1px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
       },
       borderRadius: {
         "xl": "0.75rem",
         "2xl": "1rem",
-      },
-      boxShadow: {
-        glass: "0 4px 24px -1px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
       },
       backdropBlur: {
         xs: "2px",

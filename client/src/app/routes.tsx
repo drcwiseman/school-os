@@ -1,5 +1,11 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { DashboardLayout } from "./layout/DashboardLayout";
+import { PublicLayout } from "./public/layout/PublicLayout";
+import { MarketingHome } from "./public/Home";
+import { Features } from "./public/Features";
+import { Pricing } from "./public/Pricing";
+import { About } from "./public/About";
+import { Contact } from "./public/Contact";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { StudentsList } from "./pages/StudentsList";
@@ -19,12 +25,17 @@ import { PortalDashboard } from "./pages/PortalDashboard";
 import { PlatformLogin } from "./pages/PlatformLogin";
 import { PlatformConsole } from "./pages/PlatformConsole";
 import { Settings } from "./pages/Settings";
-import { Home } from "./pages/Home";
 
 export const AppRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<MarketingHome />} />
+        <Route path="/features" element={<Features />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+      </Route>
 
       <Route path="/s/:schoolSlug/login" element={<Login />} />
       <Route path="/s/:schoolSlug/portal/login" element={<PortalLogin />} />

@@ -21,8 +21,12 @@ import messagingRoutes from "./messaging";
 import reportsRoutes from "./reports";
 import portalRoutes from "./portal";
 import settingsRoutes from "./settings";
+import publicRoutes from "./public";
 
 const router = Router();
+
+// Public marketing (no auth)
+router.use("/api/public", publicRoutes);
 
 // Platform-level routes (no school slug required)
 router.use("/api/platform", platformRoutes);
