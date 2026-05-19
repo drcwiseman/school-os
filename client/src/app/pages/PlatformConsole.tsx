@@ -26,7 +26,8 @@ export const PlatformConsole: React.FC = () => {
   });
 
   const [selectedSlug, setSelectedSlug] = useState("");
-  const [flags, setFlags] = useState({ results_visible: true, fees_must_be_clear: false });
+  const [tenantFeatures, setTenantFeatures] = useState<{ code: string; name: string; description: string; enabled: boolean }[]>([]);
+  const [flagsLoading, setFlagsLoading] = useState(false);
   const [selectedSchoolForPlan, setSelectedSchoolForPlan] = useState("");
   const [selectedPlanCode, setSelectedPlanCode] = useState("starter");
 
@@ -85,9 +86,10 @@ export const PlatformConsole: React.FC = () => {
   const saveFlags = async () => {
     if (!selectedSlug) return toast("Select a school tenant", "error");
     try {
-      await api.patch(`/api/platform/tenants/${selectedSlug}/feature-flags`, { flags });
-      toast("School feature flags updated", "success");
-      await loadData();
+      await api.patch(`/api/platform/tenants/${selectedSlug}/features`, {
+        features: tenantFeatures.map((f) => ({ code: f.code, enabled: f.enabled })),
+      });
+      toast("Tenant features saved", "success");
     } catch (err: any) {
       toast(err.message, "error");
     }
@@ -107,16 +109,23 @@ export const PlatformConsole: React.FC = () => {
 
   const handleSchoolSelectForFlags = async (slug: string) => {
     setSelectedSlug(slug);
-    if (!slug) return;
-    try {
-      const res = await api.get(`/api/platform/tenants/${slug}`);
-      const tenantData = res.data;
-      if (tenantData?.settings?.featureFlagsJson) {
-        setFlags(tenantData.settings.featureFlagsJson);
-      }
-    } catch (err: any) {
-      toast("Failed to load tenant flags: " + err.message, "error");
+    if (!slug) {
+      setTenantFeatures([]);
+      return;
     }
+    setFlagsLoading(true);
+    try {
+      const res = await api.get(`/api/platform/tenants/${slug}/features`);
+      setTenantFeatures(res.data ?? []);
+    } catch (err: any) {
+      toast("Failed to load tenant features: " + err.message, "error");
+    } finally {
+      setFlagsLoading(false);
+    }
+  };
+
+  const toggleFeature = (code: string, enabled: boolean) => {
+    setTenantFeatures((prev) => prev.map((f) => (f.code === code ? { ...f, enabled } : f)));
   };
 
   const logout = async () => {
@@ -465,43 +474,38 @@ export const PlatformConsole: React.FC = () => {
 
                 {selectedSlug ? (
                   <div className="border-t border-slate-800 pt-4 space-y-4">
-                    <h3 className="text-sm font-semibold text-white">Active Flags for {selectedSlug}</h3>
-                    
-                    <div className="space-y-3">
-                      <label className="flex items-center justify-between p-3 rounded-xl bg-slate-800/20 border border-slate-800 cursor-pointer hover:bg-slate-800/40 transition-all">
-                        <div>
-                          <p className="text-sm font-semibold text-white">Results Sheet Visibility</p>
-                          <p className="text-xs text-slate-400">If disabled, exam results are hidden in student/parent portals.</p>
+                    <h3 className="text-sm font-semibold text-white">Features for {selectedSlug}</h3>
+                    {flagsLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-3">
+                          {tenantFeatures.map((f) => (
+                            <label
+                              key={f.code}
+                              className="flex items-center justify-between p-3 rounded-xl bg-slate-800/20 border border-slate-800 cursor-pointer hover:bg-slate-800/40 transition-all"
+                            >
+                              <div className="pr-4">
+                                <p className="text-sm font-semibold text-white">{f.name}</p>
+                                <p className="text-xs text-slate-500 font-mono mt-0.5">{f.code}</p>
+                                {f.description ? <p className="text-xs text-slate-400 mt-1">{f.description}</p> : null}
+                              </div>
+                              <input
+                                type="checkbox"
+                                className="w-5 h-5 shrink-0 text-primary-600 focus:ring-primary-500 focus:ring-offset-slate-900 border-slate-700 bg-surface rounded"
+                                checked={f.enabled}
+                                onChange={(e) => toggleFeature(f.code, e.target.checked)}
+                              />
+                            </label>
+                          ))}
                         </div>
-                        <input 
-                          type="checkbox" 
-                          className="w-5 h-5 text-primary-600 focus:ring-primary-500 focus:ring-offset-slate-900 border-slate-700 bg-surface rounded"
-                          checked={flags.results_visible} 
-                          onChange={(e) => setFlags({ ...flags, results_visible: e.target.checked })} 
-                        />
-                      </label>
-
-                      <label className="flex items-center justify-between p-3 rounded-xl bg-slate-800/20 border border-slate-800 cursor-pointer hover:bg-slate-800/40 transition-all">
-                        <div>
-                          <p className="text-sm font-semibold text-white">Clear Billing Mandate</p>
-                          <p className="text-xs text-slate-400">Forces students/parents to settle outstanding dues before reading portals.</p>
-                        </div>
-                        <input 
-                          type="checkbox" 
-                          className="w-5 h-5 text-primary-600 focus:ring-primary-500 focus:ring-offset-slate-900 border-slate-700 bg-surface rounded"
-                          checked={flags.fees_must_be_clear} 
-                          onChange={(e) => setFlags({ ...flags, fees_must_be_clear: e.target.checked })} 
-                        />
-                      </label>
-                    </div>
-
-                    <button 
-                      type="button" 
-                      className="btn-primary w-full mt-4 justify-center" 
-                      onClick={saveFlags}
-                    >
-                      Save Module Feature Flags
-                    </button>
+                        <button type="button" className="btn-primary w-full mt-4 justify-center" onClick={saveFlags}>
+                          Save tenant features
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="p-6 text-center text-slate-500 border border-dashed border-slate-800 rounded-xl">

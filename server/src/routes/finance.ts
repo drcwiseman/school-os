@@ -6,7 +6,7 @@ import {
   payments, paymentAllocations, receipts, expenses, students, studentClassHistory,
 } from "../db/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
-import { softDeleteInvoice } from "../services/soft-delete";
+import { softDeleteInvoice, voidPayment } from "../services/soft-delete";
 import { nextReceiptNumber } from "../utils/receipts";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
@@ -125,7 +125,7 @@ router.post("/payments", ...guard, requirePermission("finance.payment.create"),
     try {
       const tenant = (req as any).tenant;
       const user = (req as any).user;
-      const [invoice] = await db.select().from(invoices).where(and(eq(invoices.id, req.body.invoiceId), eq(invoices.tenantId, tenant.id))).limit(1);
+      const [invoice] = await db.select().from(invoices).where(and(eq(invoices.id, req.body.invoiceId), eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt))).limit(1);
       if (!invoice) throw new NotFoundError("Invoice not found");
       const receiptNo = await nextReceiptNumber(tenant.id);
       const [payment] = await db.insert(payments).values({
@@ -143,10 +143,34 @@ router.post("/payments", ...guard, requirePermission("finance.payment.create"),
   }
 );
 
+router.get("/payments", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const active = and(eq(payments.tenantId, tenant.id), isNull(payments.deletedAt));
+    const rows = await db.select().from(payments).where(active).orderBy(desc(payments.paidAt));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/payments/:id/void", ...guard, requirePermission("finance.refund.create"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(payments).where(and(eq(payments.id, req.params.id), eq(payments.tenantId, tenant.id), isNull(payments.deletedAt))).limit(1);
+    if (!before) throw new NotFoundError("Payment not found");
+    const result = await voidPayment(tenant.id, req.params.id, user.id);
+    await createAuditLog({
+      tenantId: tenant.id, actorUserId: user.id, action: "payment.void",
+      entityType: "payment", entityId: before.id, before, after: result, ip: req.ip,
+    });
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+});
+
 router.get("/debtors", ...guard, requirePermission("finance.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenant.id), sql`${invoices.paidAmount} < ${invoices.totalAmount}`)).orderBy(desc(invoices.dueDate));
+    const rows = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt), sql`${invoices.paidAmount} < ${invoices.totalAmount}`)).orderBy(desc(invoices.dueDate));
     const withBalance = rows.map(r => ({ ...r, balance: r.totalAmount - r.paidAmount }));
     res.json({ success: true, data: withBalance });
   } catch (e) { next(e); }

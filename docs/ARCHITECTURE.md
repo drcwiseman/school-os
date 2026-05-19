@@ -62,6 +62,8 @@ Roles are **permission bundles only**. Example bundles:
 | **Librarian** | `library.*` only |
 | **Nurse** | `health.*` only |
 | **Transport Officer** | `transport.*` only |
+| **Deputy Admin** | School ops modules, no `rbac.*` |
+| **Receptionist** | `admissions.*`, `students.view`, `messaging.*` |
 
 **Tenant Admin cannot:**
 
@@ -116,7 +118,26 @@ Critical entities use `deleted_at` / `deleted_by` instead of hard delete:
 
 - `users`, `students`, `invoices`, `payments`
 
-List endpoints filter `deleted_at IS NULL` by default. Delete APIs use soft-delete (`students`, `users`, `invoices`) — never hard-delete financial or student records.
+List endpoints filter `deleted_at IS NULL` by default. Soft-delete / void APIs:
+
+| Entity | Endpoint | Notes |
+|--------|----------|--------|
+| Students | `DELETE /s/:slug/api/students/:id` | Sets `deleted_at` |
+| Staff users | `DELETE /s/:slug/api/admin/users/:id` | Sets `deleted_at` |
+| Invoices | `DELETE /s/:slug/api/finance/invoices/:id` | Sets `deleted_at` |
+| Payments | `POST /s/:slug/api/finance/payments/:id/void` | Reverses invoice allocation + soft-delete |
+| Exam marks | `DELETE /s/:slug/api/exams/marks/:id` | Sets `deleted_at` |
+| Payroll runs | `DELETE /s/:slug/api/payroll/runs/:id` | Draft/pending only; voids line items |
+
+`audit_logs` are **append-only** (DB triggers block UPDATE/DELETE).
+
+### Platform feature API
+
+- `GET /api/platform/features` — global catalog
+- `GET /api/platform/tenants/:slug/features` — per-tenant toggles
+- `PATCH /api/platform/tenants/:slug/features` — body `{ features: [{ code, enabled }] }`
+
+New tenants provisioned via platform get all catalog features enabled by default.
 
 ---
 

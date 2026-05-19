@@ -160,6 +160,15 @@ async function seed() {
     await seedTenantRole(resolvedTenant.id, "Nurse", allPerms.filter((p: any) => p.module === "health"));
     await seedTenantRole(resolvedTenant.id, "Transport Officer", allPerms.filter((p: any) => p.module === "transport"));
     await seedTenantRole(resolvedTenant.id, "Boarding Master", allPerms.filter((p: any) => p.module === "boarding"));
+    await seedTenantRole(resolvedTenant.id, "Deputy Admin",
+      allPerms.filter((p: any) =>
+        ["students", "admissions", "attendance", "academics", "exams", "messaging", "reports", "settings"].includes(p.module)
+        && !p.code.startsWith("rbac."),
+      ));
+    await seedTenantRole(resolvedTenant.id, "Receptionist",
+      allPerms.filter((p: any) =>
+        ["admissions.view", "admissions.create", "admissions.edit", "students.view", "messaging.view", "messaging.send"].includes(p.code),
+      ));
 
     // Default tenant features (relational)
     const featureRows = await db.select().from(features);

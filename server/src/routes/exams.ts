@@ -2,7 +2,8 @@ import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { assessments, marks, markSubmissions, moderationNotes, reportCards, students, classes, subjects } from "../db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull } from "drizzle-orm";
+import { softDeleteMark } from "../services/soft-delete";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -42,7 +43,7 @@ router.get("/assessments/:id/marks", ...guard, requirePermission("exams.view"), 
     const tenant = (req as any).tenant;
     const [a] = await db.select().from(assessments).where(and(eq(assessments.id, req.params.id), eq(assessments.tenantId, tenant.id))).limit(1);
     if (!a) throw new NotFoundError("Assessment not found");
-    const rows = await db.select().from(marks).where(and(eq(marks.assessmentId, a.id), eq(marks.tenantId, tenant.id)));
+    const rows = await db.select().from(marks).where(and(eq(marks.assessmentId, a.id), eq(marks.tenantId, tenant.id), isNull(marks.deletedAt)));
     res.json({ success: true, data: { assessment: a, marks: rows } });
   } catch (e) { next(e); }
 });
@@ -129,6 +130,18 @@ router.post("/report-cards/generate", ...guard, requirePermission("exams.publish
     } catch (e) { next(e); }
   }
 );
+
+router.delete("/marks/:id", ...guard, requirePermission("exams.moderate"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(marks).where(and(eq(marks.id, req.params.id), eq(marks.tenantId, tenant.id), isNull(marks.deletedAt))).limit(1);
+    if (!before) throw new NotFoundError("Mark not found");
+    const updated = await softDeleteMark(tenant.id, req.params.id, user.id);
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "mark.soft_delete", entityType: "mark", entityId: before.id, before, after: updated, ip: req.ip });
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
 
 router.get("/report-cards", ...guard, requirePermission("exams.view"), async (req, res, next) => {
   try {

@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { features, tenantFeatures, tenantSettings } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 
 const LEGACY_FLAG_MAP: Record<string, string> = {
   results_visible: "results_visible",
@@ -59,5 +59,51 @@ export async function setTenantFeature(
       .where(eq(tenantFeatures.id, existing.id));
   } else {
     await db.insert(tenantFeatures).values({ tenantId, featureId: feature.id, enabled });
+  }
+}
+
+export async function listFeatureCatalog() {
+  return db.select().from(features).orderBy(asc(features.code));
+}
+
+export type TenantFeatureRow = {
+  code: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+};
+
+/** Full catalog with per-tenant enabled state (defaults true if unset). */
+export async function getTenantFeaturesDetailed(tenantId: string): Promise<TenantFeatureRow[]> {
+  const catalog = await listFeatureCatalog();
+  const flags = await getTenantFeatureFlags(tenantId);
+  return catalog.map((f) => ({
+    code: f.code,
+    name: f.name,
+    description: f.description,
+    enabled: flags[f.code] !== false,
+  }));
+}
+
+export async function setTenantFeaturesBulk(
+  tenantId: string,
+  updates: { code: string; enabled: boolean }[],
+): Promise<Record<string, boolean>> {
+  for (const u of updates) {
+    await setTenantFeature(tenantId, u.code, u.enabled);
+  }
+  const merged = await getTenantFeatureFlags(tenantId);
+  await db
+    .update(tenantSettings)
+    .set({ featureFlagsJson: merged, updatedAt: new Date() })
+    .where(eq(tenantSettings.tenantId, tenantId));
+  return merged;
+}
+
+/** Seed all catalog features as enabled for a new tenant. */
+export async function enableDefaultFeaturesForTenant(tenantId: string) {
+  const catalog = await listFeatureCatalog();
+  for (const f of catalog) {
+    await setTenantFeature(tenantId, f.code, true);
   }
 }

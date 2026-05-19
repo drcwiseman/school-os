@@ -6,7 +6,13 @@ import {
   plans, tenantPlans, platformAdmins, students, jobs, payments,
 } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
-import { setTenantFeature } from "../services/tenant-features";
+import {
+  setTenantFeature,
+  listFeatureCatalog,
+  getTenantFeaturesDetailed,
+  setTenantFeaturesBulk,
+  enableDefaultFeaturesForTenant,
+} from "../services/tenant-features";
 import { hashPassword } from "../middleware/auth";
 import { createPlatformSession, requirePlatformAuth, verifyPassword } from "../middleware/platform-auth";
 import { validate } from "../utils/validate";
@@ -71,6 +77,32 @@ router.get("/stats", requirePlatformAuth, async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get("/features", requirePlatformAuth, async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await listFeatureCatalog() });
+  } catch (err) { next(err); }
+});
+
+router.get("/tenants/:slug/features", requirePlatformAuth, async (req, res, next) => {
+  try {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+    if (!tenant) throw new NotFoundError("Tenant not found");
+    res.json({ success: true, data: await getTenantFeaturesDetailed(tenant.id) });
+  } catch (err) { next(err); }
+});
+
+router.patch("/tenants/:slug/features", requirePlatformAuth,
+  validate({ body: z.object({ features: z.array(z.object({ code: z.string(), enabled: z.boolean() })) }) }),
+  async (req, res, next) => {
+    try {
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const merged = await setTenantFeaturesBulk(tenant.id, req.body.features);
+      res.json({ success: true, data: merged });
+    } catch (err) { next(err); }
+  },
+);
+
 router.get("/plans", requirePlatformAuth, async (_req, res, next) => {
   try {
     res.json({ success: true, data: await db.select().from(plans) });
@@ -86,6 +118,7 @@ router.post("/tenants", requirePlatformAuth, validate({ body: createTenantSchema
 
     const [tenant] = await db.insert(tenants).values({ slug, name, status: "active" }).returning();
     await db.insert(tenantSettings).values({ tenantId: tenant.id });
+    await enableDefaultFeaturesForTenant(tenant.id);
 
     if (planCode) {
       const [plan] = await db.select().from(plans).where(eq(plans.code, planCode)).limit(1);

@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { payrollRuns, payrollItems, payslips, staff, staffContracts } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
+import { softDeletePayrollRun } from "../services/soft-delete";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -16,7 +17,7 @@ const guard = [requireAuth, requireTenantMatch];
 router.get("/runs", ...guard, requirePermission("payroll.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(payrollRuns).where(eq(payrollRuns.tenantId, tenant.id)).orderBy(desc(payrollRuns.createdAt)) });
+    res.json({ success: true, data: await db.select().from(payrollRuns).where(and(eq(payrollRuns.tenantId, tenant.id), isNull(payrollRuns.deletedAt))).orderBy(desc(payrollRuns.createdAt)) });
   } catch (e) { next(e); }
 });
 
@@ -59,6 +60,18 @@ router.post("/runs/:id/approve", ...guard, requirePermission("payroll.approve"),
     }
     await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "payroll.approve", entityType: "payroll_run", entityId: run.id, after: run, ip: req.ip });
     res.json({ success: true, data: { run, payslips: slips } });
+  } catch (e) { next(e); }
+});
+
+router.delete("/runs/:id", ...guard, requirePermission("payroll.run"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(payrollRuns).where(and(eq(payrollRuns.id, req.params.id), eq(payrollRuns.tenantId, tenant.id), isNull(payrollRuns.deletedAt))).limit(1);
+    if (!before) throw new NotFoundError("Payroll run not found");
+    const updated = await softDeletePayrollRun(tenant.id, req.params.id, user.id);
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "payroll_run.void", entityType: "payroll_run", entityId: before.id, before, after: updated, ip: req.ip });
+    res.json({ success: true });
   } catch (e) { next(e); }
 });
 

@@ -521,6 +521,8 @@ export const marks = pgTable("marks", {
   score:         integer("score"),
   status:        markStatusEnum("status").notNull().default("draft"),
   enteredBy:     uuid("entered_by").references(() => users.id),
+  deletedAt:     timestamp("deleted_at"),
+  deletedBy:     uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt:     timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
   uniqueMark: uniqueIndex("marks_assessment_student_idx").on(t.assessmentId, t.studentId),
@@ -675,6 +677,8 @@ export const payrollRuns = pgTable("payroll_runs", {
   status:    payrollStatusEnum("status").notNull().default("draft"),
   runAt:     timestamp("run_at").notNull().defaultNow(),
   approvedBy: uuid("approved_by").references(() => users.id),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("payroll_runs_tenant_idx").on(t.tenantId) }));
 
@@ -686,6 +690,8 @@ export const payrollItems = pgTable("payroll_items", {
   grossPay:     integer("gross_pay").notNull(),
   deductions:   integer("deductions").notNull().default(0),
   netPay:       integer("net_pay").notNull(),
+  deletedAt:    timestamp("deleted_at"),
+  deletedBy:    uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
 }, (t) => ({ tenantIdx: index("payroll_items_tenant_idx").on(t.tenantId) }));
 
 export const payslips = pgTable("payslips", {
