@@ -13,8 +13,9 @@ export default {
           "navy-deep": "#0a1220",
           sage: "#5c7a62",
           burgundy: "#6b2d3e",
-          cream: "#f7f4ef",
-          "cream-dark": "#ebe6dc",
+          accent: "#2563eb",
+          cream: "#faf9f7",
+          "cream-dark": "#f0eeea",
         },
         primary: {
           50:  "#eff6ff",
@@ -37,6 +38,7 @@ export default {
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+        heading: ["Plus Jakarta Sans", "Inter", "system-ui", "sans-serif"],
         display: ["Playfair Display", "Georgia", "serif"],
         mono: ["JetBrains Mono", "monospace"],
       },

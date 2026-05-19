@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check } from "lucide-react";
 import { PageHero } from "./components/PageHero";
+import { Reveal } from "./components/Reveal";
 import { FEATURE_TABS } from "./data/marketing";
 
 export const Features: React.FC = () => {
@@ -26,7 +27,7 @@ export const Features: React.FC = () => {
                 onClick={() => setActive(t.id)}
                 className={`rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
                   active === t.id
-                    ? "bg-marketing-navy text-marketing-cream shadow-marketing"
+                    ? "bg-marketing-accent text-white shadow-marketing"
                     : "border border-marketing-navy/10 bg-white text-marketing-navy/70 hover:border-marketing-sage/40"
                 }`}
               >
@@ -52,8 +53,8 @@ export const Features: React.FC = () => {
                   </li>
                 ))}
               </ul>
-              <div className="mt-10 rounded-2xl border border-marketing-burgundy/15 bg-gradient-to-br from-marketing-burgundy/8 to-transparent p-6">
-                <p className="font-display text-4xl font-semibold text-marketing-burgundy">{tab.metric.value}</p>
+              <div className="mt-10 rounded-2xl border border-marketing-accent/15 bg-gradient-to-br from-marketing-accent/8 to-transparent p-6">
+                <p className="font-heading text-4xl font-bold text-marketing-accent">{tab.metric.value}</p>
                 <p className="mt-2 text-sm text-marketing-navy/65">{tab.metric.label}</p>
               </div>
             </div>
