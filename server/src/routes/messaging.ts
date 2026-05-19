@@ -8,9 +8,10 @@ import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { enqueueJob } from "../services/queue";
+import { requireTenantFeature } from "../middleware/require-feature";
 
 const router = Router();
-const guard = [requireAuth, requireTenantMatch];
+const guard = [requireAuth, requireTenantMatch, requireTenantFeature("messaging_enabled")];
 
 router.get("/templates", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
   try {

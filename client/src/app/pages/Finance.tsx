@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { ConfirmAction } from "../components/ConfirmAction";
+import { useAuth } from "../state/AuthContext";
 import { DollarSign, Loader2, Receipt } from "lucide-react";
 
 function formatMoney(cents: number | undefined) {
@@ -24,10 +26,12 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string; 
 export const Finance: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [tab, setTab] = useState<"overview" | "debtors" | "receipts">("overview");
+  const [tab, setTab] = useState<"overview" | "payments" | "debtors" | "receipts">("overview");
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [debtors, setDebtors] = useState<any[]>([]);
   const [receipts, setReceipts] = useState<any[]>([]);
 
@@ -43,6 +47,8 @@ export const Finance: React.FC = () => {
         ]);
         setStats(dash.data);
         setInvoices(inv.data || []);
+      } else if (tab === "payments") {
+        setPayments((await api.get(`/s/${schoolSlug}/api/finance/payments`)).data ?? []);
       } else if (tab === "debtors") {
         setDebtors((await api.get(`/s/${schoolSlug}/api/finance/debtors`)).data ?? []);
       } else {
@@ -52,6 +58,26 @@ export const Finance: React.FC = () => {
       toast(err.message, "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const voidPayment = async (id: string) => {
+    try {
+      await api.post(`/s/${schoolSlug}/api/finance/payments/${id}/void`, {});
+      toast("Payment voided", "success");
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const deleteInvoice = async (id: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/finance/invoices/${id}`);
+      toast("Invoice removed", "success");
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
     }
   };
 
@@ -77,6 +103,7 @@ export const Finance: React.FC = () => {
 
       <div className="flex gap-2">
         <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>overview</button>
+        <button type="button" onClick={() => setTab("payments")} className={tabBtn("payments")}>payments</button>
         <button type="button" onClick={() => setTab("debtors")} className={tabBtn("debtors")}>debtors</button>
         <button type="button" onClick={() => setTab("receipts")} className={tabBtn("receipts")}>receipts</button>
       </div>
@@ -91,22 +118,42 @@ export const Finance: React.FC = () => {
           <div className="card overflow-hidden">
             <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Recent Invoices</h3></div>
             <table className="table">
-              <thead><tr><th>Invoice No</th><th>Amount</th><th>Paid</th><th>Status</th></tr></thead>
+              <thead><tr><th>Invoice No</th><th>Amount</th><th>Paid</th><th>Status</th>{hasPermission("finance.invoice.create") && <th>Actions</th>}</tr></thead>
               <tbody>
                 {invoices.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-slate-400">No invoices yet.</td></tr>
+                  <tr><td colSpan={hasPermission("finance.invoice.create") ? 5 : 4} className="text-center py-8 text-slate-400">No invoices yet.</td></tr>
                 ) : invoices.map((inv) => (
                   <tr key={inv.id}>
                     <td className="font-mono text-xs">{inv.invoiceNo}</td>
                     <td>{formatMoney(inv.totalAmount)}</td>
                     <td>{formatMoney(inv.paidAmount)}</td>
                     <td className="capitalize">{inv.status}</td>
+                    {hasPermission("finance.invoice.create") && (
+                      <td>
+                        <ConfirmAction
+                          label="Remove"
+                          confirmMessage={`Remove invoice ${inv.invoiceNo}? This soft-deletes the record.`}
+                          onConfirm={() => deleteInvoice(inv.id)}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </>
+      )}
+
+      {tab === "payments" && (
+        <div className="card overflow-hidden">
+          <PaymentsSection
+            payments={payments}
+            formatMoney={formatMoney}
+            canVoid={hasPermission("finance.refund.create")}
+            onVoid={voidPayment}
+          />
+        </div>
       )}
 
       {tab === "debtors" && (
@@ -123,6 +170,46 @@ export const Finance: React.FC = () => {
     </div>
   );
 };
+
+function PaymentsSection({ payments, formatMoney, canVoid, onVoid }: { payments: any[]; formatMoney: (c?: number) => string; canVoid: boolean; onVoid: (id: string) => void }) {
+  return (
+    <>
+      <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Payments</h3></div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Receipt</th>
+            <th>Amount</th>
+            <th>Method</th>
+            <th>Date</th>
+            {canVoid && <th>Actions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {payments.length === 0 ? (
+            <tr><td colSpan={canVoid ? 5 : 4} className="text-center py-8 text-slate-400">No payments yet.</td></tr>
+          ) : payments.map((p) => (
+            <tr key={p.id}>
+              <td className="font-mono text-xs">{p.receiptNo ?? p.id.slice(0, 8)}</td>
+              <td>{formatMoney(p.amount)}</td>
+              <td className="capitalize">{p.method ?? "—"}</td>
+              <td>{p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "—"}</td>
+              {canVoid && (
+                <td>
+                  <ConfirmAction
+                    label="Void"
+                    confirmMessage="Void this payment? Allocations will be reversed."
+                    onConfirm={() => onVoid(p.id)}
+                  />
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
 
 function DebtorsSection({ debtors, formatMoney }: { debtors: any[]; formatMoney: (c?: number) => string }) {
   return (

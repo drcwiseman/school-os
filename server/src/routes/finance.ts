@@ -6,7 +6,7 @@ import {
   payments, paymentAllocations, receipts, expenses, students, studentClassHistory,
 } from "../db/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
-import { softDeleteInvoice, voidPayment } from "../services/soft-delete";
+import { softDeleteInvoice, voidPayment, softDeleteFeeStructure } from "../services/soft-delete";
 import { nextReceiptNumber } from "../utils/receipts";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
@@ -78,7 +78,7 @@ router.post("/invoices", ...guard, requirePermission("finance.invoice.create"),
 router.get("/fee-structures", ...guard, requirePermission("finance.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(feeStructures).where(eq(feeStructures.tenantId, tenant.id)) });
+    res.json({ success: true, data: await db.select().from(feeStructures).where(and(eq(feeStructures.tenantId, tenant.id), isNull(feeStructures.deletedAt))) });
   } catch (e) { next(e); }
 });
 
@@ -95,6 +95,18 @@ router.post("/fee-structures", ...guard, requirePermission("finance.invoice.crea
     } catch (e) { next(e); }
   }
 );
+
+router.delete("/fee-structures/:id", ...guard, requirePermission("finance.invoice.create"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(feeStructures).where(and(eq(feeStructures.id, req.params.id), eq(feeStructures.tenantId, tenant.id), isNull(feeStructures.deletedAt))).limit(1);
+    if (!before) throw new NotFoundError("Fee structure not found");
+    const updated = await softDeleteFeeStructure(tenant.id, req.params.id, user.id);
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "fee_structure.soft_delete", entityType: "fee_structure", entityId: before.id, before, after: updated, ip: req.ip });
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
 
 router.post("/invoices/bulk", ...guard, requirePermission("finance.invoice.create"),
   validate({ body: z.object({ termId: z.string().uuid(), classId: z.string().uuid(), feeStructureId: z.string().uuid() }) }),

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { ConfirmAction } from "../components/ConfirmAction";
+import { useAuth } from "../state/AuthContext";
 import { Loader2 } from "lucide-react";
 
 function SectionTable({ title, headers, children }: { title: string; headers: string[]; children: React.ReactNode }) {
@@ -19,6 +21,7 @@ function SectionTable({ title, headers, children }: { title: string; headers: st
 export const Payroll: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [runs, setRuns] = useState<any[]>([]);
   const [payslips, setPayslips] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,16 @@ export const Payroll: React.FC = () => {
       await api.post(`/s/${schoolSlug}/api/payroll/runs`, { period });
       setPeriod("");
       toast("Payroll run created", "success");
+      load();
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
+  const removeRun = async (id: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/payroll/runs/${id}`);
+      toast("Payroll run removed", "success");
       load();
     } catch (e: any) {
       toast(e.message, "error");
@@ -91,9 +104,18 @@ export const Payroll: React.FC = () => {
           <tr key={r.id}>
             <td>{r.period}</td>
             <td className="capitalize">{r.status}</td>
-            <td>
+            <td className="flex gap-2">
               {r.status === "draft" && (
-                <button type="button" className="btn-ghost text-xs" onClick={() => approve(r.id)}>Approve</button>
+                <>
+                  <button type="button" className="btn-ghost text-xs" onClick={() => approve(r.id)}>Approve</button>
+                  {hasPermission("payroll.run") && (
+                    <ConfirmAction
+                      label="Remove"
+                      confirmMessage={`Remove payroll run ${r.period}?`}
+                      onConfirm={() => removeRun(r.id)}
+                    />
+                  )}
+                </>
               )}
             </td>
           </tr>

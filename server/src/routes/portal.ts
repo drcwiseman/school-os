@@ -17,12 +17,16 @@ import { validate } from "../utils/validate";
 import { UnauthorizedError, NotFoundError } from "../middleware/error";
 import { filterStudentsForPortal } from "../services/portal-access";
 import { getTenantFeatureFlags } from "../services/tenant-features";
+import { isFeatureAllowedForTenant } from "../services/plan-features";
+import { ForbiddenError } from "../middleware/error";
 
 const router = Router();
 
 router.post("/login", validate({ body: z.object({ email: z.string().email(), password: z.string() }) }), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    const portalAllowed = await isFeatureAllowedForTenant(tenant.id, "portal_enabled");
+    if (!portalAllowed) throw new ForbiddenError("Parent/student portal is not enabled for this school");
 
     const [parent] = await db.select().from(parentAccounts)
       .where(and(eq(parentAccounts.tenantId, tenant.id), eq(parentAccounts.email, req.body.email))).limit(1);

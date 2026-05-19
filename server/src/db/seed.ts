@@ -107,8 +107,14 @@ async function seed() {
   // Platform admin + plans
   console.log("  → platform...");
   const planDefs = [
-    { code: "starter", name: "Starter", priceMonthly: 0, featuresJson: { messaging: true, reports: true, portal: false } as Record<string, boolean> },
-    { code: "pro", name: "Professional", priceMonthly: 9900, featuresJson: { messaging: true, reports: true, portal: true } as Record<string, boolean> },
+    {
+      code: "starter", name: "Starter", priceMonthly: 0,
+      featuresJson: { messaging_enabled: true, portal_enabled: false, results_visible: true, fees_must_be_clear: false } as Record<string, boolean>,
+    },
+    {
+      code: "pro", name: "Professional", priceMonthly: 9900,
+      featuresJson: { messaging_enabled: true, portal_enabled: true, results_visible: true, fees_must_be_clear: false } as Record<string, boolean>,
+    },
   ];
   for (const p of planDefs) {
     await db.insert(plans).values(p).onConflictDoNothing();

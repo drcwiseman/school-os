@@ -217,3 +217,37 @@ PORTAL (parent_accounts, student_accounts)
 ## Demo credentials (after `npm run db:seed`)
 
 See [README](../README.md#logging-in).
+
+---
+
+## Implementation phases (summary)
+
+| Phase | Focus |
+|-------|--------|
+| **1–2** | Core ERP modules, tenant RBAC, operations split |
+| **3** | Payment void, mark/payroll soft delete, append-only `audit_logs`, relational platform feature flags |
+| **4** | Extended soft delete (assessments, fee structures, staff), plan ↔ feature enforcement, platform role permissions, staff UI for void/delete |
+
+### Phase 4 details
+
+**Soft delete** (sets `deleted_at`, never hard-deletes business rows):
+
+- Assessments, fee structures, staff (migration `0007`)
+- Existing: invoices, payments (void), users, students, payroll runs, marks
+
+**Plan & tenant features**
+
+- `plans.features_json` uses catalog codes: `messaging_enabled`, `portal_enabled`, …
+- `tenant_features` overrides per school; `requireTenantFeature()` middleware gates routes
+- `GET /s/:slug/api/auth/me` returns `modules: { messaging_enabled, portal_enabled }` for sidebar gating
+
+**Platform permissions**
+
+- Beyond `super_admin` string: `platform-permissions.ts` + `requirePlatformPermission()` on `/api/platform/*`
+
+**Staff UI**
+
+- Finance: void payments, remove invoices
+- Exams: remove assessments
+- Payroll: remove draft runs
+- HR: remove staff (via ModuleCrud)

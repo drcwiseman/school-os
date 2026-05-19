@@ -50,6 +50,13 @@
       "when": 1779186800000,
       "tag": "0006_phase3_soft_delete_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1779187200000,
+      "tag": "0007_phase4_soft_delete_plans",
+      "breakpoints": true
     }
   ]
 }

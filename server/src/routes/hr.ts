@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { staff, staffContracts, leaveRequests } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
+import { softDeleteStaffMember } from "../services/soft-delete";
+import { createAuditLog } from "../services/audit";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -15,7 +17,7 @@ const guard = [requireAuth, requireTenantMatch];
 router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(staff).where(eq(staff.tenantId, tenant.id)).orderBy(desc(staff.createdAt)) });
+    res.json({ success: true, data: await db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), isNull(staff.deletedAt))).orderBy(desc(staff.createdAt)) });
   } catch (e) { next(e); }
 });
 
@@ -29,6 +31,18 @@ router.post("/staff", ...guard, requirePermission("hr.manage"),
     } catch (e) { next(e); }
   }
 );
+
+router.delete("/staff/:id", ...guard, requirePermission("hr.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(staff).where(and(eq(staff.id, req.params.id), eq(staff.tenantId, tenant.id), isNull(staff.deletedAt))).limit(1);
+    if (!before) throw new NotFoundError("Staff not found");
+    const updated = await softDeleteStaffMember(tenant.id, req.params.id, user.id);
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "staff.soft_delete", entityType: "staff", entityId: before.id, before, after: updated, ip: req.ip });
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
 
 router.post("/staff/:id/contracts", ...guard, requirePermission("hr.manage"),
   validate({ body: z.object({ salary: z.number().int(), startDate: z.string(), endDate: z.string().optional() }) }),

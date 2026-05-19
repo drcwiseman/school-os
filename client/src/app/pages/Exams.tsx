@@ -2,11 +2,14 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { ConfirmAction } from "../components/ConfirmAction";
+import { useAuth } from "../state/AuthContext";
 import { Loader2 } from "lucide-react";
 
 export const Exams: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [tab, setTab] = useState<"assessments" | "moderation" | "reports">("assessments");
   const [assessments, setAssessments] = useState<any[]>([]);
   const [moderation, setModeration] = useState<any[]>([]);
@@ -58,6 +61,16 @@ export const Exams: React.FC = () => {
     }
   };
 
+  const deleteAssessment = async (id: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/exams/assessments/${id}`);
+      toast("Assessment removed", "success");
+      load();
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
   const approve = async (id: string) => {
     try {
       await api.post(`/s/${schoolSlug}/api/exams/assessments/${id}/approve`, {});
@@ -98,7 +111,16 @@ export const Exams: React.FC = () => {
             { k: "type", l: "Type" },
             { k: "maxScore", l: "Max" },
           ]} actions={(row) => (
-            <button type="button" className="btn-ghost text-xs" onClick={() => submitMarks(row.id)}>Submit marks</button>
+            <div className="flex gap-2">
+              <button type="button" className="btn-ghost text-xs" onClick={() => submitMarks(row.id)}>Submit marks</button>
+              {hasPermission("exams.moderate") && (
+                <ConfirmAction
+                  label="Remove"
+                  confirmMessage={`Remove assessment "${row.name}"?`}
+                  onConfirm={() => deleteAssessment(row.id)}
+                />
+              )}
+            </div>
           )} />
         </>
       )}

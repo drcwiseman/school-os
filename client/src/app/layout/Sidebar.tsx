@@ -18,7 +18,7 @@ const OPS_ICONS: Record<string, React.ElementType> = {
 };
 
 export const Sidebar: React.FC = () => {
-  const { schoolSlug, logout, user, hasPermission } = useAuth();
+  const { schoolSlug, logout, user, hasPermission, moduleEnabled } = useAuth();
   const location = useLocation();
 
   const allLinks = [
@@ -37,12 +37,16 @@ export const Sidebar: React.FC = () => {
       icon: OPS_ICONS[m.id] ?? Bus,
       perm: m.perm,
     })),
-    { name: "Messaging", path: `/s/${schoolSlug}/messaging`, icon: Megaphone, perm: "messaging.view" },
+    { name: "Messaging", path: `/s/${schoolSlug}/messaging`, icon: Megaphone, perm: "messaging.view", module: "messaging_enabled" as const },
     { name: "Reports", path: `/s/${schoolSlug}/reports`, icon: FileBarChart, perm: "reports.view" },
     { name: "Users & Roles", path: `/s/${schoolSlug}/admin`, icon: Users, perm: "rbac.manage.roles" },
     { name: "Settings", path: `/s/${schoolSlug}/settings`, icon: Settings, perm: "settings.view" },
   ];
-  const links = allLinks.filter((l) => !l.perm || hasPermission(l.perm));
+  const links = allLinks.filter((l) => {
+    if (l.perm && !hasPermission(l.perm)) return false;
+    if ("module" in l && l.module && !moduleEnabled(l.module)) return false;
+    return true;
+  });
 
   return (
     <aside className="w-64 border-r border-slate-800 bg-surface flex flex-col h-screen">

@@ -23,7 +23,7 @@ export const Login: React.FC = () => {
       const res = await api.post(`/s/${schoolSlug}/api/auth/login`, { email, password });
       if (res.success && res.user) {
         const me = await api.get(`/s/${schoolSlug}/api/auth/me`);
-        setAuth(res.user, schoolSlug || null, me.permissions || [], me.roles || []);
+        setAuth(res.user, schoolSlug || null, me.permissions || [], me.roles || [], me.modules);
         navigate(`/s/${schoolSlug}/dashboard`);
       }
     } catch (err: any) {

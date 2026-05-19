@@ -11,7 +11,7 @@ export const HR: React.FC = () => {
       <HRHeader />
       <HRTabs tab={tab} setTab={setTab} tabCls={tabCls} />
       {tab === "staff" ? (
-        <ModuleCrud title="Staff" apiPath="hr/staff"
+        <ModuleCrud title="Staff" apiPath="hr/staff" allowDelete deletePermission="hr.manage"
           columns={[{ key: "employeeNo", label: "Emp #" }, { key: "firstName", label: "First" }, { key: "lastName", label: "Last" }, { key: "department", label: "Dept" }]}
           fields={[
             { name: "employeeNo", label: "Employee No", required: true },

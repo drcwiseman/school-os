@@ -8,14 +8,24 @@ interface User {
   lastName: string;
 }
 
+export type TenantModules = { messaging_enabled: boolean; portal_enabled: boolean };
+
 interface AuthContextType {
   user: User | null;
   permissions: string[];
   roles: { id: string; name: string }[];
+  modules: TenantModules;
   loading: boolean;
   schoolSlug: string | null;
-  setAuth: (user: User | null, slug: string | null, permissions?: string[], roles?: { id: string; name: string }[]) => void;
+  setAuth: (
+    user: User | null,
+    slug: string | null,
+    permissions?: string[],
+    roles?: { id: string; name: string }[],
+    modules?: TenantModules,
+  ) => void;
   hasPermission: (code: string) => boolean;
+  moduleEnabled: (key: keyof TenantModules) => boolean;
   logout: () => Promise<void>;
 }
 
@@ -26,6 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [permissions, setPermissions] = useState<string[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [schoolSlug, setSchoolSlug] = useState<string | null>(null);
+  const [modules, setModules] = useState<TenantModules>({ messaging_enabled: true, portal_enabled: true });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,6 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(res.user);
             setPermissions(res.permissions || []);
             setRoles(res.roles || []);
+            if (res.modules) setModules(res.modules);
           }
         })
         .catch(() => setUser(null))
@@ -50,14 +62,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const setAuth = (newUser: User | null, slug: string | null, perms: string[] = [], userRoles: { id: string; name: string }[] = []) => {
+  const setAuth = (
+    newUser: User | null,
+    slug: string | null,
+    perms: string[] = [],
+    userRoles: { id: string; name: string }[] = [],
+    mods?: TenantModules,
+  ) => {
     setUser(newUser);
     setSchoolSlug(slug);
     setPermissions(perms);
     setRoles(userRoles);
+    if (mods) setModules(mods);
   };
 
   const hasPermission = (code: string) => permissions.includes(code);
+  const moduleEnabled = (key: keyof TenantModules) => modules[key] !== false;
 
   const logout = async () => {
     if (schoolSlug) {
@@ -68,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, permissions, roles, loading, schoolSlug, setAuth, hasPermission, logout }}>
+    <AuthContext.Provider value={{ user, permissions, roles, modules, loading, schoolSlug, setAuth, hasPermission, moduleEnabled, logout }}>
       {children}
     </AuthContext.Provider>
   );

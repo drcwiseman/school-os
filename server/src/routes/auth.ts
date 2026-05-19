@@ -10,6 +10,7 @@ import { registerSchema, loginSchema } from "./auth.schemas";
 import { ConflictError, UnauthorizedError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
 import { getUserPermissions } from "../middleware/rbac";
+import { isFeatureAllowedForTenant } from "../services/plan-features";
 
 const router = Router();
 
@@ -76,7 +77,17 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       .from(userRoles)
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(eq(userRoles.userId, user.id));
-    res.json({ success: true, user: safeUser, permissions, roles: roleRows });
+    const [messaging, portal] = await Promise.all([
+      isFeatureAllowedForTenant(user.tenantId, "messaging_enabled"),
+      isFeatureAllowedForTenant(user.tenantId, "portal_enabled"),
+    ]);
+    res.json({
+      success: true,
+      user: safeUser,
+      permissions,
+      roles: roleRows,
+      modules: { messaging_enabled: messaging, portal_enabled: portal },
+    });
   } catch (err) { next(err); }
 });
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { assessments, marks, markSubmissions, moderationNotes, reportCards, students, classes, subjects } from "../db/schema";
 import { eq, and, desc, inArray, isNull } from "drizzle-orm";
-import { softDeleteMark } from "../services/soft-delete";
+import { softDeleteMark, softDeleteAssessment } from "../services/soft-delete";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -17,7 +17,7 @@ const guard = [requireAuth, requireTenantMatch];
 router.get("/assessments", ...guard, requirePermission("exams.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(assessments).where(eq(assessments.tenantId, tenant.id)).orderBy(desc(assessments.createdAt));
+    const rows = await db.select().from(assessments).where(and(eq(assessments.tenantId, tenant.id), isNull(assessments.deletedAt))).orderBy(desc(assessments.createdAt));
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
@@ -130,6 +130,18 @@ router.post("/report-cards/generate", ...guard, requirePermission("exams.publish
     } catch (e) { next(e); }
   }
 );
+
+router.delete("/assessments/:id", ...guard, requirePermission("exams.moderate"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(assessments).where(and(eq(assessments.id, req.params.id), eq(assessments.tenantId, tenant.id), isNull(assessments.deletedAt))).limit(1);
+    if (!before) throw new NotFoundError("Assessment not found");
+    const updated = await softDeleteAssessment(tenant.id, req.params.id, user.id);
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "assessment.soft_delete", entityType: "assessment", entityId: before.id, before, after: updated, ip: req.ip });
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
 
 router.delete("/marks/:id", ...guard, requirePermission("exams.moderate"), async (req, res, next) => {
   try {

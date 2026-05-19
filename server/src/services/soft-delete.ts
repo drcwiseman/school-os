@@ -1,5 +1,8 @@
 import { db } from "../db";
-import { students, users, invoices, payments, marks, payrollRuns, payrollItems } from "../db/schema";
+import {
+  students, users, invoices, payments, marks, payrollRuns, payrollItems,
+  assessments, feeStructures, staff,
+} from "../db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { BadRequestError, NotFoundError } from "../middleware/error";
 
@@ -137,4 +140,34 @@ export async function softDeletePayrollRun(tenantId: string, runId: string, dele
     .where(eq(payrollRuns.id, run.id))
     .returning();
   return row!;
+}
+
+export async function softDeleteAssessment(tenantId: string, assessmentId: string, deletedBy: string) {
+  const [row] = await db
+    .update(assessments)
+    .set({ deletedAt: new Date(), deletedBy })
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId), isNull(assessments.deletedAt)))
+    .returning();
+  if (!row) throw new NotFoundError("Assessment not found or already deleted");
+  return row;
+}
+
+export async function softDeleteFeeStructure(tenantId: string, feeStructureId: string, deletedBy: string) {
+  const [row] = await db
+    .update(feeStructures)
+    .set({ deletedAt: new Date(), deletedBy, isActive: false })
+    .where(and(eq(feeStructures.id, feeStructureId), eq(feeStructures.tenantId, tenantId), isNull(feeStructures.deletedAt)))
+    .returning();
+  if (!row) throw new NotFoundError("Fee structure not found or already deleted");
+  return row;
+}
+
+export async function softDeleteStaffMember(tenantId: string, staffId: string, deletedBy: string) {
+  const [row] = await db
+    .update(staff)
+    .set({ deletedAt: new Date(), deletedBy, status: "inactive" })
+    .where(and(eq(staff.id, staffId), eq(staff.tenantId, tenantId), isNull(staff.deletedAt)))
+    .returning();
+  if (!row) throw new NotFoundError("Staff member not found or already deleted");
+  return row;
 }

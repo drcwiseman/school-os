@@ -510,6 +510,8 @@ export const assessments = pgTable("assessments", {
   weight:    integer("weight").notNull().default(100),
   maxScore:  integer("max_score").notNull().default(100),
   deadline:  timestamp("deadline"),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("assessments_tenant_idx").on(t.tenantId) }));
 
@@ -576,6 +578,8 @@ export const feeStructures = pgTable("fee_structures", {
   termId:    uuid("term_id").references(() => terms.id),
   classId:   uuid("class_id").references(() => classes.id),
   isActive:  boolean("is_active").notNull().default(true),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("fee_structures_tenant_idx").on(t.tenantId) }));
 
@@ -639,6 +643,8 @@ export const staff = pgTable("staff", {
   department: text("department"),
   status:     text("status").notNull().default("active"),
   hiredAt:    timestamp("hired_at"),
+  deletedAt:  timestamp("deleted_at"),
+  deletedBy:  uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   createdAt:  timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   tenantEmpIdx: uniqueIndex("staff_tenant_emp_idx").on(t.tenantId, t.employeeNo),

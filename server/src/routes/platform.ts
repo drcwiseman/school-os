@@ -17,6 +17,7 @@ import { hashPassword } from "../middleware/auth";
 import { createPlatformSession, requirePlatformAuth, verifyPassword } from "../middleware/platform-auth";
 import { validate } from "../utils/validate";
 import { NotFoundError, ConflictError, UnauthorizedError } from "../middleware/error";
+import { requirePlatformPermission } from "../lib/platform-permissions";
 
 const router = Router();
 
@@ -38,14 +39,14 @@ router.post("/auth/login", validate({ body: z.object({ email: z.string().email()
     if (!valid) throw new UnauthorizedError("Invalid credentials");
     const session = await createPlatformSession(admin.id);
     res.cookie("platform_session_token", session.token, { httpOnly: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
-    res.json({ success: true, admin: { id: admin.id, email: admin.email, name: admin.name } });
+    res.json({ success: true, admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role } });
   } catch (err) { next(err); }
 });
 
 router.get("/auth/me", requirePlatformAuth, async (req, res, next) => {
   try {
     const admin = (req as any).platformAdmin;
-    res.json({ success: true, admin: { id: admin.id, email: admin.email, name: admin.name } });
+    res.json({ success: true, admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role } });
   } catch (err) { next(err); }
 });
 
@@ -54,7 +55,7 @@ router.post("/auth/logout", requirePlatformAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-router.get("/stats", requirePlatformAuth, async (_req, res, next) => {
+router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
   try {
     const [tenantsCount] = await db.select({ count: sql<number>`count(*)` }).from(tenants);
     const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
@@ -77,13 +78,13 @@ router.get("/stats", requirePlatformAuth, async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get("/features", requirePlatformAuth, async (_req, res, next) => {
+router.get("/features", requirePlatformAuth, requirePlatformPermission("tenants.features"), async (_req, res, next) => {
   try {
     res.json({ success: true, data: await listFeatureCatalog() });
   } catch (err) { next(err); }
 });
 
-router.get("/tenants/:slug/features", requirePlatformAuth, async (req, res, next) => {
+router.get("/tenants/:slug/features", requirePlatformAuth, requirePlatformPermission("tenants.features"), async (req, res, next) => {
   try {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
     if (!tenant) throw new NotFoundError("Tenant not found");
@@ -91,7 +92,7 @@ router.get("/tenants/:slug/features", requirePlatformAuth, async (req, res, next
   } catch (err) { next(err); }
 });
 
-router.patch("/tenants/:slug/features", requirePlatformAuth,
+router.patch("/tenants/:slug/features", requirePlatformAuth, requirePlatformPermission("tenants.features"),
   validate({ body: z.object({ features: z.array(z.object({ code: z.string(), enabled: z.boolean() })) }) }),
   async (req, res, next) => {
     try {
@@ -103,13 +104,13 @@ router.patch("/tenants/:slug/features", requirePlatformAuth,
   },
 );
 
-router.get("/plans", requirePlatformAuth, async (_req, res, next) => {
+router.get("/plans", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
   try {
     res.json({ success: true, data: await db.select().from(plans) });
   } catch (err) { next(err); }
 });
 
-router.post("/tenants", requirePlatformAuth, validate({ body: createTenantSchema }), async (req: Request, res: Response, next: NextFunction) => {
+router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.provision"), validate({ body: createTenantSchema }), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { slug, name, adminEmail, adminPassword, adminFirstName, adminLastName, planCode } = req.body;
 
@@ -144,7 +145,7 @@ router.post("/tenants", requirePlatformAuth, validate({ body: createTenantSchema
   } catch (err) { next(err); }
 });
 
-router.get("/tenants", requirePlatformAuth, async (_req, res, next) => {
+router.get("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.read"), async (_req, res, next) => {
   try {
     const rows = await db.select({
       id: tenants.id, slug: tenants.slug, name: tenants.name, status: tenants.status, createdAt: tenants.createdAt,
@@ -153,7 +154,7 @@ router.get("/tenants", requirePlatformAuth, async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get("/tenants/:slug", requirePlatformAuth, async (req, res, next) => {
+router.get("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("tenants.read"), async (req, res, next) => {
   try {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
     if (!tenant) throw new NotFoundError("Tenant not found");
@@ -165,7 +166,7 @@ router.get("/tenants/:slug", requirePlatformAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.patch("/tenants/:slug/feature-flags", requirePlatformAuth,
+router.patch("/tenants/:slug/feature-flags", requirePlatformAuth, requirePlatformPermission("tenants.features"),
   validate({ body: z.object({ flags: z.record(z.boolean()) }) }),
   async (req, res, next) => {
     try {
@@ -182,7 +183,7 @@ router.patch("/tenants/:slug/feature-flags", requirePlatformAuth,
   }
 );
 
-router.patch("/tenants/:slug/plan", requirePlatformAuth,
+router.patch("/tenants/:slug/plan", requirePlatformAuth, requirePlatformPermission("plans.assign"),
   validate({ body: z.object({ planCode: z.string() }) }),
   async (req, res, next) => {
     try {

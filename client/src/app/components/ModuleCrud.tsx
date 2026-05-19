@@ -3,6 +3,8 @@ import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "./Toast";
 import { Loader2, Plus } from "lucide-react";
+import { ConfirmAction } from "./ConfirmAction";
+import { useAuth } from "../state/AuthContext";
 
 export interface FieldDef {
   name: string;
@@ -23,11 +25,14 @@ interface ModuleCrudProps {
   columns: ColumnDef[];
   fields: FieldDef[];
   emptyMessage?: string;
+  allowDelete?: boolean;
+  deletePermission?: string;
 }
 
-export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns, fields, emptyMessage }) => {
+export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns, fields, emptyMessage, allowDelete, deletePermission }) => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -60,6 +65,18 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
       toast("Saved", "success");
       setShowForm(false);
       setForm({});
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const canDelete = allowDelete && (!deletePermission || hasPermission(deletePermission));
+
+  const removeRow = async (id: string) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/${apiPath}/${id}`);
+      toast("Removed", "success");
       load();
     } catch (err: any) {
       toast(err.message, "error");
@@ -99,16 +116,25 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
         ) : (
           <table className="table">
             <thead>
-              <tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}</tr>
+              <tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}{canDelete && <th>Actions</th>}</tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={columns.length} className="text-center py-8 text-slate-400">{emptyMessage ?? "No records."}</td></tr>
+                <tr><td colSpan={columns.length + (canDelete ? 1 : 0)} className="text-center py-8 text-slate-400">{emptyMessage ?? "No records."}</td></tr>
               ) : rows.map((row) => (
                 <tr key={row.id}>
                   {columns.map((c) => (
                     <td key={c.key}>{c.render ? c.render(row) : String(row[c.key] ?? "—")}</td>
                   ))}
+                  {canDelete && (
+                    <td>
+                      <ConfirmAction
+                        label="Remove"
+                        confirmMessage="Remove this record?"
+                        onConfirm={() => removeRow(row.id)}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
