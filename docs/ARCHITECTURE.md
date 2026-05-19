@@ -230,6 +230,7 @@ See [README](../README.md#logging-in).
 | **5** | Tenant suspend/activate, staff user status, portal dashboard enrichment, students/users/fee-structure UI |
 | **6** | Portal PDF downloads (OBAC), settings↔feature sync, marks entry UI, audit actor names, sidebar portal link |
 | **7** | Finance collect payment, admissions pipeline stages, exam class roster, audit filter, platform tenant audit |
+| **8** | Live tenant dashboard API, finance billing UI, report card generation UI, add-student form |
 
 ### Phase 4 details
 
@@ -316,3 +317,22 @@ See [README](../README.md#logging-in).
 
 - `GET /admin/audit-logs?action=...` — partial match filter
 - Platform tenant suspend/activate writes `tenant.status.update` to school audit log
+
+### Phase 8 details
+
+**Tenant dashboard**
+
+- `GET /s/:slug/api/dashboard` — active/total students, unpaid invoices, admissions pipeline count, today’s attendance sessions, last 8 audit events (with actor email)
+
+**Finance billing**
+
+- **Billing** tab: create single invoice (student, amount, optional term/due date)
+- Bulk invoices: term + class + fee structure → one invoice per enrolled student
+
+**Exams**
+
+- **Reports** tab: generate report cards for term + class (`POST /exams/report-cards/generate`)
+
+**Students**
+
+- **Add student** form on list page (`POST /students`)

@@ -22,6 +22,9 @@ export const Exams: React.FC = () => {
   const [marksAssessmentId, setMarksAssessmentId] = useState("");
   const [marksRows, setMarksRows] = useState<{ id?: string; studentId: string; score: string; status?: string; label?: string }[]>([]);
   const [marksLoading, setMarksLoading] = useState(false);
+  const [terms, setTerms] = useState<{ id: string; name: string }[]>([]);
+  const [genForm, setGenForm] = useState({ termId: "", classId: "" });
+  const [generating, setGenerating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -50,9 +53,11 @@ export const Exams: React.FC = () => {
     Promise.all([
       api.get(`/s/${schoolSlug}/api/academics/classes`),
       api.get(`/s/${schoolSlug}/api/academics/subjects`),
-    ]).then(([c, s]) => {
+      api.get(`/s/${schoolSlug}/api/academics/terms`),
+    ]).then(([c, s, t]) => {
       setClasses(c.data ?? []);
       setSubjects(s.data ?? []);
+      setTerms(t.data ?? []);
     }).catch(() => {});
   }, [schoolSlug]);
 
@@ -143,6 +148,22 @@ export const Exams: React.FC = () => {
       loadMarks(marksAssessmentId);
     } catch (e: any) {
       toast(e.message, "error");
+    }
+  };
+
+  const generateReportCards = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGenerating(true);
+    try {
+      const res = await api.post(`/s/${schoolSlug}/api/exams/report-cards/generate`, genForm);
+      const count = Array.isArray(res.data) ? res.data.length : 0;
+      toast(`Generated ${count} report cards`, "success");
+      setGenForm({ termId: "", classId: "" });
+      load();
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -287,7 +308,29 @@ export const Exams: React.FC = () => {
       )}
 
       {tab === "reports" && (
-        <DataTable loading={loading} rows={reportCards} cols={[
+        <>
+          {hasPermission("exams.publish") && (
+            <form onSubmit={generateReportCards} className="card p-4 grid md:grid-cols-3 gap-3 items-end">
+              <div>
+                <label className="label">Term</label>
+                <select className="input" required value={genForm.termId} onChange={(e) => setGenForm({ ...genForm, termId: e.target.value })}>
+                  <option value="">Select term…</option>
+                  {terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Class</label>
+                <select className="input" required value={genForm.classId} onChange={(e) => setGenForm({ ...genForm, classId: e.target.value })}>
+                  <option value="">Select class…</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <button type="submit" className="btn-primary" disabled={generating}>
+                {generating ? "Generating…" : "Generate report cards"}
+              </button>
+            </form>
+          )}
+          <DataTable loading={loading} rows={reportCards} cols={[
           { k: "studentId", l: "Student" },
           { k: "published", l: "Published", r: (x) => x.published ? "Yes" : "No" },
         ]} actions={(row) => (
@@ -298,6 +341,7 @@ export const Exams: React.FC = () => {
             <button type="button" className="btn-ghost text-xs" onClick={() => downloadPdf(`/s/${schoolSlug}/api/reports/pdf/report-card/${row.id}`)}>PDF</button>
           </div>
         )} />
+        </>
       )}
     </div>
   );

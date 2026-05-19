@@ -21,6 +21,7 @@ import messagingRoutes from "./messaging";
 import reportsRoutes from "./reports";
 import portalRoutes from "./portal";
 import settingsRoutes from "./settings";
+import dashboardRoutes from "./dashboard";
 import publicRoutes from "./public";
 
 const router = Router();
@@ -58,5 +59,6 @@ router.use("/s/:schoolSlug/api/messaging",   resolveTenant, messagingRoutes);
 router.use("/s/:schoolSlug/api/reports",     resolveTenant, reportsRoutes);
 router.use("/s/:schoolSlug/api/portal",      resolveTenant, portalRoutes);
 router.use("/s/:schoolSlug/api/settings",    resolveTenant, settingsRoutes);
+router.use("/s/:schoolSlug/api/dashboard",   resolveTenant, dashboardRoutes);
 
 export default router;

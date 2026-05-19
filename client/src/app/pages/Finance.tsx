@@ -29,13 +29,18 @@ export const Finance: React.FC = () => {
   const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [tab, setTab] = useState<"overview" | "collect" | "payments" | "debtors" | "receipts" | "fees">("overview");
+  const [tab, setTab] = useState<"overview" | "billing" | "collect" | "payments" | "debtors" | "receipts" | "fees">("overview");
   const [collectForm, setCollectForm] = useState({ invoiceId: "", amount: "", method: "cash" });
+  const [invoiceForm, setInvoiceForm] = useState({ studentId: "", invoiceNo: "", totalAmount: "", termId: "", dueDate: "" });
+  const [bulkForm, setBulkForm] = useState({ termId: "", classId: "", feeStructureId: "" });
   const [invoices, setInvoices] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [debtors, setDebtors] = useState<any[]>([]);
   const [receipts, setReceipts] = useState<any[]>([]);
   const [feeStructures, setFeeStructures] = useState<any[]>([]);
+  const [studentList, setStudentList] = useState<{ id: string; firstName: string; lastName: string; admissionNumber: string }[]>([]);
+  const [terms, setTerms] = useState<{ id: string; name: string }[]>([]);
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => { load(); }, [schoolSlug, tab]);
 
@@ -49,6 +54,17 @@ export const Finance: React.FC = () => {
         ]);
         setStats(dash.data);
         setInvoices(inv.data || []);
+      } else if (tab === "billing") {
+        const [stu, trm, cls, fs] = await Promise.all([
+          api.get(`/s/${schoolSlug}/api/students?limit=200`),
+          api.get(`/s/${schoolSlug}/api/academics/terms`),
+          api.get(`/s/${schoolSlug}/api/academics/classes`),
+          api.get(`/s/${schoolSlug}/api/finance/fee-structures`),
+        ]);
+        setStudentList(stu.data ?? []);
+        setTerms(trm.data ?? []);
+        setClasses(cls.data ?? []);
+        setFeeStructures(fs.data ?? []);
       } else if (tab === "collect") {
         setDebtors((await api.get(`/s/${schoolSlug}/api/finance/debtors`)).data ?? []);
       } else if (tab === "payments") {
@@ -113,6 +129,37 @@ export const Finance: React.FC = () => {
     }
   };
 
+  const createInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/s/${schoolSlug}/api/finance/invoices`, {
+        studentId: invoiceForm.studentId,
+        invoiceNo: invoiceForm.invoiceNo,
+        totalAmount: Math.round(Number(invoiceForm.totalAmount) * 100),
+        termId: invoiceForm.termId || undefined,
+        dueDate: invoiceForm.dueDate || undefined,
+      });
+      toast("Invoice created", "success");
+      setInvoiceForm({ studentId: "", invoiceNo: "", totalAmount: "", termId: "", dueDate: "" });
+      setTab("overview");
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const bulkInvoices = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await api.post(`/s/${schoolSlug}/api/finance/invoices/bulk`, bulkForm);
+      const count = Array.isArray(res.data) ? res.data.length : 0;
+      toast(`Created ${count} invoices`, "success");
+      setBulkForm({ termId: "", classId: "", feeStructureId: "" });
+      setTab("overview");
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -135,6 +182,9 @@ export const Finance: React.FC = () => {
 
       <div className="flex gap-2">
         <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>overview</button>
+        {hasPermission("finance.invoice.create") && (
+          <button type="button" onClick={() => setTab("billing")} className={tabBtn("billing")}>billing</button>
+        )}
         <button type="button" onClick={() => setTab("collect")} className={tabBtn("collect")}>collect</button>
         <button type="button" onClick={() => setTab("payments")} className={tabBtn("payments")}>payments</button>
         <button type="button" onClick={() => setTab("fees")} className={tabBtn("fees")}>fee structures</button>
@@ -177,6 +227,73 @@ export const Finance: React.FC = () => {
             </table>
           </div>
         </>
+      )}
+
+      {tab === "billing" && hasPermission("finance.invoice.create") && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="card p-6 space-y-4">
+            <h3 className="font-semibold text-white">Create invoice</h3>
+            <form onSubmit={createInvoice} className="space-y-3">
+              <div>
+                <label className="label">Student</label>
+                <select className="input" required value={invoiceForm.studentId} onChange={(e) => setInvoiceForm({ ...invoiceForm, studentId: e.target.value })}>
+                  <option value="">Select student…</option>
+                  {studentList.map((s) => (
+                    <option key={s.id} value={s.id}>{s.admissionNumber} — {s.firstName} {s.lastName}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Invoice number</label>
+                <input className="input" required value={invoiceForm.invoiceNo} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceNo: e.target.value })} placeholder="INV-2026-001" />
+              </div>
+              <div>
+                <label className="label">Amount (USD)</label>
+                <input className="input" type="number" step="0.01" min="0.01" required value={invoiceForm.totalAmount} onChange={(e) => setInvoiceForm({ ...invoiceForm, totalAmount: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Term (optional)</label>
+                <select className="input" value={invoiceForm.termId} onChange={(e) => setInvoiceForm({ ...invoiceForm, termId: e.target.value })}>
+                  <option value="">—</option>
+                  {terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Due date (optional)</label>
+                <input className="input" type="date" value={invoiceForm.dueDate} onChange={(e) => setInvoiceForm({ ...invoiceForm, dueDate: e.target.value })} />
+              </div>
+              <button type="submit" className="btn-primary w-full">Create invoice</button>
+            </form>
+          </div>
+          <div className="card p-6 space-y-4">
+            <h3 className="font-semibold text-white">Bulk billing</h3>
+            <p className="text-sm text-slate-400">Generate invoices for all students enrolled in a class using a fee structure.</p>
+            <form onSubmit={bulkInvoices} className="space-y-3">
+              <div>
+                <label className="label">Term</label>
+                <select className="input" required value={bulkForm.termId} onChange={(e) => setBulkForm({ ...bulkForm, termId: e.target.value })}>
+                  <option value="">Select term…</option>
+                  {terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Class</label>
+                <select className="input" required value={bulkForm.classId} onChange={(e) => setBulkForm({ ...bulkForm, classId: e.target.value })}>
+                  <option value="">Select class…</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Fee structure</label>
+                <select className="input" required value={bulkForm.feeStructureId} onChange={(e) => setBulkForm({ ...bulkForm, feeStructureId: e.target.value })}>
+                  <option value="">Select structure…</option>
+                  {feeStructures.map((fs) => <option key={fs.id} value={fs.id}>{fs.name}</option>)}
+                </select>
+              </div>
+              <button type="submit" className="btn-primary w-full">Generate invoices</button>
+            </form>
+          </div>
+        </div>
       )}
 
       {tab === "collect" && hasPermission("finance.payment.create") && (

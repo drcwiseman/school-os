@@ -21,6 +21,16 @@ export const StudentsList: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({
+    admissionNumber: "",
+    firstName: "",
+    lastName: "",
+    middleName: "",
+    gender: "",
+    dob: "",
+  });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -35,6 +45,29 @@ export const StudentsList: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const createStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post(`/s/${schoolSlug}/api/students`, {
+        admissionNumber: addForm.admissionNumber,
+        firstName: addForm.firstName,
+        lastName: addForm.lastName,
+        middleName: addForm.middleName || undefined,
+        gender: addForm.gender || undefined,
+        dob: addForm.dob || undefined,
+      });
+      toast("Student added", "success");
+      setAddForm({ admissionNumber: "", firstName: "", lastName: "", middleName: "", gender: "", dob: "" });
+      setShowAdd(false);
+      fetchStudents();
+    } catch (err: any) {
+      toast(err.message, "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -61,10 +94,51 @@ export const StudentsList: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <h1 className="page-title">Students</h1>
-        <button className="btn-primary">
-          <Plus className="w-4 h-4" /> Add Student
-        </button>
+        {hasPermission("students.create") && (
+          <button type="button" className="btn-primary" onClick={() => setShowAdd((v) => !v)}>
+            <Plus className="w-4 h-4" /> {showAdd ? "Cancel" : "Add Student"}
+          </button>
+        )}
       </div>
+
+      {showAdd && hasPermission("students.create") && (
+        <form onSubmit={createStudent} className="card p-6 grid md:grid-cols-3 gap-4">
+          <div>
+            <label className="label">Admission number</label>
+            <input className="input" required value={addForm.admissionNumber} onChange={(e) => setAddForm({ ...addForm, admissionNumber: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">First name</label>
+            <input className="input" required value={addForm.firstName} onChange={(e) => setAddForm({ ...addForm, firstName: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Last name</label>
+            <input className="input" required value={addForm.lastName} onChange={(e) => setAddForm({ ...addForm, lastName: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Middle name</label>
+            <input className="input" value={addForm.middleName} onChange={(e) => setAddForm({ ...addForm, middleName: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Gender</label>
+            <select className="input" value={addForm.gender} onChange={(e) => setAddForm({ ...addForm, gender: e.target.value })}>
+              <option value="">—</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Date of birth</label>
+            <input className="input" type="date" value={addForm.dob} onChange={(e) => setAddForm({ ...addForm, dob: e.target.value })} />
+          </div>
+          <div className="md:col-span-3">
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? "Saving…" : "Save student"}
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="card p-4">
         <div className="flex gap-4 mb-4">
