@@ -29,7 +29,8 @@ export const Finance: React.FC = () => {
   const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [tab, setTab] = useState<"overview" | "payments" | "debtors" | "receipts" | "fees">("overview");
+  const [tab, setTab] = useState<"overview" | "collect" | "payments" | "debtors" | "receipts" | "fees">("overview");
+  const [collectForm, setCollectForm] = useState({ invoiceId: "", amount: "", method: "cash" });
   const [invoices, setInvoices] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [debtors, setDebtors] = useState<any[]>([]);
@@ -48,6 +49,8 @@ export const Finance: React.FC = () => {
         ]);
         setStats(dash.data);
         setInvoices(inv.data || []);
+      } else if (tab === "collect") {
+        setDebtors((await api.get(`/s/${schoolSlug}/api/finance/debtors`)).data ?? []);
       } else if (tab === "payments") {
         setPayments((await api.get(`/s/${schoolSlug}/api/finance/payments`)).data ?? []);
       } else if (tab === "fees") {
@@ -79,6 +82,22 @@ export const Finance: React.FC = () => {
       await api.delete(`/s/${schoolSlug}/api/finance/fee-structures/${id}`);
       toast("Fee structure removed", "success");
       load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const recordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/s/${schoolSlug}/api/finance/payments`, {
+        invoiceId: collectForm.invoiceId,
+        amount: Math.round(Number(collectForm.amount) * 100),
+        method: collectForm.method,
+      });
+      toast("Payment recorded", "success");
+      setCollectForm({ invoiceId: "", amount: "", method: "cash" });
+      setTab("payments");
     } catch (err: any) {
       toast(err.message, "error");
     }
@@ -116,6 +135,7 @@ export const Finance: React.FC = () => {
 
       <div className="flex gap-2">
         <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>overview</button>
+        <button type="button" onClick={() => setTab("collect")} className={tabBtn("collect")}>collect</button>
         <button type="button" onClick={() => setTab("payments")} className={tabBtn("payments")}>payments</button>
         <button type="button" onClick={() => setTab("fees")} className={tabBtn("fees")}>fee structures</button>
         <button type="button" onClick={() => setTab("debtors")} className={tabBtn("debtors")}>debtors</button>
@@ -157,6 +177,43 @@ export const Finance: React.FC = () => {
             </table>
           </div>
         </>
+      )}
+
+      {tab === "collect" && hasPermission("finance.payment.create") && (
+        <div className="card p-6 max-w-lg space-y-4">
+          <h3 className="font-semibold text-white">Record payment</h3>
+          <form onSubmit={recordPayment} className="space-y-3">
+            <div>
+              <label className="label">Unpaid invoice</label>
+              <select className="input" required value={collectForm.invoiceId} onChange={(e) => {
+                const inv = debtors.find((d) => d.id === e.target.value);
+                setCollectForm({
+                  ...collectForm,
+                  invoiceId: e.target.value,
+                  amount: inv ? String((inv.balance ?? 0) / 100) : "",
+                });
+              }}>
+                <option value="">Select invoice…</option>
+                {debtors.map((d) => (
+                  <option key={d.id} value={d.id}>{d.invoiceNo} — balance {formatMoney(d.balance)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Amount</label>
+              <input className="input" type="number" step="0.01" min="0" required value={collectForm.amount} onChange={(e) => setCollectForm({ ...collectForm, amount: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Method</label>
+              <select className="input" value={collectForm.method} onChange={(e) => setCollectForm({ ...collectForm, method: e.target.value })}>
+                <option value="cash">Cash</option>
+                <option value="mpesa">M-Pesa</option>
+                <option value="bank">Bank transfer</option>
+              </select>
+            </div>
+            <button type="submit" className="btn-primary w-full">Record payment</button>
+          </form>
+        </div>
       )}
 
       {tab === "payments" && (

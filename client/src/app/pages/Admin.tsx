@@ -18,13 +18,14 @@ export const Admin: React.FC = () => {
   const [roles, setRoles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditActionFilter, setAuditActionFilter] = useState("");
   const [newRoleName, setNewRoleName] = useState("");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
 
   useEffect(() => {
     loadAll();
-  }, [schoolSlug, tab]);
+  }, [schoolSlug, tab, auditActionFilter]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -40,7 +41,8 @@ export const Admin: React.FC = () => {
         setRoles(r.data || []);
         setPermissions(p.data || []);
       } else {
-        const res = await api.get(`/s/${schoolSlug}/api/admin/audit-logs`);
+        const q = auditActionFilter.trim() ? `?action=${encodeURIComponent(auditActionFilter.trim())}` : "";
+        const res = await api.get(`/s/${schoolSlug}/api/admin/audit-logs${q}`);
         setAuditLogs(res.data || []);
       }
     } catch (err: any) {
@@ -150,7 +152,12 @@ export const Admin: React.FC = () => {
           saveRolePermissions={saveRolePermissions}
         />
       ) : (
-        <AuditTable logs={auditLogs} />
+        <AuditPanel
+          logs={auditLogs}
+          actionFilter={auditActionFilter}
+          setActionFilter={setAuditActionFilter}
+          onSearch={loadAll}
+        />
       )}
     </div>
   );
@@ -279,6 +286,29 @@ function RolesPanel(props: {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function AuditPanel({ logs, actionFilter, setActionFilter, onSearch }: {
+  logs: any[];
+  actionFilter: string;
+  setActionFilter: (v: string) => void;
+  onSearch: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2 max-w-md">
+        <input
+          className="input flex-1"
+          placeholder="Filter by action (e.g. payment.void)"
+          value={actionFilter}
+          onChange={(e) => setActionFilter(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSearch()}
+        />
+        <button type="button" className="btn-ghost" onClick={onSearch}>Search</button>
+      </div>
+      <AuditTable logs={logs} />
     </div>
   );
 }

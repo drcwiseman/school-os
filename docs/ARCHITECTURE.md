@@ -229,6 +229,7 @@ See [README](../README.md#logging-in).
 | **4** | Extended soft delete (assessments, fee structures, staff), plan ↔ feature enforcement, platform role permissions, staff UI for void/delete |
 | **5** | Tenant suspend/activate, staff user status, portal dashboard enrichment, students/users/fee-structure UI |
 | **6** | Portal PDF downloads (OBAC), settings↔feature sync, marks entry UI, audit actor names, sidebar portal link |
+| **7** | Finance collect payment, admissions pipeline stages, exam class roster, audit filter, platform tenant audit |
 
 ### Phase 4 details
 
@@ -295,3 +296,23 @@ See [README](../README.md#logging-in).
 - Exams: marks entry tab, publish report cards, staff PDF export
 - Audit log: shows actor email (joined from `users`)
 - Sidebar: Parent portal link when `portal_enabled`
+
+### Phase 7 details
+
+**Finance collections**
+
+- **Collect** tab: record payment against unpaid invoice (creates receipt, updates invoice balance)
+
+**Admissions pipeline**
+
+- Stage dropdown per applicant: inquiry → interview → offered → rejected → enrolled
+
+**Exams**
+
+- Class/subject pickers from academics API
+- `GET /exams/assessments/:id/roster` — class enrollment + existing marks for marks entry
+
+**Audit**
+
+- `GET /admin/audit-logs?action=...` — partial match filter
+- Platform tenant suspend/activate writes `tenant.status.update` to school audit log

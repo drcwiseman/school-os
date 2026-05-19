@@ -17,8 +17,10 @@ export const Exams: React.FC = () => {
   const [reportCards, setReportCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", classId: "", subjectId: "" });
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+  const [subjects, setSubjects] = useState<{ id: string; name: string; code?: string }[]>([]);
   const [marksAssessmentId, setMarksAssessmentId] = useState("");
-  const [marksRows, setMarksRows] = useState<{ id?: string; studentId: string; score: string; status?: string }[]>([]);
+  const [marksRows, setMarksRows] = useState<{ id?: string; studentId: string; score: string; status?: string; label?: string }[]>([]);
   const [marksLoading, setMarksLoading] = useState(false);
 
   const load = async () => {
@@ -42,6 +44,17 @@ export const Exams: React.FC = () => {
   };
 
   useEffect(() => { load(); }, [schoolSlug, tab]);
+
+  useEffect(() => {
+    if (!schoolSlug) return;
+    Promise.all([
+      api.get(`/s/${schoolSlug}/api/academics/classes`),
+      api.get(`/s/${schoolSlug}/api/academics/subjects`),
+    ]).then(([c, s]) => {
+      setClasses(c.data ?? []);
+      setSubjects(s.data ?? []);
+    }).catch(() => {});
+  }, [schoolSlug]);
 
   useEffect(() => {
     if (tab === "marks" && assessments.length === 0) {
@@ -86,12 +99,13 @@ export const Exams: React.FC = () => {
     if (!assessmentId) return;
     setMarksLoading(true);
     try {
-      const res = await api.get(`/s/${schoolSlug}/api/exams/assessments/${assessmentId}/marks`);
-      setMarksRows((res.data?.marks ?? []).map((m: any) => ({
-        id: m.id,
-        studentId: m.studentId,
-        score: m.score != null ? String(m.score) : "",
-        status: m.status,
+      const res = await api.get(`/s/${schoolSlug}/api/exams/assessments/${assessmentId}/roster`);
+      setMarksRows((res.data?.roster ?? []).map((r: any) => ({
+        id: r.markId,
+        studentId: r.studentId,
+        score: r.score != null ? String(r.score) : "",
+        status: r.status,
+        label: `${r.firstName} ${r.lastName}`,
       })));
     } catch (e: any) {
       toast(e.message, "error");
@@ -173,8 +187,14 @@ export const Exams: React.FC = () => {
         <>
           <form onSubmit={createAssessment} className="card p-4 grid md:grid-cols-4 gap-3">
             <input className="input" placeholder="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <input className="input" placeholder="Class UUID" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} />
-            <input className="input" placeholder="Subject UUID" required value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })} />
+            <select className="input" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}>
+              <option value="">Select class…</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select className="input" required value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })}>
+              <option value="">Select subject…</option>
+              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>)}
+            </select>
             <button type="submit" className="btn-primary">Add Assessment</button>
           </form>
           <DataTable loading={loading} rows={assessments} cols={[
@@ -228,7 +248,7 @@ export const Exams: React.FC = () => {
                   <tr><td colSpan={4} className="text-center py-6 text-slate-400">No marks — select assessment or add rows.</td></tr>
                 ) : marksRows.map((r, i) => (
                   <tr key={r.id ?? i}>
-                    <td className="font-mono text-xs">{r.studentId.slice(0, 12)}…</td>
+                    <td>{r.label ?? <span className="font-mono text-xs">{r.studentId.slice(0, 12)}…</span>}</td>
                     <td>
                       <input
                         className="input w-24"

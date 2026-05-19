@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { assessments, marks, markSubmissions, moderationNotes, reportCards, students, classes, subjects } from "../db/schema";
+import { assessments, marks, markSubmissions, moderationNotes, reportCards, students, classes, subjects, studentClassHistory } from "../db/schema";
 import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import { softDeleteMark, softDeleteAssessment } from "../services/soft-delete";
 import { requireAuth } from "../middleware/auth";
@@ -37,6 +37,36 @@ router.post("/assessments", ...guard, requirePermission("exams.enter_marks"),
     } catch (e) { next(e); }
   }
 );
+
+router.get("/assessments/:id/roster", ...guard, requirePermission("exams.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [a] = await db.select().from(assessments).where(and(eq(assessments.id, req.params.id), eq(assessments.tenantId, tenant.id), isNull(assessments.deletedAt))).limit(1);
+    if (!a) throw new NotFoundError("Assessment not found");
+    const enrolled = await db
+      .select({
+        studentId: students.id,
+        firstName: students.firstName,
+        lastName: students.lastName,
+        admissionNumber: students.admissionNumber,
+      })
+      .from(studentClassHistory)
+      .innerJoin(students, eq(students.id, studentClassHistory.studentId))
+      .where(and(
+        eq(studentClassHistory.tenantId, tenant.id),
+        eq(studentClassHistory.classId, a.classId),
+        isNull(studentClassHistory.toDate),
+        isNull(students.deletedAt),
+      ));
+    const existingMarks = await db.select().from(marks).where(and(eq(marks.assessmentId, a.id), eq(marks.tenantId, tenant.id), isNull(marks.deletedAt)));
+    const markByStudent = new Map(existingMarks.map((m) => [m.studentId, m]));
+    const roster = enrolled.map((s) => {
+      const m = markByStudent.get(s.studentId);
+      return { ...s, markId: m?.id, score: m?.score ?? null, status: m?.status ?? "draft" };
+    });
+    res.json({ success: true, data: { assessment: a, roster } });
+  } catch (e) { next(e); }
+});
 
 router.get("/assessments/:id/marks", ...guard, requirePermission("exams.view"), async (req, res, next) => {
   try {

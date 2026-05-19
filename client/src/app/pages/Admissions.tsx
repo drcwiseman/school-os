@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { useToast } from "../components/Toast";
 import { Plus, CheckCircle, Clock, XCircle, Search, UserPlus } from "lucide-react";
+
+const PIPELINE_STAGES = ["inquiry", "interview", "offered", "rejected", "enrolled"] as const;
 
 interface Applicant {
   id: string;
@@ -15,6 +18,7 @@ interface Applicant {
 
 export const Admissions: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
+  const { toast } = useToast();
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -45,6 +49,16 @@ export const Admissions: React.FC = () => {
       fetchApplicants();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const updateStage = async (id: string, stage: string) => {
+    try {
+      await api.patch(`/s/${schoolSlug}/api/admissions/${id}/stage`, { stage });
+      toast("Stage updated", "success");
+      fetchApplicants();
+    } catch (err: any) {
+      toast(err.message, "error");
     }
   };
 
@@ -129,10 +143,20 @@ export const Admissions: React.FC = () => {
                   </td>
                   <td className="text-slate-400">{app.email || "-"}</td>
                   <td>
-                    <div className="flex items-center gap-2">
-                      {getStageIcon(app.stage, app.convertedTo)}
-                      <span className="capitalize">{app.stage}</span>
-                    </div>
+                    {!app.convertedTo ? (
+                      <select
+                        className="input text-sm py-1 capitalize"
+                        value={app.stage}
+                        onChange={(e) => updateStage(app.id, e.target.value)}
+                      >
+                        {PIPELINE_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {getStageIcon(app.stage, app.convertedTo)}
+                        <span className="capitalize">{app.stage}</span>
+                      </div>
+                    )}
                   </td>
                   <td className="text-slate-400">{new Date(app.createdAt).toLocaleDateString()}</td>
                   <td className="text-right">

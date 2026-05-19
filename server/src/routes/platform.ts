@@ -18,6 +18,7 @@ import { createPlatformSession, requirePlatformAuth, verifyPassword } from "../m
 import { validate } from "../utils/validate";
 import { NotFoundError, ConflictError, UnauthorizedError } from "../middleware/error";
 import { requirePlatformPermission } from "../lib/platform-permissions";
+import { createAuditLog } from "../services/audit";
 
 const router = Router();
 
@@ -190,6 +191,15 @@ router.patch("/tenants/:slug/status", requirePlatformAuth, requirePlatformPermis
       const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
       if (!tenant) throw new NotFoundError("Tenant not found");
       const [updated] = await db.update(tenants).set({ status: req.body.status, updatedAt: new Date() }).where(eq(tenants.id, tenant.id)).returning();
+      await createAuditLog({
+        tenantId: tenant.id,
+        action: "tenant.status.update",
+        entityType: "tenant",
+        entityId: tenant.id,
+        before: tenant,
+        after: updated,
+        ip: req.ip,
+      });
       res.json({ success: true, data: updated });
     } catch (err) { next(err); }
   },

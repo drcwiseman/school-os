@@ -138,6 +138,12 @@ router.get("/audit-logs", ...guard, requirePermission("audit.view"), async (req:
     const tenant = (req as any).tenant;
     const q      = await paginationSchema.parseAsync(req.query);
     const { limit, offset } = paginate(q.page, q.limit);
+    const actionFilter = typeof req.query.action === "string" && req.query.action.trim()
+      ? ilike(auditLogs.action, `%${req.query.action.trim()}%`)
+      : undefined;
+    const whereClause = actionFilter
+      ? and(eq(auditLogs.tenantId, tenant.id), actionFilter)
+      : eq(auditLogs.tenantId, tenant.id);
     const rows = await db
       .select({
         id: auditLogs.id,
@@ -154,7 +160,7 @@ router.get("/audit-logs", ...guard, requirePermission("audit.view"), async (req:
       })
       .from(auditLogs)
       .leftJoin(users, eq(auditLogs.actorUserId, users.id))
-      .where(eq(auditLogs.tenantId, tenant.id))
+      .where(whereClause)
       .orderBy(desc(auditLogs.createdAt))
       .limit(limit)
       .offset(offset);
