@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { campaigns, deliveryLogs, guardians, studentGuardians, students, users } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { campaigns, deliveryLogs, guardians, studentGuardians, students, studentClassHistory, users } from "../db/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { getMessagingProvider } from "./messaging";
 
 export async function processCampaignJob(tenantId: string, payload: { campaignId: string }) {
@@ -9,11 +9,28 @@ export async function processCampaignJob(tenantId: string, payload: { campaignId
   if (!campaign) throw new Error("Campaign not found");
 
   const recipients: { to: string; name: string }[] = [];
+  const classId = (campaign.audienceFilter as Record<string, string> | null)?.classId;
 
-  if (campaign.audience === "parents" || campaign.audience === "parents_of_class") {
+  if (campaign.audience === "parents") {
     const links = await db.select({ phone: guardians.phone, email: guardians.email, name: guardians.firstName })
       .from(studentGuardians)
       .innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id))
+      .where(eq(guardians.tenantId, tenantId));
+    for (const l of links) {
+      const to = l.phone || l.email;
+      if (to) recipients.push({ to, name: l.name });
+    }
+  } else if (campaign.audience === "parents_of_class" && classId) {
+    const links = await db
+      .select({ phone: guardians.phone, email: guardians.email, name: guardians.firstName })
+      .from(studentGuardians)
+      .innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id))
+      .innerJoin(students, eq(studentGuardians.studentId, students.id))
+      .innerJoin(studentClassHistory, and(
+        eq(studentClassHistory.studentId, students.id),
+        eq(studentClassHistory.classId, classId),
+        isNull(studentClassHistory.toDate),
+      ))
       .where(eq(guardians.tenantId, tenantId));
     for (const l of links) {
       const to = l.phone || l.email;

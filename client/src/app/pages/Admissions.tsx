@@ -5,6 +5,8 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../state/AuthContext";
 import { Plus, CheckCircle, Clock, XCircle, Search, UserPlus } from "lucide-react";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+
 const PIPELINE_STAGES = ["inquiry", "interview", "offered", "rejected", "enrolled"] as const;
 
 interface Applicant {
@@ -33,6 +35,8 @@ export const Admissions: React.FC = () => {
   const [events, setEvents] = useState<{ id: string; eventType: string; notes: string; createdAt: string; actorEmail?: string }[]>([]);
   const [noteText, setNoteText] = useState("");
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [applicantDocs, setApplicantDocs] = useState<{ id: string; documentType: string; fileUrl: string; status: string }[]>([]);
+  const [appDocForm, setAppDocForm] = useState({ documentType: "", file: null as File | null });
 
   useEffect(() => {
     fetchApplicants();
@@ -78,13 +82,41 @@ export const Admissions: React.FC = () => {
     setNoteText("");
     setEventsLoading(true);
     try {
-      const res = await api.get(`/s/${schoolSlug}/api/admissions/${app.id}/events`);
-      setEvents(res.data ?? []);
+      const [ev, docs] = await Promise.all([
+        api.get(`/s/${schoolSlug}/api/admissions/${app.id}/events`),
+        api.get(`/s/${schoolSlug}/api/admissions/${app.id}/documents`),
+      ]);
+      setEvents(ev.data ?? []);
+      setApplicantDocs(docs.data ?? []);
     } catch (err: any) {
       toast(err.message, "error");
     } finally {
       setEventsLoading(false);
     }
+  };
+
+  const uploadApplicantDoc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!timelineTarget || !appDocForm.file) return toast("Choose a file", "error");
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(",")[1];
+      try {
+        await api.post(`/s/${schoolSlug}/api/admissions/${timelineTarget.id}/documents`, {
+          documentType: appDocForm.documentType,
+          fileName: appDocForm.file!.name,
+          contentBase64: base64,
+          mimeType: appDocForm.file!.type || undefined,
+        });
+        toast("Document uploaded", "success");
+        setAppDocForm({ documentType: "", file: null });
+        const docs = await api.get(`/s/${schoolSlug}/api/admissions/${timelineTarget.id}/documents`);
+        setApplicantDocs(docs.data ?? []);
+      } catch (err: any) {
+        toast(err.message, "error");
+      }
+    };
+    reader.readAsDataURL(appDocForm.file);
   };
 
   const addNote = async (e: React.FormEvent) => {
@@ -191,6 +223,28 @@ export const Admissions: React.FC = () => {
               <button type="submit" className="btn-primary">Add note</button>
             </form>
           )}
+          <div className="border-t border-slate-700/50 pt-4 space-y-3">
+            <h4 className="text-sm font-medium text-white">Documents</h4>
+            {applicantDocs.length === 0 ? (
+              <p className="text-sm text-slate-500">No documents uploaded.</p>
+            ) : (
+              <ul className="text-sm space-y-1">
+                {applicantDocs.map((d) => (
+                  <li key={d.id} className="flex justify-between">
+                    <span className="text-slate-300">{d.documentType} — {d.status}</span>
+                    <a className="text-primary-400 text-xs" href={`${API_BASE}/s/${schoolSlug}/api/admissions/${timelineTarget.id}/documents/${d.id}/file`} target="_blank" rel="noreferrer">Download</a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {hasPermission("admissions.edit") && (
+              <form onSubmit={uploadApplicantDoc} className="grid md:grid-cols-3 gap-2">
+                <input className="input" required placeholder="Document type" value={appDocForm.documentType} onChange={(e) => setAppDocForm({ ...appDocForm, documentType: e.target.value })} />
+                <input className="input" type="file" required onChange={(e) => setAppDocForm({ ...appDocForm, file: e.target.files?.[0] ?? null })} />
+                <button type="submit" className="btn-primary">Upload</button>
+              </form>
+            )}
+          </div>
         </div>
       )}
 

@@ -1,13 +1,15 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { applicants, applicantEvents, students, users } from "../db/schema";
+import { applicants, applicantEvents, applicantDocuments, students, users } from "../db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
-import { AppError } from "../middleware/error";
+import { AppError, NotFoundError, ConflictError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
+import { validate } from "../utils/validate";
+import { writeTenantFile, resolveTenantFile } from "../lib/uploads";
 
 export const admissionsRouter = Router();
 
@@ -103,6 +105,59 @@ admissionsRouter.patch("/:id/stage", requirePermission("admissions.edit"), async
   } catch (error) {
     next(error);
   }
+});
+
+admissionsRouter.get("/:id/documents", requirePermission("admissions.view"), async (req, res, next) => {
+  try {
+    const tenantId = (req as any).tenant!.id;
+    const { id } = req.params;
+    const [applicant] = await db.select().from(applicants).where(and(eq(applicants.id, id), eq(applicants.tenantId, tenantId))).limit(1);
+    if (!applicant) throw new AppError("Applicant not found", 404);
+    const docs = await db.select().from(applicantDocuments).where(and(
+      eq(applicantDocuments.applicantId, id),
+      eq(applicantDocuments.tenantId, tenantId),
+    )).orderBy(desc(applicantDocuments.uploadedAt));
+    res.json({ success: true, data: docs });
+  } catch (error) { next(error); }
+});
+
+admissionsRouter.post("/:id/documents", requirePermission("admissions.edit"),
+  validate({ body: z.object({ documentType: z.string().min(1), fileName: z.string().min(1), contentBase64: z.string().min(1), mimeType: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenantId = (req as any).tenant!.id;
+      const { id } = req.params;
+      const [applicant] = await db.select().from(applicants).where(and(eq(applicants.id, id), eq(applicants.tenantId, tenantId))).limit(1);
+      if (!applicant) throw new AppError("Applicant not found", 404);
+      const { validateUpload } = await import("../middleware/upload");
+      const { safeName, size } = validateUpload(req.body.fileName, req.body.mimeType, req.body.contentBase64);
+      const buffer = Buffer.from(req.body.contentBase64, "base64");
+      if (buffer.length !== size) throw new ConflictError("Invalid file payload");
+      const filePath = writeTenantFile(tenantId, ["applicants", id], `${Date.now()}_${safeName}`, buffer);
+      const [doc] = await db.insert(applicantDocuments).values({
+        tenantId: tenantId,
+        applicantId: id,
+        documentType: req.body.documentType,
+        fileUrl: filePath,
+        status: "pending",
+      }).returning();
+      res.status(201).json({ success: true, data: doc });
+    } catch (error) { next(error); }
+  }
+);
+
+admissionsRouter.get("/:id/documents/:docId/file", requirePermission("admissions.view"), async (req, res, next) => {
+  try {
+    const tenantId = (req as any).tenant!.id;
+    const { id, docId } = req.params;
+    const [doc] = await db.select().from(applicantDocuments).where(and(
+      eq(applicantDocuments.id, docId),
+      eq(applicantDocuments.applicantId, id),
+      eq(applicantDocuments.tenantId, tenantId),
+    )).limit(1);
+    if (!doc?.fileUrl) throw new NotFoundError("Document not found");
+    res.sendFile(resolveTenantFile(tenantId, doc.fileUrl));
+  } catch (error) { next(error); }
 });
 
 admissionsRouter.get("/:id/events", requirePermission("admissions.view"), async (req: Request, res: Response, next: NextFunction) => {

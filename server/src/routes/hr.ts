@@ -100,7 +100,24 @@ router.post("/staff/:id/contracts", ...guard, requirePermission("hr.manage"),
 router.get("/leave", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(leaveRequests).where(eq(leaveRequests.tenantId, tenant.id)).orderBy(desc(leaveRequests.createdAt)) });
+    const rows = await db
+      .select({
+        id: leaveRequests.id,
+        staffId: leaveRequests.staffId,
+        startDate: leaveRequests.startDate,
+        endDate: leaveRequests.endDate,
+        reason: leaveRequests.reason,
+        status: leaveRequests.status,
+        createdAt: leaveRequests.createdAt,
+        staffFirstName: staff.firstName,
+        staffLastName: staff.lastName,
+        employeeNo: staff.employeeNo,
+      })
+      .from(leaveRequests)
+      .innerJoin(staff, eq(leaveRequests.staffId, staff.id))
+      .where(eq(leaveRequests.tenantId, tenant.id))
+      .orderBy(desc(leaveRequests.createdAt));
+    res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
 

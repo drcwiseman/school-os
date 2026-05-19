@@ -12,9 +12,14 @@ export const Messaging: React.FC = () => {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [campaignName, setCampaignName] = useState("");
+  const [campaignForm, setCampaignForm] = useState({
+    name: "",
+    audience: "parents",
+    classId: "",
+  });
 
   const load = async () => {
     setLoading(true);
@@ -35,6 +40,11 @@ export const Messaging: React.FC = () => {
 
   useEffect(() => { load(); }, [schoolSlug, tab]);
 
+  useEffect(() => {
+    if (!schoolSlug) return;
+    api.get(`/s/${schoolSlug}/api/academics/classes`).then((res) => setClasses(res.data ?? [])).catch(() => {});
+  }, [schoolSlug]);
+
   const postAnnouncement = async () => {
     try {
       await api.post(`/s/${schoolSlug}/api/messaging/announcements`, { title, body, audience: "all" });
@@ -44,11 +54,19 @@ export const Messaging: React.FC = () => {
     } catch (err: any) { toast(err.message, "error"); }
   };
 
-  const createCampaign = async () => {
+  const createCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      await api.post(`/s/${schoolSlug}/api/messaging/campaigns`, { name: campaignName, audience: "parents" });
+      const audienceFilter = campaignForm.audience === "parents_of_class" && campaignForm.classId
+        ? { classId: campaignForm.classId }
+        : {};
+      await api.post(`/s/${schoolSlug}/api/messaging/campaigns`, {
+        name: campaignForm.name,
+        audience: campaignForm.audience,
+        audienceFilter,
+      });
       toast("Campaign created", "success");
-      setCampaignName("");
+      setCampaignForm({ name: "", audience: "parents", classId: "" });
       load();
     } catch (err: any) { toast(err.message, "error"); }
   };
@@ -105,14 +123,39 @@ export const Messaging: React.FC = () => {
           )}
           {tab === "campaigns" && (
             <div className="space-y-4">
-              <div className="card p-5 flex flex-wrap gap-3 items-end">
-                <input className="input flex-1 min-w-[200px]" placeholder="Campaign name" value={campaignName} onChange={(e) => setCampaignName(e.target.value)} />
-                <button type="button" className="btn-primary" onClick={createCampaign}>Create</button>
-              </div>
+              <form onSubmit={createCampaign} className="card p-5 grid md:grid-cols-4 gap-3 items-end">
+                <div>
+                  <label className="label">Campaign name</label>
+                  <input className="input" required value={campaignForm.name} onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Audience</label>
+                  <select className="input" value={campaignForm.audience} onChange={(e) => setCampaignForm({ ...campaignForm, audience: e.target.value, classId: "" })}>
+                    <option value="parents">All parents</option>
+                    <option value="parents_of_class">Parents of class</option>
+                    <option value="staff">Staff users</option>
+                  </select>
+                </div>
+                {campaignForm.audience === "parents_of_class" && (
+                  <div>
+                    <label className="label">Class</label>
+                    <select className="input" required value={campaignForm.classId} onChange={(e) => setCampaignForm({ ...campaignForm, classId: e.target.value })}>
+                      <option value="">Select class…</option>
+                      {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                <button type="submit" className="btn-primary">Create campaign</button>
+              </form>
               <div className="card p-5">
-                {campaigns.map((c) => (
+                {campaigns.length === 0 ? (
+                  <p className="text-slate-500 text-sm">No campaigns yet.</p>
+                ) : campaigns.map((c) => (
                   <div key={c.id} className="flex justify-between items-center py-2 border-b border-slate-800">
-                    <span className="text-slate-200">{c.name} <span className="text-xs text-slate-500">({c.status})</span></span>
+                    <span className="text-slate-200">
+                      {c.name}{" "}
+                      <span className="text-xs text-slate-500">({c.audience} · {c.status})</span>
+                    </span>
                     {c.status === "draft" && (
                       <button type="button" className="btn-ghost text-primary-400" onClick={() => sendCampaign(c.id)}>
                         <Send className="w-4 h-4" /> Queue send

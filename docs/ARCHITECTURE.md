@@ -234,6 +234,7 @@ See [README](../README.md#logging-in).
 | **9** | Permission-scoped dashboard, student detail/edit, fee heads & structures UI, platform stats enrichment |
 | **10** | Student guardians, CSV import/export, admissions enroll UI, fee structure line preview |
 | **11** | Applicant timeline, student documents, parent portal linking, HR CSV import/export |
+| **12** | Leave approve/reject, student portal accounts, applicant documents, campaign audience picker |
 
 ### Phase 4 details
 
@@ -388,3 +389,25 @@ See [README](../README.md#logging-in).
 **HR**
 
 - Staff **CSV export/import** (`GET/POST /hr/staff/export|import/csv`) on HR staff tab
+
+### Phase 12 details
+
+**HR leave**
+
+- Leave list includes staff name; **Approve** / **Reject** for pending requests (`PATCH /hr/leave/:id`)
+- Submit new leave request from UI
+
+**Student portal**
+
+- `POST /students/:id/student-portal` — create `student_accounts` for active students
+- Student detail shows portal email when provisioned
+
+**Admissions documents**
+
+- `GET/POST /admissions/:id/documents` + file download (same upload pattern as student docs)
+- Upload/list in applicant **Timeline** panel
+
+**Messaging campaigns**
+
+- Campaign create form: audience **parents**, **parents_of_class** (with class picker), or **staff**
+- Worker respects `audienceFilter.classId` for class-scoped parent campaigns

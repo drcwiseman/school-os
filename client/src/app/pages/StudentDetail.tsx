@@ -42,6 +42,8 @@ export const StudentDetail: React.FC = () => {
   const [docForm, setDocForm] = useState({ documentType: "", file: null as File | null });
   const [portalTarget, setPortalTarget] = useState<string | null>(null);
   const [portalForm, setPortalForm] = useState({ email: "", password: "" });
+  const [portalAccount, setPortalAccount] = useState<{ email: string; status: string } | null>(null);
+  const [studentPortalForm, setStudentPortalForm] = useState({ email: "", password: "" });
 
   const reloadGuardians = async () => {
     const g = await api.get(`/s/${schoolSlug}/api/students/${studentId}/guardians`);
@@ -78,6 +80,8 @@ export const StudentDetail: React.FC = () => {
         setTerms(trm.data ?? []);
         setGuardians(g.data ?? []);
         setDocuments(docs.data ?? []);
+        setPortalAccount(s.portalAccount ?? null);
+        setStudentPortalForm({ email: "", password: "" });
       })
       .catch((err: any) => toast(err.message, "error"))
       .finally(() => setLoading(false));
@@ -119,6 +123,19 @@ export const StudentDetail: React.FC = () => {
       toast("Guardian added", "success");
       setGuardianForm({ firstName: "", lastName: "", relationship: "", phone: "", email: "", isPrimary: false });
       await reloadGuardians();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const createStudentPortal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/s/${schoolSlug}/api/students/${studentId}/student-portal`, studentPortalForm);
+      toast("Student portal account created", "success");
+      setStudentPortalForm({ email: "", password: "" });
+      const stu = await api.get(`/s/${schoolSlug}/api/students/${studentId}`);
+      setPortalAccount(stu.data?.portalAccount ?? null);
     } catch (err: any) {
       toast(err.message, "error");
     }
@@ -246,6 +263,23 @@ export const StudentDetail: React.FC = () => {
           <div><span className="text-slate-500">Name</span><p className="text-white">{form.firstName} {form.lastName}</p></div>
           <div><span className="text-slate-500">Status</span><p className="text-white capitalize">{form.status}</p></div>
           <div><span className="text-slate-500">Gender</span><p className="text-white capitalize">{form.gender || "—"}</p></div>
+        </div>
+      )}
+
+      {moduleEnabled("portal_enabled") && (
+        <div className="card p-6 space-y-3">
+          <h3 className="font-semibold text-white">Student portal</h3>
+          {portalAccount ? (
+            <p className="text-sm text-slate-300">Portal login: <span className="text-primary-400">{portalAccount.email}</span> ({portalAccount.status})</p>
+          ) : hasPermission("students.edit") ? (
+            <form onSubmit={createStudentPortal} className="grid md:grid-cols-3 gap-3">
+              <input className="input" type="email" required placeholder="Portal email" value={studentPortalForm.email} onChange={(e) => setStudentPortalForm({ ...studentPortalForm, email: e.target.value })} />
+              <input className="input" type="password" required minLength={8} placeholder="Temporary password" value={studentPortalForm.password} onChange={(e) => setStudentPortalForm({ ...studentPortalForm, password: e.target.value })} />
+              <button type="submit" className="btn-primary">Create student login</button>
+            </form>
+          ) : (
+            <p className="text-sm text-slate-500">No portal account.</p>
+          )}
         </div>
       )}
 

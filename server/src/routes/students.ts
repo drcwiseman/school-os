@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../db";
-import { students, studentGuardians, guardians, studentClassHistory, studentDocuments, classes, parentAccounts } from "../db/schema";
+import { students, studentGuardians, guardians, studentClassHistory, studentDocuments, classes, parentAccounts, studentAccounts } from "../db/schema";
 import { hashPassword } from "../middleware/auth";
 import fs from "fs";
 import path from "path";
@@ -98,7 +98,9 @@ router.get("/:id", ...guard, requirePermission("students.view"), async (req: Req
     const tenant = (req as any).tenant;
     const [student] = await db.select().from(students).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id))).limit(1);
     if (!student) throw new NotFoundError("Student not found");
-    res.json({ success: true, data: student });
+    const [portalAccount] = await db.select({ email: studentAccounts.email, status: studentAccounts.status })
+      .from(studentAccounts).where(eq(studentAccounts.studentId, student.id)).limit(1);
+    res.json({ success: true, data: { ...student, portalAccount: portalAccount ?? null } });
   } catch (err) { next(err); }
 });
 
@@ -174,6 +176,41 @@ router.post("/:id/guardians", ...guard, requirePermission("students.edit"),
       const [guardian] = await db.insert(guardians).values({ ...guardianData, tenantId: tenant.id }).returning();
       await db.insert(studentGuardians).values({ studentId: student.id, guardianId: guardian.id, isPrimary });
       res.status(201).json({ success: true, data: guardian });
+    } catch (err) { next(err); }
+  }
+);
+
+router.post("/:id/student-portal", ...guard, requirePermission("students.edit"),
+  validate({ body: z.object({ email: z.string().email(), password: z.string().min(8) }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [student] = await db.select().from(students).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id))).limit(1);
+      if (!student) throw new NotFoundError("Student not found");
+      const [existingEmail] = await db.select().from(studentAccounts).where(and(
+        eq(studentAccounts.tenantId, tenant.id),
+        eq(studentAccounts.email, req.body.email),
+      )).limit(1);
+      if (existingEmail) throw new ConflictError("A student portal account with this email already exists");
+      const [existingStudent] = await db.select().from(studentAccounts).where(and(
+        eq(studentAccounts.tenantId, tenant.id),
+        eq(studentAccounts.studentId, student.id),
+      )).limit(1);
+      if (existingStudent) throw new ConflictError("This student already has a portal account");
+      const passwordHash = await hashPassword(req.body.password);
+      const [account] = await db.insert(studentAccounts).values({
+        tenantId: tenant.id,
+        email: req.body.email,
+        passwordHash,
+        studentId: student.id,
+        status: "active",
+      }).returning();
+      await createAuditLog({
+        tenantId: tenant.id, actorUserId: user.id, action: "student_portal.create",
+        entityType: "student_account", entityId: account.id, after: { email: account.email, studentId: student.id }, ip: req.ip,
+      });
+      res.status(201).json({ success: true, data: { id: account.id, email: account.email, status: account.status } });
     } catch (err) { next(err); }
   }
 );

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
@@ -91,14 +91,7 @@ export const HR: React.FC = () => {
             ]} />
         </>
       ) : (
-        <ModuleCrud title="Leave requests" apiPath="hr/leave"
-          columns={[{ key: "staffId", label: "Staff" }, { key: "status", label: "Status" }, { key: "startDate", label: "From", render: (r) => new Date(r.startDate).toLocaleDateString() }]}
-          fields={[
-            { name: "staffId", label: "Staff UUID", required: true },
-            { name: "startDate", label: "Start", type: "date", required: true },
-            { name: "endDate", label: "End", type: "date", required: true },
-            { name: "reason", label: "Reason" },
-          ]} />
+        <LeaveRequestsPanel schoolSlug={schoolSlug!} hasPermission={hasPermission} toast={toast} />
       )}
     </div>
   );
@@ -120,6 +113,119 @@ function HRTabs({ tab, setTab, tabCls }: { tab: string; setTab: (t: "staff" | "l
     <div className="flex gap-2">
       <button type="button" onClick={() => setTab("staff")} className={tabCls(tab === "staff")}>Staff</button>
       <button type="button" onClick={() => setTab("leave")} className={tabCls(tab === "leave")}>Leave</button>
+    </div>
+  );
+}
+
+type LeaveRow = {
+  id: string;
+  staffId: string;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+  status: string;
+  staffFirstName?: string;
+  staffLastName?: string;
+  employeeNo?: string;
+};
+
+function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: string; hasPermission: (p: string) => boolean; toast: (m: string, t?: "success" | "error") => void }) {
+  const [rows, setRows] = useState<LeaveRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ staffId: "", startDate: "", endDate: "", reason: "" });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      setRows((await api.get(`/s/${schoolSlug}/api/hr/leave`)).data ?? []);
+    } catch (err: any) {
+      toast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [schoolSlug]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/s/${schoolSlug}/api/hr/leave`, form);
+      toast("Leave request submitted", "success");
+      setShowForm(false);
+      setForm({ staffId: "", startDate: "", endDate: "", reason: "" });
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const setStatus = async (id: string, status: "approved" | "rejected") => {
+    try {
+      await api.patch(`/s/${schoolSlug}/api/hr/leave/${id}`, { status });
+      toast(`Leave ${status}`, "success");
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        {hasPermission("hr.view") && (
+          <button type="button" className="btn-primary" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Cancel" : "New request"}
+          </button>
+        )}
+      </div>
+      {showForm && (
+        <form onSubmit={submit} className="card p-4 grid md:grid-cols-4 gap-3">
+          <input className="input" required placeholder="Staff UUID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} />
+          <input className="input" type="date" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+          <input className="input" type="date" required value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+          <input className="input" placeholder="Reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+          <div className="md:col-span-4">
+            <button type="submit" className="btn-primary">Submit</button>
+          </div>
+        </form>
+      )}
+      <div className="card overflow-hidden">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Staff</th>
+              <th>Period</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={5} className="text-center py-8 text-slate-400">Loading…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={5} className="text-center py-8 text-slate-400">No leave requests.</td></tr>
+            ) : rows.map((r) => (
+              <tr key={r.id}>
+                <td>{r.employeeNo ? `${r.employeeNo} — ` : ""}{r.staffFirstName} {r.staffLastName}</td>
+                <td className="text-sm">{new Date(r.startDate).toLocaleDateString()} – {new Date(r.endDate).toLocaleDateString()}</td>
+                <td className="text-slate-400">{r.reason || "—"}</td>
+                <td className="capitalize">{r.status}</td>
+                <td>
+                  {r.status === "pending" && hasPermission("hr.manage") && (
+                    <div className="flex gap-2">
+                      <button type="button" className="btn-ghost text-xs text-emerald-400" onClick={() => setStatus(r.id, "approved")}>Approve</button>
+                      <button type="button" className="btn-ghost text-xs text-red-400" onClick={() => setStatus(r.id, "rejected")}>Reject</button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
