@@ -21,6 +21,43 @@ router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, ne
   } catch (e) { next(e); }
 });
 
+router.get("/staff/export/csv", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), isNull(staff.deletedAt)));
+    const header = "employeeNo,firstName,lastName,email,department\n";
+    const body = rows.map((s) =>
+      [s.employeeNo, s.firstName, s.lastName, s.email ?? "", s.department ?? ""].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
+    ).join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=staff.csv");
+    res.send(header + body);
+  } catch (e) { next(e); }
+});
+
+router.post("/staff/import/csv", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ csv: z.string().min(1) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const lines = req.body.csv.trim().split("\n").slice(1);
+      let imported = 0;
+      for (const line of lines) {
+        const [employeeNo, firstName, lastName, email, department] = line.split(",").map((s: string) => s.replace(/^"|"$/g, "").trim());
+        if (!employeeNo || !firstName || !lastName) continue;
+        await db.insert(staff).values({
+          tenantId: tenant.id, employeeNo, firstName, lastName,
+          email: email || undefined, department: department || undefined,
+        }).onConflictDoNothing();
+        imported++;
+      }
+      await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "staff.import", entityType: "staff", after: { imported }, ip: req.ip });
+      res.json({ success: true, data: { imported } });
+    } catch (e) { next(e); }
+  }
+);
+
 router.post("/staff", ...guard, requirePermission("hr.manage"),
   validate({ body: z.object({ employeeNo: z.string(), firstName: z.string(), lastName: z.string(), email: z.string().optional(), department: z.string().optional() }) }),
   async (req, res, next) => {

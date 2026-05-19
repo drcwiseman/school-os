@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../db";
-import { students, studentGuardians, guardians, studentClassHistory, studentDocuments, classes } from "../db/schema";
+import { students, studentGuardians, guardians, studentClassHistory, studentDocuments, classes, parentAccounts } from "../db/schema";
+import { hashPassword } from "../middleware/auth";
 import fs from "fs";
 import path from "path";
 import { eq, and, ilike, or, desc, sql, isNull } from "drizzle-orm";
@@ -146,8 +147,16 @@ router.get("/:id/guardians", ...guard, requirePermission("students.view"), async
     const tenant = (req as any).tenant;
     const [student] = await db.select().from(students).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id))).limit(1);
     if (!student) throw new NotFoundError("Student not found");
-    const links = await db.select({ guardian: guardians, isPrimary: studentGuardians.isPrimary })
-      .from(studentGuardians).innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id))
+    const links = await db
+      .select({
+        guardian: guardians,
+        isPrimary: studentGuardians.isPrimary,
+        portalEmail: parentAccounts.email,
+        portalStatus: parentAccounts.status,
+      })
+      .from(studentGuardians)
+      .innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id))
+      .leftJoin(parentAccounts, eq(parentAccounts.guardianId, guardians.id))
       .where(eq(studentGuardians.studentId, student.id));
     res.json({ success: true, data: links });
   } catch (err) { next(err); }
@@ -165,6 +174,46 @@ router.post("/:id/guardians", ...guard, requirePermission("students.edit"),
       const [guardian] = await db.insert(guardians).values({ ...guardianData, tenantId: tenant.id }).returning();
       await db.insert(studentGuardians).values({ studentId: student.id, guardianId: guardian.id, isPrimary });
       res.status(201).json({ success: true, data: guardian });
+    } catch (err) { next(err); }
+  }
+);
+
+router.post("/:id/guardians/:guardianId/parent-portal", ...guard, requirePermission("students.edit"),
+  validate({ body: z.object({ email: z.string().email(), password: z.string().min(8) }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [student] = await db.select().from(students).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id))).limit(1);
+      if (!student) throw new NotFoundError("Student not found");
+      const [link] = await db.select().from(studentGuardians).where(and(
+        eq(studentGuardians.studentId, student.id),
+        eq(studentGuardians.guardianId, req.params.guardianId),
+      )).limit(1);
+      if (!link) throw new NotFoundError("Guardian not linked to this student");
+      const [existingEmail] = await db.select().from(parentAccounts).where(and(
+        eq(parentAccounts.tenantId, tenant.id),
+        eq(parentAccounts.email, req.body.email),
+      )).limit(1);
+      if (existingEmail) throw new ConflictError("A parent portal account with this email already exists");
+      const [existingGuardian] = await db.select().from(parentAccounts).where(and(
+        eq(parentAccounts.tenantId, tenant.id),
+        eq(parentAccounts.guardianId, req.params.guardianId),
+      )).limit(1);
+      if (existingGuardian) throw new ConflictError("This guardian already has a portal account");
+      const passwordHash = await hashPassword(req.body.password);
+      const [account] = await db.insert(parentAccounts).values({
+        tenantId: tenant.id,
+        email: req.body.email,
+        passwordHash,
+        guardianId: req.params.guardianId,
+        status: "active",
+      }).returning();
+      await createAuditLog({
+        tenantId: tenant.id, actorUserId: user.id, action: "parent_portal.create",
+        entityType: "parent_account", entityId: account.id, after: { email: account.email, guardianId: account.guardianId }, ip: req.ip,
+      });
+      res.status(201).json({ success: true, data: { id: account.id, email: account.email, status: account.status } });
     } catch (err) { next(err); }
   }
 );

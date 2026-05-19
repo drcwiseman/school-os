@@ -5,9 +5,20 @@ import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
 import { Loader2, ArrowLeft } from "lucide-react";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+
+type GuardianRow = {
+  guardian: { id: string; firstName: string; lastName: string; relationship: string; phone?: string; email?: string };
+  isPrimary: boolean;
+  portalEmail?: string | null;
+  portalStatus?: string | null;
+};
+
+type StudentDoc = { id: string; documentType: string; fileName: string; createdAt: string };
+
 export const StudentDetail: React.FC = () => {
   const { schoolSlug, studentId } = useParams<{ schoolSlug: string; studentId: string }>();
-  const { hasPermission } = useAuth();
+  const { hasPermission, moduleEnabled } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,10 +34,24 @@ export const StudentDetail: React.FC = () => {
   const [promote, setPromote] = useState({ classId: "", termId: "" });
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [terms, setTerms] = useState<{ id: string; name: string }[]>([]);
-  const [guardians, setGuardians] = useState<{ guardian: { id: string; firstName: string; lastName: string; relationship: string; phone?: string; email?: string }; isPrimary: boolean }[]>([]);
+  const [guardians, setGuardians] = useState<GuardianRow[]>([]);
   const [guardianForm, setGuardianForm] = useState({
     firstName: "", lastName: "", relationship: "", phone: "", email: "", isPrimary: false,
   });
+  const [documents, setDocuments] = useState<StudentDoc[]>([]);
+  const [docForm, setDocForm] = useState({ documentType: "", file: null as File | null });
+  const [portalTarget, setPortalTarget] = useState<string | null>(null);
+  const [portalForm, setPortalForm] = useState({ email: "", password: "" });
+
+  const reloadGuardians = async () => {
+    const g = await api.get(`/s/${schoolSlug}/api/students/${studentId}/guardians`);
+    setGuardians(g.data ?? []);
+  };
+
+  const reloadDocuments = async () => {
+    const d = await api.get(`/s/${schoolSlug}/api/students/${studentId}/documents`);
+    setDocuments(d.data ?? []);
+  };
 
   useEffect(() => {
     if (!schoolSlug || !studentId) return;
@@ -36,8 +61,9 @@ export const StudentDetail: React.FC = () => {
       api.get(`/s/${schoolSlug}/api/academics/classes`),
       api.get(`/s/${schoolSlug}/api/academics/terms`),
       api.get(`/s/${schoolSlug}/api/students/${studentId}/guardians`),
+      api.get(`/s/${schoolSlug}/api/students/${studentId}/documents`),
     ])
-      .then(([stu, cls, trm, g]) => {
+      .then(([stu, cls, trm, g, docs]) => {
         const s = stu.data;
         setForm({
           admissionNumber: s.admissionNumber ?? "",
@@ -51,6 +77,7 @@ export const StudentDetail: React.FC = () => {
         setClasses(cls.data ?? []);
         setTerms(trm.data ?? []);
         setGuardians(g.data ?? []);
+        setDocuments(docs.data ?? []);
       })
       .catch((err: any) => toast(err.message, "error"))
       .finally(() => setLoading(false));
@@ -91,11 +118,47 @@ export const StudentDetail: React.FC = () => {
       });
       toast("Guardian added", "success");
       setGuardianForm({ firstName: "", lastName: "", relationship: "", phone: "", email: "", isPrimary: false });
-      const g = await api.get(`/s/${schoolSlug}/api/students/${studentId}/guardians`);
-      setGuardians(g.data ?? []);
+      await reloadGuardians();
     } catch (err: any) {
       toast(err.message, "error");
     }
+  };
+
+  const createParentPortal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!portalTarget) return;
+    try {
+      await api.post(`/s/${schoolSlug}/api/students/${studentId}/guardians/${portalTarget}/parent-portal`, portalForm);
+      toast("Parent portal account created", "success");
+      setPortalTarget(null);
+      setPortalForm({ email: "", password: "" });
+      await reloadGuardians();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const uploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docForm.file) return toast("Choose a file", "error");
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(",")[1];
+      try {
+        await api.post(`/s/${schoolSlug}/api/students/${studentId}/documents`, {
+          documentType: docForm.documentType,
+          fileName: docForm.file!.name,
+          contentBase64: base64,
+          mimeType: docForm.file!.type || undefined,
+        });
+        toast("Document uploaded", "success");
+        setDocForm({ documentType: "", file: null });
+        await reloadDocuments();
+      } catch (err: any) {
+        toast(err.message, "error");
+      }
+    };
+    reader.readAsDataURL(docForm.file);
   };
 
   const promoteStudent = async (e: React.FormEvent) => {
@@ -193,14 +256,23 @@ export const StudentDetail: React.FC = () => {
         ) : (
           <ul className="space-y-2">
             {guardians.map((row) => (
-              <li key={row.guardian.id} className="flex items-center justify-between text-sm border border-slate-700/50 rounded-lg px-3 py-2">
+              <li key={row.guardian.id} className="flex flex-wrap items-center justify-between gap-2 text-sm border border-slate-700/50 rounded-lg px-3 py-2">
                 <span className="text-white">
                   {row.guardian.firstName} {row.guardian.lastName}
                   <span className="text-slate-500"> · {row.guardian.relationship}</span>
                 </span>
-                <span className="text-slate-400 text-xs">
-                  {row.isPrimary && <span className="badge-green mr-2">Primary</span>}
-                  {row.guardian.phone || row.guardian.email || ""}
+                <span className="flex items-center gap-2 text-slate-400 text-xs">
+                  {row.isPrimary && <span className="badge-green">Primary</span>}
+                  {row.portalEmail ? (
+                    <span className="badge-blue">Portal: {row.portalEmail}</span>
+                  ) : moduleEnabled("portal_enabled") && hasPermission("students.edit") ? (
+                    <button type="button" className="btn-ghost text-xs" onClick={() => {
+                      setPortalTarget(row.guardian.id);
+                      setPortalForm({ email: row.guardian.email || "", password: "" });
+                    }}>
+                      Create portal login
+                    </button>
+                  ) : null}
                 </span>
               </li>
             ))}
@@ -220,6 +292,46 @@ export const StudentDetail: React.FC = () => {
             <div className="md:col-span-3">
               <button type="submit" className="btn-primary">Add guardian</button>
             </div>
+          </form>
+        )}
+        {portalTarget && hasPermission("students.edit") && (
+          <form onSubmit={createParentPortal} className="grid md:grid-cols-3 gap-3 p-3 bg-slate-900/40 rounded-lg border border-primary-500/30">
+            <input className="input" type="email" required placeholder="Portal email" value={portalForm.email} onChange={(e) => setPortalForm({ ...portalForm, email: e.target.value })} />
+            <input className="input" type="password" required minLength={8} placeholder="Temporary password" value={portalForm.password} onChange={(e) => setPortalForm({ ...portalForm, password: e.target.value })} />
+            <div className="flex gap-2">
+              <button type="submit" className="btn-primary">Create account</button>
+              <button type="button" className="btn-ghost" onClick={() => setPortalTarget(null)}>Cancel</button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      <div className="card p-6 space-y-4">
+        <h3 className="font-semibold text-white">Documents</h3>
+        {documents.length === 0 ? (
+          <p className="text-sm text-slate-500">No documents on file.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {documents.map((doc) => (
+              <li key={doc.id} className="flex items-center justify-between border border-slate-700/50 rounded-lg px-3 py-2">
+                <span className="text-white">{doc.documentType} — {doc.fileName}</span>
+                <a
+                  className="text-primary-400 hover:text-primary-300 text-xs"
+                  href={`${API_BASE}/s/${schoolSlug}/api/students/${studentId}/documents/${doc.id}/file`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Download
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        {hasPermission("students.edit") && (
+          <form onSubmit={uploadDocument} className="grid md:grid-cols-3 gap-3 pt-2 border-t border-slate-700/50">
+            <input className="input" required placeholder="Document type" value={docForm.documentType} onChange={(e) => setDocForm({ ...docForm, documentType: e.target.value })} />
+            <input className="input" type="file" required onChange={(e) => setDocForm({ ...docForm, file: e.target.files?.[0] ?? null })} />
+            <button type="submit" className="btn-primary">Upload</button>
           </form>
         )}
       </div>

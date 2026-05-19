@@ -29,6 +29,10 @@ export const Admissions: React.FC = () => {
   const [enrollAdmNo, setEnrollAdmNo] = useState("");
   const [enrolledStudentId, setEnrolledStudentId] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [timelineTarget, setTimelineTarget] = useState<Applicant | null>(null);
+  const [events, setEvents] = useState<{ id: string; eventType: string; notes: string; createdAt: string; actorEmail?: string }[]>([]);
+  const [noteText, setNoteText] = useState("");
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   useEffect(() => {
     fetchApplicants();
@@ -64,6 +68,37 @@ export const Admissions: React.FC = () => {
       await api.patch(`/s/${schoolSlug}/api/admissions/${id}/stage`, { stage });
       toast("Stage updated", "success");
       fetchApplicants();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const openTimeline = async (app: Applicant) => {
+    setTimelineTarget(app);
+    setNoteText("");
+    setEventsLoading(true);
+    try {
+      const res = await api.get(`/s/${schoolSlug}/api/admissions/${app.id}/events`);
+      setEvents(res.data ?? []);
+    } catch (err: any) {
+      toast(err.message, "error");
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  const addNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!timelineTarget || !noteText.trim()) return;
+    try {
+      await api.post(`/s/${schoolSlug}/api/admissions/${timelineTarget.id}/events`, {
+        eventType: "note",
+        notes: noteText.trim(),
+      });
+      toast("Note added", "success");
+      setNoteText("");
+      const res = await api.get(`/s/${schoolSlug}/api/admissions/${timelineTarget.id}/events`);
+      setEvents(res.data ?? []);
     } catch (err: any) {
       toast(err.message, "error");
     }
@@ -124,6 +159,38 @@ export const Admissions: React.FC = () => {
               <button type="submit" className="btn-primary">Save Applicant</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {timelineTarget && (
+        <div className="card p-6 border-indigo-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-white">Timeline — {timelineTarget.firstName} {timelineTarget.lastName}</h3>
+            <button type="button" className="btn-ghost text-sm" onClick={() => setTimelineTarget(null)}>Close</button>
+          </div>
+          {eventsLoading ? (
+            <p className="text-sm text-slate-500">Loading events…</p>
+          ) : events.length === 0 ? (
+            <p className="text-sm text-slate-500">No events yet.</p>
+          ) : (
+            <ul className="space-y-2 text-sm max-h-48 overflow-y-auto">
+              {events.map((ev) => (
+                <li key={ev.id} className="border-l-2 border-primary-500 pl-3">
+                  <p className="text-slate-300">{ev.notes}</p>
+                  <p className="text-xs text-slate-500">
+                    <span className="font-mono text-primary-400">{ev.eventType}</span>
+                    {" · "}{ev.actorEmail ?? "system"} · {new Date(ev.createdAt).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {hasPermission("admissions.edit") && (
+            <form onSubmit={addNote} className="flex gap-2">
+              <input className="input flex-1" placeholder="Add a note…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+              <button type="submit" className="btn-primary">Add note</button>
+            </form>
+          )}
         </div>
       )}
 
@@ -220,7 +287,8 @@ export const Admissions: React.FC = () => {
                     )}
                   </td>
                   <td className="text-slate-400">{new Date(app.createdAt).toLocaleDateString()}</td>
-                  <td className="text-right">
+                  <td className="text-right space-x-2">
+                    <button type="button" className="btn-ghost text-xs" onClick={() => openTimeline(app)}>Timeline</button>
                     {!app.convertedTo && hasPermission("admissions.enroll") && (
                       <button type="button" onClick={() => openEnroll(app)} className="btn-ghost text-emerald-400 hover:text-emerald-300 hover:bg-emerald-900/20">
                         <UserPlus className="w-4 h-4" /> Enroll

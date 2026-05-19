@@ -233,6 +233,7 @@ See [README](../README.md#logging-in).
 | **8** | Live tenant dashboard API, finance billing UI, report card generation UI, add-student form |
 | **9** | Permission-scoped dashboard, student detail/edit, fee heads & structures UI, platform stats enrichment |
 | **10** | Student guardians, CSV import/export, admissions enroll UI, fee structure line preview |
+| **11** | Applicant timeline, student documents, parent portal linking, HR CSV import/export |
 
 ### Phase 4 details
 
@@ -371,3 +372,19 @@ See [README](../README.md#logging-in).
 **Finance**
 
 - `GET /finance/fee-structures/:id` — structure with line items and total; **View lines** on fee structures tab
+
+### Phase 11 details
+
+**Admissions timeline**
+
+- `GET/POST /admissions/:id/events` — list pipeline events (with actor email) and add notes
+- **Timeline** panel per applicant in admissions UI
+
+**Students**
+
+- **Documents**: list, upload (base64), download on student detail
+- **Parent portal**: `POST /students/:id/guardians/:guardianId/parent-portal` — create `parent_accounts` linked to guardian; guardians list shows portal email when provisioned
+
+**HR**
+
+- Staff **CSV export/import** (`GET/POST /hr/staff/export|import/csv`) on HR staff tab
