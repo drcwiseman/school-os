@@ -231,6 +231,7 @@ See [README](../README.md#logging-in).
 | **6** | Portal PDF downloads (OBAC), settings↔feature sync, marks entry UI, audit actor names, sidebar portal link |
 | **7** | Finance collect payment, admissions pipeline stages, exam class roster, audit filter, platform tenant audit |
 | **8** | Live tenant dashboard API, finance billing UI, report card generation UI, add-student form |
+| **9** | Permission-scoped dashboard, student detail/edit, fee heads & structures UI, platform stats enrichment |
 
 ### Phase 4 details
 
@@ -336,3 +337,21 @@ See [README](../README.md#logging-in).
 **Students**
 
 - **Add student** form on list page (`POST /students`)
+
+### Phase 9 details
+
+**Tenant dashboard (RBAC-scoped)**
+
+- `GET /s/:slug/api/dashboard` — any authenticated staff; metrics and audit feed filtered by permission (`students.view`, `finance.view`, `admissions.view`, `attendance.view`, `audit.view`)
+
+**Students**
+
+- `GET/PATCH /students/:id` — detail page with edit form and class promotion
+
+**Finance fee setup**
+
+- **Fee structures** tab: create fee heads, build fee structures with line items (amounts in cents)
+
+**Platform analytics**
+
+- `GET /api/platform/stats` — adds `activeTenants`, `suspendedTenants`; console shows staff users and tenant status summary

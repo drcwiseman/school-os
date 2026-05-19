@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
@@ -188,7 +188,10 @@ export const StudentsList: React.FC = () => {
                     <td className="font-mono text-xs">{s.admissionNumber}</td>
                     <td className="font-medium text-white">{s.firstName} {s.lastName}</td>
                     <td>{getStatusBadge(s.status)}</td>
-                    <td className="text-right">
+                    <td className="text-right space-x-2">
+                      <Link to={`/s/${schoolSlug}/students/${s.id}`} className="btn-ghost text-xs inline-flex">
+                        View
+                      </Link>
                       {hasPermission("students.delete") && (
                         <ConfirmAction
                           label="Remove"

@@ -9,6 +9,7 @@ import { Contact } from "./public/Contact";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { StudentsList } from "./pages/StudentsList";
+import { StudentDetail } from "./pages/StudentDetail";
 import { Admissions } from "./pages/Admissions";
 import { Attendance } from "./pages/Attendance";
 import { Admin } from "./pages/Admin";
@@ -49,6 +50,7 @@ export const AppRoutes = () => {
       <Route path="/s/:schoolSlug/*" element={<DashboardLayout />}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="students" element={<StudentsList />} />
+        <Route path="students/:studentId" element={<StudentDetail />} />
         <Route path="admissions" element={<Admissions />} />
         <Route path="attendance" element={<Attendance />} />
         <Route path="academics" element={<Academics />} />

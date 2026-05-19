@@ -59,6 +59,8 @@ router.post("/auth/logout", requirePlatformAuth, async (req, res) => {
 router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
   try {
     const [tenantsCount] = await db.select({ count: sql<number>`count(*)` }).from(tenants);
+    const [activeTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "active"));
+    const [suspendedTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "suspended"));
     const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
     const [studentsCount] = await db.select({ count: sql<number>`count(*)` }).from(students);
     const [jobsCount] = await db.select({ count: sql<number>`count(*)` }).from(jobs);
@@ -69,6 +71,8 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
       success: true,
       data: {
         totalTenants: Number(tenantsCount?.count ?? 0),
+        activeTenants: Number(activeTenants?.count ?? 0),
+        suspendedTenants: Number(suspendedTenants?.count ?? 0),
         totalUsers: Number(usersCount?.count ?? 0),
         totalStudents: Number(studentsCount?.count ?? 0),
         totalJobs: Number(jobsCount?.count ?? 0),

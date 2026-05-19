@@ -41,6 +41,14 @@ export const Finance: React.FC = () => {
   const [studentList, setStudentList] = useState<{ id: string; firstName: string; lastName: string; admissionNumber: string }[]>([]);
   const [terms, setTerms] = useState<{ id: string; name: string }[]>([]);
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+  const [feeHeads, setFeeHeads] = useState<{ id: string; name: string }[]>([]);
+  const [feeHeadForm, setFeeHeadForm] = useState({ name: "", description: "" });
+  const [structureForm, setStructureForm] = useState({
+    name: "",
+    termId: "",
+    classId: "",
+    items: [{ feeHeadId: "", amount: "" }],
+  });
 
   useEffect(() => { load(); }, [schoolSlug, tab]);
 
@@ -70,7 +78,16 @@ export const Finance: React.FC = () => {
       } else if (tab === "payments") {
         setPayments((await api.get(`/s/${schoolSlug}/api/finance/payments`)).data ?? []);
       } else if (tab === "fees") {
-        setFeeStructures((await api.get(`/s/${schoolSlug}/api/finance/fee-structures`)).data ?? []);
+        const [fs, fh, trm, cls] = await Promise.all([
+          api.get(`/s/${schoolSlug}/api/finance/fee-structures`),
+          api.get(`/s/${schoolSlug}/api/finance/fee-heads`),
+          api.get(`/s/${schoolSlug}/api/academics/terms`),
+          api.get(`/s/${schoolSlug}/api/academics/classes`),
+        ]);
+        setFeeStructures(fs.data ?? []);
+        setFeeHeads(fh.data ?? []);
+        setTerms(trm.data ?? []);
+        setClasses(cls.data ?? []);
       } else if (tab === "debtors") {
         setDebtors((await api.get(`/s/${schoolSlug}/api/finance/debtors`)).data ?? []);
       } else {
@@ -142,6 +159,39 @@ export const Finance: React.FC = () => {
       toast("Invoice created", "success");
       setInvoiceForm({ studentId: "", invoiceNo: "", totalAmount: "", termId: "", dueDate: "" });
       setTab("overview");
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const createFeeHead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/s/${schoolSlug}/api/finance/fee-heads`, feeHeadForm);
+      toast("Fee head added", "success");
+      setFeeHeadForm({ name: "", description: "" });
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const createFeeStructure = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const items = structureForm.items
+      .filter((i) => i.feeHeadId && i.amount)
+      .map((i) => ({ feeHeadId: i.feeHeadId, amount: Math.round(Number(i.amount) * 100) }));
+    if (items.length === 0) return toast("Add at least one fee line", "error");
+    try {
+      await api.post(`/s/${schoolSlug}/api/finance/fee-structures`, {
+        name: structureForm.name,
+        termId: structureForm.termId || undefined,
+        classId: structureForm.classId || undefined,
+        items,
+      });
+      toast("Fee structure created", "success");
+      setStructureForm({ name: "", termId: "", classId: "", items: [{ feeHeadId: "", amount: "" }] });
+      load();
     } catch (err: any) {
       toast(err.message, "error");
     }
@@ -345,6 +395,62 @@ export const Finance: React.FC = () => {
       )}
 
       {tab === "fees" && (
+        <div className="space-y-6">
+          {hasPermission("finance.invoice.create") && (
+            <div className="grid md:grid-cols-2 gap-6">
+              <form onSubmit={createFeeHead} className="card p-6 space-y-3">
+                <h3 className="font-semibold text-white">Add fee head</h3>
+                <input className="input" required placeholder="Name (e.g. Tuition)" value={feeHeadForm.name} onChange={(e) => setFeeHeadForm({ ...feeHeadForm, name: e.target.value })} />
+                <input className="input" placeholder="Description (optional)" value={feeHeadForm.description} onChange={(e) => setFeeHeadForm({ ...feeHeadForm, description: e.target.value })} />
+                <button type="submit" className="btn-primary w-full">Add fee head</button>
+              </form>
+              <form onSubmit={createFeeStructure} className="card p-6 space-y-3">
+                <h3 className="font-semibold text-white">Create fee structure</h3>
+                <input className="input" required placeholder="Structure name" value={structureForm.name} onChange={(e) => setStructureForm({ ...structureForm, name: e.target.value })} />
+                <select className="input" value={structureForm.termId} onChange={(e) => setStructureForm({ ...structureForm, termId: e.target.value })}>
+                  <option value="">Term (optional)</option>
+                  {terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <select className="input" value={structureForm.classId} onChange={(e) => setStructureForm({ ...structureForm, classId: e.target.value })}>
+                  <option value="">Class (optional)</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {structureForm.items.map((item, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <select className="input flex-1" required value={item.feeHeadId} onChange={(e) => {
+                      const items = [...structureForm.items];
+                      items[idx] = { ...item, feeHeadId: e.target.value };
+                      setStructureForm({ ...structureForm, items });
+                    }}>
+                      <option value="">Fee head…</option>
+                      {feeHeads.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    </select>
+                    <input className="input w-28" type="number" step="0.01" min="0" required placeholder="USD" value={item.amount} onChange={(e) => {
+                      const items = [...structureForm.items];
+                      items[idx] = { ...item, amount: e.target.value };
+                      setStructureForm({ ...structureForm, items });
+                    }} />
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <button type="button" className="btn-ghost" onClick={() => setStructureForm({ ...structureForm, items: [...structureForm.items, { feeHeadId: "", amount: "" }] })}>
+                    Add line
+                  </button>
+                  <button type="submit" className="btn-primary flex-1">Save structure</button>
+                </div>
+              </form>
+            </div>
+          )}
+          {feeHeads.length > 0 && (
+            <div className="card p-4">
+              <h4 className="text-sm font-medium text-slate-400 mb-2">Fee heads</h4>
+              <div className="flex flex-wrap gap-2">
+                {feeHeads.map((h) => (
+                  <span key={h.id} className="badge-gray">{h.name}</span>
+                ))}
+              </div>
+            </div>
+          )}
         <div className="card overflow-hidden">
           <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Fee structures</h3></div>
           <table className="table">
@@ -369,6 +475,7 @@ export const Finance: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

@@ -26,7 +26,7 @@ export const Dashboard: React.FC = () => {
   }
 
   const cards = [
-    { label: "Active students", value: stats?.activeStudents ?? 0, sub: `${stats?.totalStudents ?? 0} total`, icon: Users, color: "text-blue-400", link: "students" },
+    { label: "Active students", value: stats?.activeStudents ?? 0, sub: stats?.totalStudents != null ? `${stats.totalStudents} total` : undefined, icon: Users, color: "text-blue-400", link: "students", perm: "students.view" },
     { label: "Unpaid invoices", value: stats?.unpaidInvoices ?? 0, icon: FileWarning, color: "text-amber-400", link: "finance", perm: "finance.view" },
     { label: "Admissions pipeline", value: stats?.applicantsInPipeline ?? 0, icon: UserPlus, color: "text-indigo-400", link: "admissions", perm: "admissions.view" },
     { label: "Attendance today", value: stats?.todayAttendanceSessions ?? 0, sub: "sessions", icon: UserCheck, color: "text-emerald-400", link: "attendance", perm: "attendance.view" },

@@ -18,6 +18,8 @@ export const PlatformConsole: React.FC = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({
     totalTenants: 0,
+    activeTenants: 0,
+    suspendedTenants: 0,
     totalUsers: 0,
     totalStudents: 0,
     totalJobs: 0,
@@ -214,7 +216,7 @@ export const PlatformConsole: React.FC = () => {
           <div className="space-y-6">
             
             {/* KPI Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               
               <div className="card p-5 flex items-center gap-4 bg-gradient-to-br from-surface-raised to-slate-900/40">
                 <div className="p-3.5 rounded-xl bg-primary-950/60 text-primary-400 border border-primary-800/40">
@@ -227,11 +229,21 @@ export const PlatformConsole: React.FC = () => {
               </div>
 
               <div className="card p-5 flex items-center gap-4 bg-gradient-to-br from-surface-raised to-slate-900/40">
+                <div className="p-3.5 rounded-xl bg-violet-950/60 text-violet-400 border border-violet-800/40">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Staff Users</p>
+                  <p className="text-2xl font-bold text-white mt-1">{stats.totalUsers}</p>
+                </div>
+              </div>
+
+              <div className="card p-5 flex items-center gap-4 bg-gradient-to-br from-surface-raised to-slate-900/40">
                 <div className="p-3.5 rounded-xl bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Active Students</p>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Students (all schools)</p>
                   <p className="text-2xl font-bold text-white mt-1">{stats.totalStudents}</p>
                 </div>
               </div>
@@ -269,10 +281,12 @@ export const PlatformConsole: React.FC = () => {
                 <ShieldCheck className="w-5 h-5 text-emerald-500" />
                 <span>Multi-tenancy isolation strictly enforced at query-level in PostgreSQL.</span>
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-400">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> DB Connection Healthy</span>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <span>{stats.activeTenants} active schools</span>
                 <span>•</span>
-                <span>Job Queue Listening</span>
+                <span>{stats.suspendedTenants} suspended</span>
+                <span>•</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> DB healthy</span>
               </div>
             </div>
 
