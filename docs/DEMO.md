@@ -121,3 +121,19 @@ pm2 restart school-os --update-env
 If `git pull` fails on `package-lock.json`: `rm package-lock.json && git pull && npm install`
 
 If seed was never run: `npm run db:seed` (demo logins only).
+
+### Platform login shows "Internal Server Error"
+
+Usually the database is missing tables or the platform admin was never seeded.
+
+```bash
+cd /root/school-os
+pm2 logs school-os --lines 40 --nostream    # read the real Postgres error
+npm run db:migrate
+npm run db:ensure-platform   # creates platform@schoolos.local if missing
+# or full demo data:
+npm run db:seed
+pm2 restart school-os --update-env
+```
+
+Then sign in at `/platform/login` with `platform@schoolos.local` / `Platform123!`.

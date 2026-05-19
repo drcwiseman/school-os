@@ -14,6 +14,7 @@
     "db:generate": "npm run db:generate --prefix server",
     "db:migrate": "npm run db:migrate --prefix server",
     "db:seed": "npm run db:seed --prefix server",
+    "db:ensure-platform": "npm run db:ensure-platform --prefix server",
     "db:build-full-migration": "npm run db:build-full-migration --prefix server",
     "docker:up": "docker compose up -d --build"
   },
