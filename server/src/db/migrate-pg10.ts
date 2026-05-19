@@ -3,9 +3,9 @@
  * Drizzle's default migrator runs all pending files in one transaction, which breaks
  * `ALTER TYPE ... ADD VALUE` on older PostgreSQL (CWP/VPS).
  */
-import { readMigrationFiles } from "drizzle-orm/migrator";
 import { sql } from "drizzle-orm";
 import { db } from "./index";
+import { splitMigrationSql } from "./sql-runner";
 import path from "path";
 import fs from "fs";
 import crypto from "node:crypto";
@@ -45,7 +45,7 @@ async function isEnumValuePresent(typeName: string, label: string): Promise<bool
 
 async function runStatement(stmt: string) {
   const trimmed = stmt.trim();
-  if (!trimmed || trimmed.startsWith("--")) return;
+  if (!trimmed) return;
 
   const enumMatch = /^ALTER TYPE "([^"]+)" ADD VALUE '([^']+)'/i.exec(trimmed);
   if (enumMatch) {
@@ -83,7 +83,7 @@ async function main() {
 
     const filePath = path.join(MIGRATIONS_FOLDER, `${entry.tag}.sql`);
     const query = fs.readFileSync(filePath, "utf8");
-    const statements = query.split("--> statement-breakpoint");
+    const statements = splitMigrationSql(query);
     const hash = crypto.createHash("sha256").update(query).digest("hex");
 
     console.log(`\n▶ ${entry.tag}`);
@@ -95,6 +95,17 @@ async function main() {
       `INSERT INTO "${MIGRATIONS_SCHEMA}"."${MIGRATIONS_TABLE}" (hash, created_at) VALUES ('${hash}', ${entry.when})`,
     ));
     console.log("  ✓ recorded");
+  }
+
+  const features = await db.execute<{ t: string | null }>(sql`
+    SELECT to_regclass('public.features')::text AS t
+  `);
+  if (!features.rows[0]?.t) {
+    console.log("\n⚠ features table missing — re-applying 0004_architecture_hardening.sql");
+    const q = fs.readFileSync(path.join(MIGRATIONS_FOLDER, "0004_architecture_hardening.sql"), "utf8");
+    for (const stmt of splitMigrationSql(q)) {
+      await runStatement(stmt);
+    }
   }
 
   console.log("\nMigrations complete.");

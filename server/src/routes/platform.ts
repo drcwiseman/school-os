@@ -19,6 +19,7 @@ import { validate } from "../utils/validate";
 import { NotFoundError, ConflictError, UnauthorizedError } from "../middleware/error";
 import { requirePlatformPermission } from "../lib/platform-permissions";
 import { createAuditLog } from "../services/audit";
+import { platformAdminAuthColumns, platformAdminPublic } from "../db/platform-admin-columns";
 
 const router = Router();
 
@@ -34,20 +35,23 @@ const createTenantSchema = z.object({
 
 router.post("/auth/login", validate({ body: z.object({ email: z.string().email(), password: z.string() }) }), async (req, res, next) => {
   try {
-    const [admin] = await db.select().from(platformAdmins).where(eq(platformAdmins.email, req.body.email)).limit(1);
+    const [admin] = await db.select(platformAdminAuthColumns).from(platformAdmins).where(eq(platformAdmins.email, req.body.email)).limit(1);
     if (!admin) throw new UnauthorizedError("Invalid credentials");
     const valid = await verifyPassword(req.body.password, admin.passwordHash);
     if (!valid) throw new UnauthorizedError("Invalid credentials");
     const session = await createPlatformSession(admin.id);
-    res.cookie("platform_session_token", session.token, { httpOnly: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
-    res.json({ success: true, admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role } });
+    res.cookie("platform_session_token", session.token, {
+      httpOnly: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === "production",
+    });
+    res.json({ success: true, admin: platformAdminPublic(admin) });
   } catch (err) { next(err); }
 });
 
 router.get("/auth/me", requirePlatformAuth, async (req, res, next) => {
   try {
     const admin = (req as any).platformAdmin;
-    res.json({ success: true, admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role } });
+    res.json({ success: true, admin: platformAdminPublic(admin) });
   } catch (err) { next(err); }
 });
 

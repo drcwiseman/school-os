@@ -4,6 +4,7 @@
  */
 import { sql } from "drizzle-orm";
 import { db } from "../src/db";
+import { splitMigrationSql } from "../src/db/sql-runner";
 import fs from "fs";
 import path from "path";
 
@@ -11,7 +12,7 @@ const MIGRATIONS = path.join(__dirname, "../src/db/migrations");
 
 async function run(statement: string) {
   const trimmed = statement.trim();
-  if (!trimmed || trimmed.startsWith("--")) return;
+  if (!trimmed) return;
   const label = trimmed.replace(/\s+/g, " ").trim().slice(0, 90);
   console.log(`→ ${label}`);
   try {
@@ -33,7 +34,7 @@ async function runSqlFile(filename: string) {
     return;
   }
   console.log(`\n── ${filename} ──`);
-  const parts = fs.readFileSync(filePath, "utf8").split("--> statement-breakpoint");
+  const parts = splitMigrationSql(fs.readFileSync(filePath, "utf8"));
   for (const part of parts) {
     await run(part);
   }

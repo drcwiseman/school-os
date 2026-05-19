@@ -128,14 +128,19 @@ Logs often show `column "role" does not exist` on `platform_admins`. Migrations 
 
 ```bash
 cd /root/school-os
-git pull
-npm install
+rm -f package-lock.json    # only if git pull complains about untracked lockfile
+git pull && npm install
 npm run db:repair          # applies 0004–0008 SQL without transactions (safe to re-run)
 npm run db:migrate         # PG10-safe migrator (no single transaction wrap)
 npm run db:ensure-platform
 npm run db:seed
+npm run build
 pm2 restart school-os --update-env
 ```
+
+Diagnose DB without guessing: `npm run db:doctor` (checks `platform_admins.role`, password hash, `features` table).
+
+After deploy, the server also runs **startup schema repair** (adds `platform_admins.role`, `features`, etc.) before accepting traffic — but you still need `db:seed` once for demo data.
 
 If `db:migrate` still fails on an enum value “already exists”, that is OK — continue with `db:seed`.
 

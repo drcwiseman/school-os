@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { db } from "../db";
 import { platformAdmins, platformSessions } from "../db/schema";
+import { platformAdminAuthColumns } from "../db/platform-admin-columns";
 import { eq, and, gt } from "drizzle-orm";
 import { UnauthorizedError } from "./error";
 import { hashPassword, verifyPassword } from "./auth";
@@ -16,7 +17,7 @@ export async function createPlatformSession(adminId: string) {
 export async function validatePlatformSession(token: string) {
   const [session] = await db.select().from(platformSessions).where(and(eq(platformSessions.token, token), gt(platformSessions.expiresAt, new Date()))).limit(1);
   if (!session) return null;
-  const [admin] = await db.select().from(platformAdmins).where(eq(platformAdmins.id, session.adminId)).limit(1);
+  const [admin] = await db.select(platformAdminAuthColumns).from(platformAdmins).where(eq(platformAdmins.id, session.adminId)).limit(1);
   if (!admin) return null;
   return { session, admin };
 }

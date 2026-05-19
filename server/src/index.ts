@@ -8,6 +8,7 @@ import { errorHandler } from "./middleware/error";
 import routes from "./routes/index";
 import { rateLimit } from "./middleware/rate-limit";
 import { tick as processJobs } from "./services/queue";
+import { ensureRuntimeSchema } from "./db/ensure-runtime-schema";
 
 function isApiPath(url: string) {
   return url.startsWith("/api") || /^\/s\/[^/]+\/api(\/|$)/.test(url);
@@ -68,8 +69,10 @@ app.use(errorHandler);
 
 if (process.env.NODE_ENV !== "test") {
   setInterval(() => { processJobs().catch(() => {}); }, 5000);
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || "development"} mode`);
+  void ensureRuntimeSchema().then(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || "development"} mode`);
+    });
   });
 }
 
