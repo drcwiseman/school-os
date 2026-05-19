@@ -45,8 +45,12 @@ export async function validateSession(token: string) {
   const [user] = await db
     .select()
     .from(users)
-    .where(and(eq(users.id, session.userId), eq(users.status, "active")))
+    .where(and(
+      eq(users.id, session.userId),
+      eq(users.status, "active"),
+    ))
     .limit(1);
+  if (user?.deletedAt) return null;
   if (!user) return null;
 
   return { session, user };

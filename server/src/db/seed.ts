@@ -6,7 +6,7 @@ import {
   tenants, tenantSettings, users, permissions, roles, rolePermissions, userRoles,
   students, classes, studentClassHistory, academicYears, terms,
   guardians, studentGuardians, platformAdmins, plans, tenantPlans,
-  portalAccounts, messageTemplates, announcements, campaigns,
+  parentAccounts, studentAccounts, messageTemplates, announcements, campaigns,
   features, tenantFeatures,
 } from "./schema";
 import { hashPassword } from "../middleware/auth";
@@ -238,23 +238,23 @@ async function seed() {
       const [firstStudent] = await db.select().from(students).where(eq2(students.tenantId, resolvedTenant.id)).limit(1);
       if (firstStudent && guardian) {
         await db.insert(studentGuardians).values({ studentId: firstStudent.id, guardianId: guardian.id, isPrimary: true }).onConflictDoNothing();
-        const [portal] = await db.select().from(portalAccounts).where(eq2(portalAccounts.email, "parent@school-a.com")).limit(1);
-        if (!portal) {
+        const [parentAcct] = await db.select().from(parentAccounts).where(eq2(parentAccounts.email, "parent@school-a.com")).limit(1);
+        if (!parentAcct) {
           const ph = await hashPassword("Parent123!");
-          await db.insert(portalAccounts).values({
+          await db.insert(parentAccounts).values({
             tenantId: resolvedTenant.id, email: "parent@school-a.com", passwordHash: ph,
-            type: "parent", guardianId: guardian.id,
+            guardianId: guardian.id,
           });
         }
       }
       const [secondStudent] = await db.select().from(students).where(eq2(students.admissionNumber, "STU-002")).limit(1);
       if (secondStudent) {
-        const [sp] = await db.select().from(portalAccounts).where(eq2(portalAccounts.email, "student@school-a.com")).limit(1);
-        if (!sp) {
+        const [studentAcct] = await db.select().from(studentAccounts).where(eq2(studentAccounts.email, "student@school-a.com")).limit(1);
+        if (!studentAcct) {
           const ph = await hashPassword("Student123!");
-          await db.insert(portalAccounts).values({
+          await db.insert(studentAccounts).values({
             tenantId: resolvedTenant.id, email: "student@school-a.com", passwordHash: ph,
-            type: "student", studentId: secondStudent.id,
+            studentId: secondStudent.id,
           });
         }
       }

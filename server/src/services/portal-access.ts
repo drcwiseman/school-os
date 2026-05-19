@@ -1,43 +1,35 @@
 import { db } from "../db";
-import { portalAccounts, studentGuardians, students } from "../db/schema";
+import { studentGuardians, students } from "../db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { ForbiddenError, NotFoundError } from "../middleware/error";
+import type { PortalPrincipal } from "../middleware/portal-auth";
 
-export type PortalAccount = typeof portalAccounts.$inferSelect;
-
-/** Parent: student IDs this portal account may access */
-export async function getParentAccessibleStudentIds(account: PortalAccount): Promise<string[]> {
-  if (account.type !== "parent" || !account.guardianId) {
-    throw new ForbiddenError("Invalid parent portal account");
-  }
+/** Parent: student IDs linked via guardian */
+export async function getParentAccessibleStudentIds(guardianId: string): Promise<string[]> {
   const links = await db
     .select({ studentId: studentGuardians.studentId })
     .from(studentGuardians)
-    .where(eq(studentGuardians.guardianId, account.guardianId));
+    .where(eq(studentGuardians.guardianId, guardianId));
   return links.map((l) => l.studentId);
 }
 
-/** Student: only own student id */
-export function getStudentAccessibleStudentIds(account: PortalAccount): string[] {
-  if (account.type !== "student" || !account.studentId) {
-    throw new ForbiddenError("Invalid student portal account");
+export function getStudentAccessibleStudentIds(studentId: string): string[] {
+  return [studentId];
+}
+
+export async function getPortalAccessibleStudentIds(principal: PortalPrincipal): Promise<string[]> {
+  if (principal.kind === "parent") {
+    return getParentAccessibleStudentIds(principal.account.guardianId);
   }
-  return [account.studentId];
+  return getStudentAccessibleStudentIds(principal.account.studentId);
 }
 
-export async function getPortalAccessibleStudentIds(account: PortalAccount): Promise<string[]> {
-  return account.type === "parent"
-    ? getParentAccessibleStudentIds(account)
-    : getStudentAccessibleStudentIds(account);
-}
-
-/** IDOR guard: portal user may only access this student within tenant */
 export async function assertPortalCanAccessStudent(
-  account: PortalAccount,
+  principal: PortalPrincipal,
   tenantId: string,
   studentId: string,
 ): Promise<void> {
-  const allowed = await getPortalAccessibleStudentIds(account);
+  const allowed = await getPortalAccessibleStudentIds(principal);
   if (!allowed.includes(studentId)) {
     throw new ForbiddenError("You do not have access to this student");
   }
@@ -50,10 +42,10 @@ export async function assertPortalCanAccessStudent(
 }
 
 export async function filterStudentsForPortal(
-  account: PortalAccount,
+  principal: PortalPrincipal,
   tenantId: string,
 ): Promise<typeof students.$inferSelect[]> {
-  const ids = await getPortalAccessibleStudentIds(account);
+  const ids = await getPortalAccessibleStudentIds(principal);
   if (ids.length === 0) return [];
   return db
     .select()

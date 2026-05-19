@@ -36,6 +36,13 @@
       "when": 1779186000000,
       "tag": "0004_architecture_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1779186400000,
+      "tag": "0005_portal_split_and_account_status",
+      "breakpoints": true
     }
   ]
 }

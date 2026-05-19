@@ -6,7 +6,7 @@ SchoolOS is a **multi-tenant education ERP SaaS**. Three **separate security dom
 |--------|-----|-------------------|----------------|-----------|
 | **Platform** | SchoolOS company (SaaS operator) | `platform_admins` — **no `tenant_id`** | `platform_session_token` | `/platform/login` → `/platform/dashboard` |
 | **Tenant staff** | School employees (admin, teacher, bursar, …) | `users` — **always has `tenant_id`** | `session_token` | `/s/:schoolSlug/login` → `/s/:schoolSlug/dashboard` |
-| **Portal** | Parents & students only | `portal_accounts` — **tenant-scoped, not staff** | `portal_session_token` | `/s/:schoolSlug/portal/login` → `/s/:schoolSlug/portal/dashboard` |
+| **Portal** | Parents & students only | `parent_accounts` / `student_accounts` — **tenant-scoped, not staff** | `portal_session_token` | `/s/:schoolSlug/portal/login` → `/s/:schoolSlug/portal/dashboard` |
 
 > **Platform users ≠ Tenant users ≠ Portal users.**  
 > They use different tables, cookies, middleware, and authorization models.
@@ -79,18 +79,18 @@ Roles are **permission bundles only**. Example bundles:
 
 **Tables:**
 
-- `portal_accounts` (type `parent` | `student`) — separate from `users`
-- `portal_sessions`
+- `parent_accounts` + `parent_sessions` — guardian-linked
+- `student_accounts` + `student_sessions` — single-student linked
 
 **Authorization model:** **Ownership-based access control (OBAC)**, not staff RBAC.
 
 - **Parent:** only students linked via `student_guardians` → `guardian_id`
-- **Student:** only `portal_accounts.student_id`
+- **Student:** only `student_accounts.student_id`
 
 Parents/students **never** receive `students.view` or other staff permissions.
 
 ```
-/s/:slug/portal/login → portal_accounts → portal_session → OBAC checks on each API
+/s/:slug/portal/login → parent_accounts | student_accounts → portal_session → OBAC checks on each API
 ```
 
 ---
@@ -116,7 +116,7 @@ Critical entities use `deleted_at` / `deleted_by` instead of hard delete:
 
 - `users`, `students`, `invoices`, `payments`
 
-List endpoints filter `deleted_at IS NULL` by default.
+List endpoints filter `deleted_at IS NULL` by default. Delete APIs use soft-delete (`students`, `users`, `invoices`) — never hard-delete financial or student records.
 
 ---
 
@@ -174,7 +174,7 @@ TENANT (staff — users table)
 ├── Boarding Master
 └── Receptionist
 
-PORTAL (portal_accounts)
+PORTAL (parent_accounts, student_accounts)
 ├── Parent
 └── Student
 ```

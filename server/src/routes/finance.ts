@@ -5,7 +5,8 @@ import {
   feeHeads, feeStructures, feeStructureItems, invoices, invoiceItems,
   payments, paymentAllocations, receipts, expenses, students, studentClassHistory,
 } from "../db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { softDeleteInvoice } from "../services/soft-delete";
 import { nextReceiptNumber } from "../utils/receipts";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
@@ -42,8 +43,9 @@ router.get("/invoices", ...guard, requirePermission("finance.view"), async (req:
     const tenant = (req as any).tenant;
     const q = await paginationSchema.parseAsync(req.query);
     const { limit, offset } = paginate(q.page, q.limit);
-    const rows = await db.select().from(invoices).where(eq(invoices.tenantId, tenant.id)).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
-    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(invoices).where(eq(invoices.tenantId, tenant.id));
+    const active = and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt));
+    const rows = await db.select().from(invoices).where(active).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
+    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(invoices).where(active);
     res.json(paginatedResponse(rows, Number(count), q.page, q.limit));
   } catch (err) { next(err); }
 });
@@ -184,8 +186,20 @@ router.get("/dashboard", ...guard, requirePermission("finance.view"), async (req
       totalInvoiced: sql<number>`coalesce(sum(${invoices.totalAmount}), 0)`,
       totalPaid: sql<number>`coalesce(sum(${invoices.paidAmount}), 0)`,
       unpaidCount: sql<number>`count(*) filter (where ${invoices.status} = 'unpaid')`,
-    }).from(invoices).where(eq(invoices.tenantId, tenant.id));
+    }).from(invoices).where(and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt)));
     res.json({ success: true, data: stats });
+  } catch (err) { next(err); }
+});
+
+router.delete("/invoices/:id", ...guard, requirePermission("finance.invoice.create"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [before] = await db.select().from(invoices).where(and(eq(invoices.id, req.params.id), eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt))).limit(1);
+    if (!before) throw new NotFoundError("Invoice not found");
+    const updated = await softDeleteInvoice(tenant.id, req.params.id, user.id);
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "invoice.soft_delete", entityType: "invoice", entityId: before.id, before, after: updated, ip: req.ip });
+    res.json({ success: true });
   } catch (err) { next(err); }
 });
 

@@ -4,11 +4,14 @@ import { students, studentGuardians, guardians, studentClassHistory, studentDocu
 import fs from "fs";
 import path from "path";
 import { eq, and, ilike, or, desc, sql, isNull } from "drizzle-orm";
+import { resolveTenantFile } from "../lib/uploads";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { createAuditLog } from "../services/audit";
+import { softDeleteStudent } from "../services/soft-delete";
+import { writeTenantFile } from "../lib/uploads";
 import { NotFoundError, ConflictError } from "../middleware/error";
 import { paginationSchema, paginate, paginatedResponse } from "../utils/pagination";
 import { z } from "zod";
@@ -129,10 +132,10 @@ router.delete("/:id", ...guard, requirePermission("students.delete"), async (req
   try {
     const tenant = (req as any).tenant;
     const user   = (req as any).user;
-    const [student] = await db.select().from(students).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id))).limit(1);
-    if (!student) throw new NotFoundError("Student not found");
-    await db.update(students).set({ status: "inactive", updatedAt: new Date() }).where(eq(students.id, req.params.id));
-    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "student.deactivate", entityType: "student", entityId: student.id, before: student, ip: req.ip });
+    const [before] = await db.select().from(students).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id))).limit(1);
+    if (!before) throw new NotFoundError("Student not found");
+    const updated = await softDeleteStudent(tenant.id, req.params.id, user.id);
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "student.soft_delete", entityType: "student", entityId: before.id, before, after: updated, ip: req.ip });
     res.json({ success: true });
   } catch (err) { next(err); }
 });
@@ -209,12 +212,9 @@ router.post("/:id/documents", ...guard, requirePermission("students.edit"),
       if (!student) throw new NotFoundError("Student not found");
       const { validateUpload } = await import("../middleware/upload");
       const { safeName, size } = validateUpload(req.body.fileName, req.body.mimeType, req.body.contentBase64);
-      const uploadDir = path.join(process.cwd(), "uploads", tenant.id, student.id);
-      fs.mkdirSync(uploadDir, { recursive: true });
-      const filePath = path.join(uploadDir, `${Date.now()}_${safeName}`);
       const buffer = Buffer.from(req.body.contentBase64, "base64");
       if (buffer.length !== size) throw new ConflictError("Invalid file payload");
-      fs.writeFileSync(filePath, buffer);
+      const filePath = writeTenantFile(tenant.id, ["students", student.id], `${Date.now()}_${safeName}`, buffer);
       const [doc] = await db.insert(studentDocuments).values({
         tenantId: tenant.id, studentId: student.id, documentType: req.body.documentType,
         fileName: safeName, filePath, mimeType: req.body.mimeType,
@@ -223,5 +223,22 @@ router.post("/:id/documents", ...guard, requirePermission("students.edit"),
     } catch (err) { next(err); }
   }
 );
+
+// GET /s/:schoolSlug/api/students/:id/documents/:docId/file — tenant-scoped file download
+router.get("/:id/documents/:docId/file", ...guard, requirePermission("students.view"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [student] = await db.select().from(students).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id), isNull(students.deletedAt))).limit(1);
+    if (!student) throw new NotFoundError("Student not found");
+    const [doc] = await db.select().from(studentDocuments).where(and(
+      eq(studentDocuments.id, req.params.docId),
+      eq(studentDocuments.studentId, student.id),
+      eq(studentDocuments.tenantId, tenant.id),
+    )).limit(1);
+    if (!doc?.filePath) throw new NotFoundError("Document not found");
+    const absPath = resolveTenantFile(tenant.id, doc.filePath);
+    res.sendFile(absPath);
+  } catch (err) { next(err); }
+});
 
 export default router;

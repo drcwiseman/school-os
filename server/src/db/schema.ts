@@ -4,7 +4,7 @@ import {
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended", "trial"]);
-export const userStatusEnum   = pgEnum("user_status",   ["active", "inactive", "invited"]);
+export const userStatusEnum   = pgEnum("user_status",   ["active", "inactive", "invited", "suspended", "disabled", "pending"]);
 
 // ─── Platform Tables ─────────────────────────────────────────────────────────
 
@@ -931,35 +931,58 @@ export const deliveryLogs = pgTable("delivery_logs", {
   createdAt:    timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("delivery_logs_tenant_idx").on(t.tenantId) }));
 
-// ─── Phase 13: Portal accounts (NOT staff users — ownership-based access) ───
+// ─── Portal (NOT staff — ownership-based access; separate from users/RBAC) ───
 
-export const portalTypeEnum = pgEnum("portal_type", ["parent", "student"]);
-
-/** Parent and student logins only. Staff use `users`. */
-export const portalAccounts = pgTable("portal_accounts", {
+/** Parent portal login — linked to guardian → children via student_guardians */
+export const parentAccounts = pgTable("parent_accounts", {
   id:           uuid("id").primaryKey().defaultRandom(),
   tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   email:        text("email").notNull(),
   passwordHash: text("password_hash").notNull(),
-  type:         portalTypeEnum("type").notNull(),
-  guardianId:   uuid("guardian_id").references(() => guardians.id),
-  studentId:    uuid("student_id").references(() => students.id),
+  guardianId:   uuid("guardian_id").notNull().references(() => guardians.id, { onDelete: "cascade" }),
   status:       userStatusEnum("status").notNull().default("active"),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
-  tenantEmailIdx: uniqueIndex("portal_accounts_tenant_email_idx").on(t.tenantId, t.email),
-  tenantIdx:      index("portal_accounts_tenant_idx").on(t.tenantId),
+  tenantEmailIdx: uniqueIndex("parent_accounts_tenant_email_idx").on(t.tenantId, t.email),
+  tenantIdx:      index("parent_accounts_tenant_idx").on(t.tenantId),
 }));
 
-export const portalSessions = pgTable("portal_sessions", {
+/** Student portal login — linked to exactly one student row */
+export const studentAccounts = pgTable("student_accounts", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  email:        text("email").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  studentId:    uuid("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+  status:       userStatusEnum("status").notNull().default("active"),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantEmailIdx: uniqueIndex("student_accounts_tenant_email_idx").on(t.tenantId, t.email),
+  tenantIdx:      index("student_accounts_tenant_idx").on(t.tenantId),
+}));
+
+export const parentSessions = pgTable("parent_sessions", {
   id:              uuid("id").primaryKey().defaultRandom(),
-  portalAccountId: uuid("portal_account_id").notNull().references(() => portalAccounts.id, { onDelete: "cascade" }),
+  parentAccountId: uuid("parent_account_id").notNull().references(() => parentAccounts.id, { onDelete: "cascade" }),
   tenantId:        uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   token:           text("token").notNull().unique(),
   expiresAt:       timestamp("expires_at").notNull(),
   createdAt:       timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
-  tokenIdx: uniqueIndex("portal_sessions_token_idx").on(t.token),
+  tokenIdx: uniqueIndex("parent_sessions_token_idx").on(t.token),
+}));
+
+export const studentSessions = pgTable("student_sessions", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  studentAccountId: uuid("student_account_id").notNull().references(() => studentAccounts.id, { onDelete: "cascade" }),
+  tenantId:         uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  token:            text("token").notNull().unique(),
+  expiresAt:        timestamp("expires_at").notNull(),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  tokenIdx: uniqueIndex("student_sessions_token_idx").on(t.token),
 }));
 
 // ─── Phase 14: Platform SaaS ─────────────────────────────────────────────────

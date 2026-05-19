@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../db";
 import { roles, permissions, rolePermissions, userRoles, users, auditLogs } from "../db/schema";
-import { eq, and, ilike, desc } from "drizzle-orm";
+import { eq, and, ilike, desc, isNull } from "drizzle-orm";
+import { softDeleteStaffUser } from "../services/soft-delete";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -74,7 +75,7 @@ router.get("/users", ...guard, requirePermission("settings.users.view"), async (
     const q      = await paginationSchema.parseAsync(req.query);
     const { limit, offset } = paginate(q.page, q.limit);
     const rows = await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName, status: users.status, createdAt: users.createdAt })
-      .from(users).where(eq(users.tenantId, tenant.id)).limit(limit).offset(offset);
+      .from(users).where(and(eq(users.tenantId, tenant.id), isNull(users.deletedAt))).limit(limit).offset(offset);
     res.json(paginatedResponse(rows, rows.length, q.page, q.limit));
   } catch (err) { next(err); }
 });
@@ -95,6 +96,21 @@ router.post("/users/:userId/roles", ...guard, requirePermission("rbac.manage.rol
       res.json({ success: true });
     } catch (err) { next(err); }
   }
+);
+
+router.delete("/users/:userId", ...guard, requirePermission("settings.users.manage"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const actor = (req as any).user;
+      if (actor.id === req.params.userId) throw new ConflictError("Cannot delete your own account");
+      const [before] = await db.select().from(users).where(and(eq(users.id, req.params.userId), eq(users.tenantId, tenant.id), isNull(users.deletedAt))).limit(1);
+      if (!before) throw new NotFoundError("User not found");
+      const updated = await softDeleteStaffUser(tenant.id, req.params.userId, actor.id);
+      await createAuditLog({ tenantId: tenant.id, actorUserId: actor.id, action: "user.soft_delete", entityType: "user", entityId: before.id, before, after: updated, ip: req.ip });
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  },
 );
 
 // ── Audit log viewer ──────────────────────────────────────────────────────────
