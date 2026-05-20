@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { Loader2, Save } from "lucide-react";
-import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from "../../lib/currencies";
+import { COUNTRY_OPTIONS, CURRENCY_OPTIONS, DEFAULT_COUNTRY, DEFAULT_CURRENCY } from "../../lib/currencies";
 
 export const Settings: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
@@ -11,7 +11,7 @@ export const Settings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [country, setCountry] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [timezone, setTimezone] = useState("UTC");
   const [schoolName, setSchoolName] = useState("");
   const [footer, setFooter] = useState("");
@@ -23,8 +23,8 @@ export const Settings: React.FC = () => {
       try {
         const res = await api.get(`/s/${schoolSlug}/api/settings`);
         const s = res.data;
-        setCountry(s.country ?? "");
-        setCurrency(s.currency ?? "USD");
+        setCountry(s.country ?? DEFAULT_COUNTRY);
+        setCurrency(s.currency ?? DEFAULT_CURRENCY);
         setTimezone(s.timezone ?? "UTC");
         const branding = (s.brandingJson ?? {}) as Record<string, string>;
         setSchoolName(branding.logoText ?? branding.name ?? "");

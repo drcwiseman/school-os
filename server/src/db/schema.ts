@@ -52,7 +52,7 @@ export const tenantSettings = pgTable("tenant_settings", {
   /** @deprecated Prefer tenant_features — kept for backward compatibility */
   featureFlagsJson: jsonb("feature_flags_json").$type<Record<string, boolean>>().default({}),
   country:          text("country").notNull().default(""),
-  currency:         text("currency").notNull().default("USD"),
+  currency:         text("currency").notNull().default("UGX"),
   timezone:         text("timezone").notNull().default("UTC"),
   updatedAt:        timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
@@ -1108,7 +1108,7 @@ export const usageBillingThresholds = pgTable("usage_billing_thresholds", {
   metric:           text("metric").notNull().unique(),
   includedQuantity: bigint("included_quantity", { mode: "number" }).notNull().default(0),
   overageUnitPrice: integer("overage_unit_price").notNull().default(0),
-  currency:         text("currency").notNull().default("USD"),
+  currency:         text("currency").notNull().default("UGX"),
 });
 
 export const saasBillingLines = pgTable("saas_billing_lines", {

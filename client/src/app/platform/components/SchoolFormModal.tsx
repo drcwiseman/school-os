@@ -2,7 +2,13 @@ import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
-import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from "../../../lib/currencies";
+import {
+  COUNTRY_OPTIONS,
+  CURRENCY_OPTIONS,
+  DEFAULT_COUNTRY,
+  DEFAULT_CURRENCY,
+  currencyForCountry,
+} from "../../../lib/currencies";
 
 export type TenantRow = {
   id: string;
@@ -25,8 +31,8 @@ const emptyCreate = {
   adminFirstName: "Admin",
   adminLastName: "User",
   planCode: "starter",
-  country: "UG",
-  currency: "UGX",
+  country: DEFAULT_COUNTRY,
+  currency: DEFAULT_CURRENCY,
 };
 
 export const SchoolFormModal: React.FC<{
@@ -129,7 +135,18 @@ export const SchoolFormModal: React.FC<{
                 value={createForm.name}
                 onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
               />
-              <select className="input text-sm" value={createForm.country} onChange={(e) => setCreateForm({ ...createForm, country: e.target.value })}>
+              <select
+              className="input text-sm"
+              value={createForm.country}
+              onChange={(e) => {
+                const country = e.target.value;
+                setCreateForm({
+                  ...createForm,
+                  country,
+                  currency: currencyForCountry(country),
+                });
+              }}
+            >
                 {COUNTRY_OPTIONS.map((c) => (
                   <option key={c.code} value={c.code}>{c.name}</option>
                 ))}

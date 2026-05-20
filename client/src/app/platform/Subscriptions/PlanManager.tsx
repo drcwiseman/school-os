@@ -2,13 +2,20 @@ import React, { useEffect, useState } from "react";
 import { Layers } from "lucide-react";
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
-import { formatMoneyMinor, COUNTRY_OPTIONS } from "../../../lib/currencies";
+import {
+  formatMoneyMinor,
+  COUNTRY_OPTIONS,
+  CURRENCY_OPTIONS,
+  DEFAULT_COUNTRY,
+  DEFAULT_CURRENCY,
+  currencyForCountry,
+} from "../../../lib/currencies";
 
 export const PlanManager: React.FC = () => {
   const { toast } = useToast();
   const [plans, setPlans] = useState<any[]>([]);
-  const [country, setCountry] = useState("KE");
-  const [currency, setCurrency] = useState("KES");
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
 
   const load = async () => {
     const res = await api.get(`/api/platform/plans?country=${country}&currency=${currency}`);
@@ -29,12 +36,28 @@ export const PlanManager: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1">Prices resolve by country → currency → global fallback. FX conversions use frankfurter.app (free).</p>
         </div>
         <div className="flex gap-2">
-          <select className="bg-[#060a12] border border-slate-800 text-xs rounded-lg px-3 py-2" value={country} onChange={(e) => setCountry(e.target.value)}>
+          <select
+            className="rounded-md border border-slate-200 bg-white text-xs px-3 py-2 text-slate-700"
+            value={country}
+            onChange={(e) => {
+              const next = e.target.value;
+              setCountry(next);
+              if (next) setCurrency(currencyForCountry(next));
+            }}
+          >
             <option value="">Global (*)</option>
-            {COUNTRY_OPTIONS.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+            {COUNTRY_OPTIONS.map((c) => (
+              <option key={c.code} value={c.code}>{c.name}</option>
+            ))}
           </select>
-          <select className="bg-[#060a12] border border-slate-800 text-xs rounded-lg px-3 py-2" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {["KES", "USD", "EUR", "GBP", "NGN", "ZAR", "INR", "AED"].map((c) => <option key={c} value={c}>{c}</option>)}
+          <select
+            className="rounded-md border border-slate-200 bg-white text-xs px-3 py-2 text-slate-700"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+          >
+            {CURRENCY_OPTIONS.map((c) => (
+              <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+            ))}
           </select>
         </div>
       </div>

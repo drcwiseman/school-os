@@ -6,7 +6,7 @@ import {
   plans, tenantPlans, platformAdmins, students, jobs, payments, staff, userRoles,
 } from "../db/schema";
 import { eq, sql, isNull } from "drizzle-orm";
-import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry } from "../lib/currencies";
+import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry, DEFAULT_CURRENCY } from "../lib/currencies";
 import { getExchangeRates, convertMinor } from "../services/currency-exchange";
 import { getPlatformDefaults, setPlatformDefaults } from "../services/platform-settings";
 import { getPlansWithRegionalPricing } from "../services/plan-pricing";
@@ -169,7 +169,7 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
     let totalRevenueMinor = 0;
     for (const row of revenueRows.rows) {
       const amt = Number(row.total ?? 0);
-      const cur = (row.currency ?? "USD").toUpperCase();
+      const cur = (row.currency ?? DEFAULT_CURRENCY).toUpperCase();
       totalRevenueMinor += await convertMinor(amt, cur, displayCurrency);
     }
 
@@ -254,7 +254,7 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
     }
 
     const cc = (country ?? "").toUpperCase();
-    const cur = (currency?.toUpperCase() ?? (cc ? defaultCurrencyForCountry(cc) : "USD"));
+    const cur = (currency?.toUpperCase() ?? (cc ? defaultCurrencyForCountry(cc) : DEFAULT_CURRENCY));
     await db.insert(tenantSettings).values({ tenantId: tenant.id, country: cc, currency: cur });
     await enableDefaultFeaturesForTenant(tenant.id);
 

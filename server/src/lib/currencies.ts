@@ -1,3 +1,7 @@
+/** East Africa–first product defaults (Uganda). */
+export const DEFAULT_COUNTRY = "UG";
+export const DEFAULT_CURRENCY = "UGX";
+
 /** ISO 4217 currencies supported for tenant billing & platform display. */
 export type CurrencyInfo = {
   code: string;
@@ -55,9 +59,10 @@ export function getCurrencyInfo(code: string): CurrencyInfo | undefined {
 }
 
 export function defaultCurrencyForCountry(countryCode: string): string {
-  const cc = countryCode.toUpperCase();
+  const cc = countryCode.toUpperCase().trim();
+  if (!cc) return DEFAULT_CURRENCY;
   const hit = SUPPORTED_CURRENCIES.find((c) => c.countries.includes(cc));
-  return hit?.code ?? "USD";
+  return hit?.code ?? DEFAULT_CURRENCY;
 }
 
 export function formatMoneyMinor(amountMinor: number, currency: string): string {

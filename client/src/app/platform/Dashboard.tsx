@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
-import { formatMoneyMinor } from "../../lib/currencies";
+import { formatMoneyMinor, DEFAULT_CURRENCY } from "../../lib/currencies";
 import { SchoolFormModal, type TenantRow as ModalTenant } from "./components/SchoolFormModal";
 
 type TenantRow = {
@@ -166,7 +166,7 @@ export const PlatformDashboard: React.FC = () => {
     load();
   }, []);
 
-  const cur = stats?.displayCurrency ?? "USD";
+  const cur = stats?.displayCurrency ?? DEFAULT_CURRENCY;
   const fmtMinor = (n: number) => formatMoneyMinor(n, cur);
 
   const statusBreakdown = useMemo(() => {

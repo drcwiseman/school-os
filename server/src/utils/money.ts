@@ -1,5 +1,5 @@
 /** Format integer cents to a human-readable currency string */
-export function formatMoney(cents: number, currency = "USD"): string {
+export function formatMoney(cents: number, currency = "UGX"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,

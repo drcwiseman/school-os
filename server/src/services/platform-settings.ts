@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { platformSettings } from "../db/schema";
+import { DEFAULT_CURRENCY } from "../lib/currencies";
 
 const DEFAULTS_KEY = "defaults";
 
@@ -8,7 +9,7 @@ export type PlatformDefaults = {
   displayCurrency: string;
 };
 
-const FALLBACK: PlatformDefaults = { displayCurrency: "USD" };
+const FALLBACK: PlatformDefaults = { displayCurrency: DEFAULT_CURRENCY };
 
 export async function getPlatformDefaults(): Promise<PlatformDefaults> {
   const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, DEFAULTS_KEY)).limit(1);

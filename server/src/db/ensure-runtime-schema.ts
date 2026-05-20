@@ -101,6 +101,10 @@ export async function ensureRuntimeSchema() {
       "updated_at" timestamp DEFAULT now() NOT NULL,
       CONSTRAINT "tenant_billing_usage_metric_idx" UNIQUE("tenant_id", "metric", "billing_cycle")
     )`,
+    `UPDATE "platform_settings" SET "value" = '{"displayCurrency":"UGX"}'::jsonb, "updated_at" = now()
+      WHERE "key" = 'defaults' AND COALESCE("value"->>'displayCurrency', 'USD') = 'USD'`,
+    `INSERT INTO "platform_settings" ("key", "value") VALUES ('defaults', '{"displayCurrency":"UGX"}')
+      ON CONFLICT ("key") DO NOTHING`,
     `INSERT INTO "addon_features" ("code", "name", "description", "price_monthly") VALUES
       ('ai_homework', 'AI Homework Assistant', 'AI homework auto-grading and personalized feedback loops', 2900),
       ('white_label', 'White-Label Branding', 'Full custom domain, SMTP mail transport, and customized logo assets', 4900),

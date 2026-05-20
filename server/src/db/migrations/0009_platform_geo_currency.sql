@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS "platform_settings" (
   "updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-INSERT INTO "platform_settings" ("key", "value") VALUES ('defaults', '{"displayCurrency":"USD"}')
+INSERT INTO "platform_settings" ("key", "value") VALUES ('defaults', '{"displayCurrency":"UGX"}')
 ON CONFLICT ("key") DO NOTHING;
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "plan_regional_prices" (

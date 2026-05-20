@@ -7,7 +7,7 @@ import {
   students, classes, studentClassHistory, academicYears, terms,
   guardians, studentGuardians, platformAdmins, plans, planRegionalPrices, tenantPlans, staff,
   parentAccounts, studentAccounts, messageTemplates, announcements, campaigns,
-  features, tenantFeatures,
+  features, tenantFeatures, platformSettings,
 } from "./schema";
 import { hashPassword } from "../middleware/auth";
 
@@ -121,6 +121,8 @@ async function seed() {
   }
   const seededPlans = await db.select().from(plans);
   const regionalDefs: { code: string; countryCode: string; currency: string; priceMonthly: number }[] = [
+    { code: "starter", countryCode: "*", currency: "UGX", priceMonthly: 0 },
+    { code: "pro", countryCode: "*", currency: "UGX", priceMonthly: 18000000 },
     { code: "starter", countryCode: "*", currency: "USD", priceMonthly: 0 },
     { code: "pro", countryCode: "*", currency: "USD", priceMonthly: 9900 },
     { code: "starter", countryCode: "UG", currency: "UGX", priceMonthly: 0 },
@@ -144,6 +146,14 @@ async function seed() {
       priceMonthly: r.priceMonthly,
     }).onConflictDoNothing();
   }
+  await db
+    .insert(platformSettings)
+    .values({ key: "defaults", value: { displayCurrency: "UGX" } })
+    .onConflictDoUpdate({
+      target: platformSettings.key,
+      set: { value: { displayCurrency: "UGX" }, updatedAt: new Date() },
+    });
+
   const [platformAdmin] = await db.select().from(platformAdmins).where((await import("drizzle-orm")).eq(platformAdmins.email, "platform@schoolos.local")).limit(1);
   if (!platformAdmin) {
     const passwordHash = await hashPassword("Platform123!");

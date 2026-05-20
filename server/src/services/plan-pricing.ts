@@ -1,7 +1,7 @@
 import { eq, and, or } from "drizzle-orm";
 import { db } from "../db";
 import { plans, planRegionalPrices } from "../db/schema";
-import { defaultCurrencyForCountry } from "../lib/currencies";
+import { defaultCurrencyForCountry, DEFAULT_CURRENCY } from "../lib/currencies";
 
 export async function listRegionalPricesForPlan(planId: string) {
   return db.select().from(planRegionalPrices).where(eq(planRegionalPrices.planId, planId));
@@ -24,10 +24,13 @@ export async function resolvePlanMonthlyPrice(opts: {
   const byCurrency = regional.find((r) => (r.countryCode === "*" || r.countryCode === "") && r.currency === currency);
   if (byCurrency) return { priceMonthly: byCurrency.priceMonthly, currency, source: "regional" };
 
-  const global = regional.find((r) => r.countryCode === "*" && r.currency === "USD");
-  if (global && currency === "USD") return { priceMonthly: global.priceMonthly, currency: "USD", source: "regional" };
+  const globalUgx = regional.find((r) => r.countryCode === "*" && r.currency === "UGX");
+  if (globalUgx && currency === "UGX") return { priceMonthly: globalUgx.priceMonthly, currency: "UGX", source: "regional" };
 
-  return { priceMonthly: opts.basePriceMonthly, currency: currency || "USD", source: "base" };
+  const globalUsd = regional.find((r) => r.countryCode === "*" && r.currency === "USD");
+  if (globalUsd && currency === "USD") return { priceMonthly: globalUsd.priceMonthly, currency: "USD", source: "regional" };
+
+  return { priceMonthly: opts.basePriceMonthly, currency: currency || DEFAULT_CURRENCY, source: "base" };
 }
 
 export async function getPlansWithRegionalPricing(countryCode?: string, currency?: string) {

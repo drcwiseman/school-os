@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../api/client";
-import { formatMoneyMinor } from "../../../lib/currencies";
+import { formatMoneyMinor, DEFAULT_CURRENCY } from "../../../lib/currencies";
 
 export const RevenueLedger: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
@@ -9,7 +9,7 @@ export const RevenueLedger: React.FC = () => {
     api.get("/api/platform/stats").then((s) => setStats(s.data));
   }, []);
 
-  const cur = stats?.displayCurrency ?? "USD";
+  const cur = stats?.displayCurrency ?? DEFAULT_CURRENCY;
 
   return (
     <div className="space-y-6">
