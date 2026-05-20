@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { ForbiddenError } from "../middleware/error";
+import {
+  loadEffectiveRolePermissions,
+  roleHasPermissionAsync,
+} from "../services/platform-role-settings";
 
 export const PLATFORM_ROLES = ["super_admin", "support", "billing"] as const;
 export type PlatformRole = (typeof PLATFORM_ROLES)[number];
@@ -20,9 +24,9 @@ export const PLATFORM_ROLE_DESCRIPTIONS: Record<PlatformRole, string> = {
   billing: "Subscriptions and revenue — assign plans, view finance ledgers and school billing.",
 };
 
-/** Platform operator capabilities — separate from tenant (school) RBAC. */
+/** Default capabilities (used until customized in platform settings). */
 export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, string[]> = {
-  super_admin: ["*", "tenants.provision", "tenants.suspend", "plans.write"],
+  super_admin: ["*", "tenants.provision", "tenants.suspend", "plans.write", "roles.manage"],
   support: [
     "tenants.read",
     "tenants.features",
@@ -45,7 +49,6 @@ export type PlatformPermissionDef = {
   group: string;
 };
 
-/** All granular permissions (excluding wildcard). */
 export const PLATFORM_PERMISSION_CATALOG: PlatformPermissionDef[] = [
   { code: "tenants.read", label: "View schools", description: "List and open school detail, impersonate", group: "Schools" },
   { code: "tenants.provision", label: "Provision schools", description: "Create schools, domains, platform users", group: "Schools" },
@@ -55,43 +58,60 @@ export const PLATFORM_PERMISSION_CATALOG: PlatformPermissionDef[] = [
   { code: "plans.write", label: "Edit plans", description: "Create/update/delete plan tiers and regional prices", group: "Billing" },
   { code: "plans.assign", label: "Assign subscriptions", description: "Assign or change a school's subscription plan", group: "Billing" },
   { code: "stats.read", label: "View analytics", description: "Dashboard stats, revenue, invoices, transactions, payouts", group: "Analytics" },
+  { code: "roles.manage", label: "Manage role permissions", description: "Edit capabilities for Support and Billing roles", group: "Platform" },
 ];
 
+/** @deprecated Use roleHasPermissionAsync — sync fallback for tests only */
 export function roleHasPermission(role: string, permission: string): boolean {
   const perms = PLATFORM_ROLE_PERMISSIONS[role as PlatformRole] ?? PLATFORM_ROLE_PERMISSIONS.support;
   if (perms.includes("*")) return true;
   return perms.includes(permission);
 }
 
-export function platformAdminHasPermission(role: string, permission: string): boolean {
-  return roleHasPermission(role, permission);
+export async function platformAdminHasPermission(role: string, permission: string): Promise<boolean> {
+  return roleHasPermissionAsync(role, permission);
 }
 
-export function permissionsForRole(role: PlatformRole): PlatformPermissionDef[] {
-  const codes = PLATFORM_ROLE_PERMISSIONS[role];
+export async function permissionsForRole(role: PlatformRole): Promise<PlatformPermissionDef[]> {
+  const map = await loadEffectiveRolePermissions();
+  const codes = map[role];
   if (codes.includes("*")) return [...PLATFORM_PERMISSION_CATALOG];
   const set = new Set(codes);
   return PLATFORM_PERMISSION_CATALOG.filter((p) => set.has(p.code));
 }
 
-export function getPlatformRolesMeta() {
-  return PLATFORM_ROLES.map((role) => ({
-    role,
-    label: PLATFORM_ROLE_LABELS[role],
-    description: PLATFORM_ROLE_DESCRIPTIONS[role],
-    permissions: permissionsForRole(role).map((p) => p.code),
-    permissionCount: permissionsForRole(role).length,
-    hasFullAccess: PLATFORM_ROLE_PERMISSIONS[role].includes("*"),
-  }));
+export async function getPlatformRolesMeta() {
+  const map = await loadEffectiveRolePermissions();
+  return PLATFORM_ROLES.map((role) => {
+    const codes = map[role];
+    const hasFullAccess = codes.includes("*");
+    const effective = hasFullAccess
+      ? PLATFORM_PERMISSION_CATALOG.map((p) => p.code)
+      : codes.filter((c) => c !== "*");
+    return {
+      role,
+      label: PLATFORM_ROLE_LABELS[role],
+      description: PLATFORM_ROLE_DESCRIPTIONS[role],
+      permissions: effective,
+      permissionCount: effective.length,
+      hasFullAccess,
+      editable: role !== "super_admin",
+    };
+  });
 }
 
 export function requirePlatformPermission(permission: string) {
-  return (req: Request, _res: Response, next: NextFunction) => {
-    const admin = (req as any).platformAdmin as { role?: string } | undefined;
-    const role = admin?.role ?? "super_admin";
-    if (!platformAdminHasPermission(role, permission)) {
-      return next(new ForbiddenError(`Platform permission denied: ${permission}`));
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { role?: string } }).platformAdmin;
+      const role = admin?.role ?? "super_admin";
+      const ok = await roleHasPermissionAsync(role, permission);
+      if (!ok) {
+        return next(new ForbiddenError(`Platform permission denied: ${permission}`));
+      }
+      next();
+    } catch (err) {
+      next(err);
     }
-    next();
   };
 }

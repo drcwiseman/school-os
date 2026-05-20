@@ -9,6 +9,7 @@ import routes from "./routes/index";
 import { rateLimit } from "./middleware/rate-limit";
 import { tick as processJobs } from "./services/queue";
 import { ensureRuntimeSchema } from "./db/ensure-runtime-schema";
+import { warmRolePermissionsCache } from "./services/platform-role-settings";
 import { attachTenantFromHost, redirectSchoolHostToSlugPath } from "./middleware/host-tenant";
 
 function isApiPath(url: string) {
@@ -73,11 +74,13 @@ app.use(errorHandler);
 
 if (process.env.NODE_ENV !== "test") {
   setInterval(() => { processJobs().catch(() => {}); }, 5000);
-  void ensureRuntimeSchema().then(() => {
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || "development"} mode`);
+  void ensureRuntimeSchema()
+    .then(() => warmRolePermissionsCache())
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || "development"} mode`);
+      });
     });
-  });
 }
 
 export default app;

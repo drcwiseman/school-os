@@ -195,6 +195,6 @@ export async function deletePlatformAdmin(adminId: string, actorId: string) {
   return { success: true };
 }
 
-export function getRoleMeta() {
+export async function getRoleMeta() {
   return getPlatformRolesMeta();
 }

@@ -45,7 +45,11 @@ import {
   isPlatformRole,
   getRoleMeta,
 } from "../services/platform-admins";
-import { getPlatformRolesOverview } from "../services/platform-roles";
+import {
+  getPlatformRolesOverview,
+  patchPlatformRolePermissions,
+  restorePlatformRoleDefaults,
+} from "../services/platform-roles";
 import {
   setTenantFeature,
   listFeatureCatalog,
@@ -357,9 +361,29 @@ router.patch("/payouts/:id", requirePlatformAuth, requirePlatformPermission("sta
   },
 );
 
-router.get("/roles", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+router.get("/roles", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
   try {
-    res.json({ success: true, data: await getPlatformRolesOverview() });
+    const actor = (req as Request & { platformAdmin?: { role?: string } }).platformAdmin;
+    res.json({ success: true, data: await getPlatformRolesOverview(actor?.role ?? "super_admin") });
+  } catch (err) { next(err); }
+});
+
+router.patch("/roles/:role", requirePlatformAuth, requirePlatformPermission("roles.manage"),
+  validate({ body: z.object({ permissions: z.array(z.string()) }) }),
+  async (req, res, next) => {
+    try {
+      await patchPlatformRolePermissions(req.params.role, req.body.permissions);
+      const actor = (req as Request & { platformAdmin?: { role?: string } }).platformAdmin;
+      res.json({ success: true, data: await getPlatformRolesOverview(actor?.role ?? "super_admin") });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/roles/:role/reset", requirePlatformAuth, requirePlatformPermission("roles.manage"), async (req, res, next) => {
+  try {
+    await restorePlatformRoleDefaults(req.params.role);
+    const actor = (req as Request & { platformAdmin?: { role?: string } }).platformAdmin;
+    res.json({ success: true, data: await getPlatformRolesOverview(actor?.role ?? "super_admin") });
   } catch (err) { next(err); }
 });
 
@@ -367,7 +391,7 @@ router.get("/users", requirePlatformAuth, requirePlatformPermission("stats.read"
   try {
     res.json({
       success: true,
-      data: { admins: await listPlatformAdmins(), roles: getRoleMeta() },
+      data: { admins: await listPlatformAdmins(), roles: await getRoleMeta() },
     });
   } catch (err) { next(err); }
 });
