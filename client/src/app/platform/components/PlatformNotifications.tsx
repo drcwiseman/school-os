@@ -5,8 +5,8 @@ import { api } from "../../api/client";
 
 type AuditItem = {
   action: string;
-  tenant_name?: string;
-  created_at: string;
+  tenantName?: string | null;
+  createdAt: string;
   source: string;
 };
 
@@ -88,13 +88,13 @@ export const PlatformNotifications: React.FC = () => {
               <ul className="space-y-1">
                 {items.map((row) => (
                   <li
-                    key={`${row.source}-${row.action}-${row.created_at}`}
+                    key={`${row.source}-${row.action}-${row.createdAt}`}
                     className="rounded-lg px-3 py-2 hover:bg-slate-50"
                   >
                     <p className="text-sm font-medium text-slate-800 truncate">{row.action}</p>
-                    <p className="text-xs text-slate-500 truncate">{row.tenant_name ?? row.source}</p>
+                    <p className="text-xs text-slate-500 truncate">{row.tenantName ?? row.source}</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">
-                      {new Date(row.created_at).toLocaleString()}
+                      {new Date(row.createdAt).toLocaleString()}
                     </p>
                   </li>
                 ))}

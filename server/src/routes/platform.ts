@@ -71,7 +71,13 @@ import { platformAdminAuthColumns, platformAdminPublic } from "../db/platform-ad
 import {
   setCustomDomain, verifyCustomDomain, getDomainInstructions,
 } from "../services/domain-verify";
-import { createPlatformAuditLog, listGlobalAuditFeed } from "../services/platform-audit";
+import {
+  createPlatformAuditLog,
+  logPlatformAction,
+  listGlobalAuditFeed,
+  getPlatformAuditHub,
+  getPlatformAuditEventDetail,
+} from "../services/platform-audit";
 import {
   createImpersonationToken, findImpersonationTargetUser,
 } from "../services/impersonation";
@@ -106,6 +112,11 @@ router.post("/auth/login", validate({ body: z.object({ email: z.string().email()
     if (!valid) throw new UnauthorizedError("Invalid credentials");
     const session = await createPlatformSession(admin.id);
     res.cookie("platform_session_token", session.token, platformSessionCookieOptions());
+    await logPlatformAction(admin.id, "platform.auth.login", {
+      entityType: "platform_admin",
+      entityId: admin.id,
+      ip: req.ip,
+    });
     res.json({ success: true, admin: platformAdminPublic(admin) });
   } catch (err) { next(err); }
 });
@@ -346,6 +357,13 @@ router.post("/payouts", requirePlatformAuth, requirePlatformPermission("stats.re
         status: req.body.status as PayoutStatus | undefined,
         createdById: admin?.id,
       });
+      await logPlatformAction(admin?.id, "platform.payout.create", {
+        tenantId: row.tenantId,
+        entityType: "platform_payout",
+        entityId: row.id,
+        after: { amount: row.amount, status: row.status, reference: row.reference },
+        ip: req.ip,
+      });
       res.status(201).json({ success: true, data: row });
     } catch (err) { next(err); }
   },
@@ -355,7 +373,15 @@ router.patch("/payouts/:id", requirePlatformAuth, requirePlatformPermission("sta
   validate({ body: z.object({ status: z.enum(["pending", "processing", "completed", "failed", "cancelled"]) }) }),
   async (req, res, next) => {
     try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
       const row = await updatePlatformPayoutStatus(req.params.id, req.body.status as PayoutStatus);
+      await logPlatformAction(admin?.id, "platform.payout.status", {
+        tenantId: row.tenantId,
+        entityType: "platform_payout",
+        entityId: row.id,
+        after: { status: row.status },
+        ip: req.ip,
+      });
       res.json({ success: true, data: row });
     } catch (err) { next(err); }
   },
@@ -407,7 +433,14 @@ router.post("/users", requirePlatformAuth, requirePlatformPermission("tenants.pr
   }),
   async (req, res, next) => {
     try {
+      const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
       const admin = await createPlatformAdmin(req.body);
+      await logPlatformAction(actor.id, "platform.user.create", {
+        entityType: "platform_admin",
+        entityId: admin.id,
+        after: { email: admin.email, role: admin.role },
+        ip: req.ip,
+      });
       res.status(201).json({ success: true, data: admin });
     } catch (err) { next(err); }
   },
@@ -425,6 +458,12 @@ router.patch("/users/:id", requirePlatformAuth, requirePlatformPermission("tenan
       const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
       const role = req.body.role && isPlatformRole(req.body.role) ? req.body.role : undefined;
       const admin = await updatePlatformAdmin(req.params.id, { name: req.body.name, role }, actor.id);
+      await logPlatformAction(actor.id, "platform.user.update", {
+        entityType: "platform_admin",
+        entityId: admin.id,
+        after: { email: admin.email, role: admin.role },
+        ip: req.ip,
+      });
       res.json({ success: true, data: admin });
     } catch (err) { next(err); }
   },
@@ -434,7 +473,13 @@ router.post("/users/:id/reset-password", requirePlatformAuth, requirePlatformPer
   validate({ body: z.object({ newPassword: z.string().min(8) }) }),
   async (req, res, next) => {
     try {
+      const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
       await resetPlatformAdminPassword(req.params.id, req.body.newPassword);
+      await logPlatformAction(actor.id, "platform.user.reset_password", {
+        entityType: "platform_admin",
+        entityId: req.params.id,
+        ip: req.ip,
+      });
       res.json({ success: true });
     } catch (err) { next(err); }
   },
@@ -444,6 +489,11 @@ router.delete("/users/:id", requirePlatformAuth, requirePlatformPermission("tena
   try {
     const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
     await deletePlatformAdmin(req.params.id, actor.id);
+    await logPlatformAction(actor.id, "platform.user.delete", {
+      entityType: "platform_admin",
+      entityId: req.params.id,
+      ip: req.ip,
+    });
     res.json({ success: true });
   } catch (err) { next(err); }
 });
@@ -653,6 +703,15 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
     }).returning();
     await db.insert(userRoles).values({ userId: adminUser.id, roleId: adminRole.id, tenantId: tenant.id });
 
+    const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+    await logPlatformAction(actor?.id, "tenant.create", {
+      tenantId: tenant.id,
+      entityType: "tenant",
+      entityId: tenant.id,
+      after: { slug: tenant.slug, name: tenant.name, planCode: planCode ?? null },
+      ip: req.ip,
+    });
+
     res.status(201).json({
       success: true,
       data: { tenant, adminUser: { id: adminUser.id, email: adminUser.email } },
@@ -805,6 +864,36 @@ router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPe
   },
 );
 
+router.get("/audit", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const source = req.query.source === "school" || req.query.source === "platform"
+      ? req.query.source
+      : "all";
+    const days = req.query.days != null ? Number(req.query.days) : undefined;
+    const data = await getPlatformAuditHub({
+      source,
+      tenantId: typeof req.query.tenantId === "string" ? req.query.tenantId : undefined,
+      action: typeof req.query.action === "string" ? req.query.action : undefined,
+      days: Number.isFinite(days) && days! > 0 ? days : undefined,
+      limit: req.query.limit != null ? Number(req.query.limit) : undefined,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
+
+router.get("/audit/:source/:id", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const source = req.params.source;
+    if (source !== "school" && source !== "platform") {
+      res.status(400).json({ success: false, message: "Invalid source" });
+      return;
+    }
+    const detail = await getPlatformAuditEventDetail(source, req.params.id);
+    if (!detail) throw new NotFoundError("Audit event not found");
+    res.json({ success: true, data: detail });
+  } catch (err) { next(err); }
+});
+
 router.get("/audit-logs", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
   try {
     const limit = Number(req.query.limit ?? 100);
@@ -949,6 +1038,7 @@ router.patch("/tenants/:slug/status", requirePlatformAuth, requirePlatformPermis
       const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
       if (!tenant) throw new NotFoundError("Tenant not found");
       const [updated] = await db.update(tenants).set({ status: req.body.status, updatedAt: new Date() }).where(eq(tenants.id, tenant.id)).returning();
+      const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
       await createAuditLog({
         tenantId: tenant.id,
         action: "tenant.status.update",
@@ -956,6 +1046,14 @@ router.patch("/tenants/:slug/status", requirePlatformAuth, requirePlatformPermis
         entityId: tenant.id,
         before: tenant,
         after: updated,
+        ip: req.ip,
+      });
+      await logPlatformAction(actor?.id, "tenant.status.update", {
+        tenantId: tenant.id,
+        entityType: "tenant",
+        entityId: tenant.id,
+        before: { status: tenant.status },
+        after: { status: updated.status },
         ip: req.ip,
       });
       res.json({ success: true, data: updated });
@@ -973,6 +1071,14 @@ router.patch("/tenants/:slug/plan", requirePlatformAuth, requirePlatformPermissi
       if (!plan) throw new NotFoundError("Plan not found");
       await db.delete(tenantPlans).where(eq(tenantPlans.tenantId, tenant.id));
       await db.insert(tenantPlans).values({ tenantId: tenant.id, planId: plan.id });
+      const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      await logPlatformAction(actor?.id, "tenant.plan.assign", {
+        tenantId: tenant.id,
+        entityType: "plan",
+        entityId: plan.id,
+        after: { planCode: plan.code, planName: plan.name },
+        ip: req.ip,
+      });
       res.json({ success: true, data: plan });
     } catch (err) { next(err); }
   }

@@ -95,7 +95,7 @@ const Sparkline = ({ color }: { color: string }) => (
   </svg>
 );
 
-type AuditRow = { action: string; tenant_name?: string; created_at: string; source: string };
+type AuditRow = { action: string; tenantName?: string | null; createdAt: string; source: string };
 
 function KpiCard({
   icon: Icon,
@@ -425,7 +425,7 @@ export const PlatformDashboard: React.FC = () => {
               <p className="text-sm text-slate-500">No recent platform events yet.</p>
             ) : (
               audit.slice(0, 6).map((row) => (
-                <div key={`${row.source}-${row.action}-${row.created_at}`} className="flex gap-4">
+                <div key={`${row.source}-${row.action}-${row.createdAt}`} className="flex gap-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 shrink-0">
                     <Activity size={14} />
                   </div>
@@ -433,11 +433,11 @@ export const PlatformDashboard: React.FC = () => {
                     <div className="flex justify-between items-start gap-2">
                       <p className="text-sm font-semibold text-slate-800 truncate">{row.action}</p>
                       <span className="text-[11px] text-slate-500 whitespace-nowrap">
-                        {new Date(row.created_at).toLocaleString()}
+                        {new Date(row.createdAt).toLocaleString()}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 truncate">
-                      {row.tenant_name ?? row.source}
+                      {row.tenantName ?? row.source}
                     </p>
                   </div>
                 </div>
