@@ -1,31 +1,61 @@
 import React, { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  LayoutDashboard,
-  Building2,
-  CreditCard,
-  Receipt,
-  LifeBuoy,
-  ListTodo,
-  ScrollText,
-  Loader2,
-  LogOut,
-  RefreshCw,
+  LayoutDashboard, Building2, CreditCard, Globe, Link as LinkIcon, 
+  Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft, 
+  Landmark, Users, Shield, ScrollText, HardDrive, 
+  LifeBuoy, ListTodo, Settings, Flag, Mail, 
+  Blocks, DatabaseBackup, Loader2, Search, Bell, HelpCircle, Menu
 } from "lucide-react";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
 
-const nav = [
-  { to: "/platform/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/platform/tenants", label: "Schools", icon: Building2 },
-  { to: "/platform/subscriptions/plans", label: "Plans & pricing", icon: CreditCard },
-  { to: "/platform/subscriptions/ledger", label: "Revenue", icon: Receipt },
-  { to: "/platform/support", label: "Support", icon: LifeBuoy },
-  { to: "/platform/system/queue", label: "Job queue", icon: ListTodo },
-  { to: "/platform/system/audit", label: "Audit log", icon: ScrollText },
+const navGroups = [
+  {
+    label: "TENANT MANAGEMENT",
+    items: [
+      { to: "/platform/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
+      { to: "/platform/tenants", label: "Schools", icon: Building2 },
+      { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard },
+      { to: "/platform/domains", label: "Domains", icon: Globe },
+      { to: "/platform/custom-domains", label: "Custom Domains", icon: LinkIcon },
+      { to: "/platform/subscriptions/plans", label: "Plans & Pricing", icon: Tags },
+      { to: "/platform/marketplace", label: "Add-ons Marketplace", icon: LayoutTemplate },
+    ]
+  },
+  {
+    label: "FINANCE",
+    items: [
+      { to: "/platform/subscriptions/ledger", label: "Revenue", icon: Landmark },
+      { to: "/platform/invoices", label: "Invoices", icon: FileText },
+      { to: "/platform/transactions", label: "Transactions", icon: ArrowRightLeft },
+      { to: "/platform/payouts", label: "Payouts", icon: Receipt },
+    ]
+  },
+  {
+    label: "OPERATIONS",
+    items: [
+      { to: "/platform/users", label: "Users (Platform)", icon: Users },
+      { to: "/platform/roles", label: "Roles & Permissions", icon: Shield },
+      { to: "/platform/system/audit", label: "Audit Logs", icon: ScrollText },
+      { to: "/platform/logs", label: "System Logs", icon: HardDrive },
+      { to: "/platform/support", label: "Support Tickets", icon: LifeBuoy },
+      { to: "/platform/system/queue", label: "Job Queue", icon: ListTodo },
+    ]
+  },
+  {
+    label: "SETTINGS",
+    items: [
+      { to: "/platform/settings/general", label: "General Settings", icon: Settings },
+      { to: "/platform/settings/flags", label: "Feature Flags", icon: Flag },
+      { to: "/platform/settings/email", label: "Email Templates", icon: Mail },
+      { to: "/platform/settings/integrations", label: "Integrations", icon: Blocks },
+      { to: "/platform/settings/backup", label: "Backup & Restore", icon: DatabaseBackup },
+    ]
+  }
 ];
 
 export const PlatformLayout: React.FC = () => {
-  const { ready, admin, logout } = usePlatformAuth();
+  const { ready, logout } = usePlatformAuth();
 
   useEffect(() => {
     document.body.classList.add("platform-active");
@@ -34,114 +64,115 @@ export const PlatformLayout: React.FC = () => {
 
   if (!ready) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      <div className="min-h-screen bg-[#f4f6f8] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
-      <div className="flex min-h-screen">
-        <aside className="hidden lg:flex w-64 flex-col border-r border-slate-200 bg-white">
-          <div className="px-5 py-6 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white font-bold text-sm">
-                SO
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900 leading-tight">SchoolOS</p>
-                <p className="text-xs text-slate-500">Platform admin</p>
-              </div>
+    <div className="min-h-screen bg-[#f4f6f8] text-[#1e293b] font-sans antialiased flex">
+      {/* Left Sidebar */}
+      <aside className="hidden lg:flex w-[260px] flex-col bg-[#0f172a] text-slate-300 shadow-xl overflow-y-auto">
+        <div className="px-5 py-5 sticky top-0 bg-[#0f172a] z-10 border-b border-slate-800">
+          <div className="flex items-center gap-3 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-sm">
+              <Shield size={18} />
+            </div>
+            <div>
+              <p className="font-bold tracking-tight leading-tight text-lg">SchoolOS</p>
+              <p className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 mt-0.5">Platform Admin</p>
             </div>
           </div>
-
-          <nav className="flex-1 p-3 space-y-0.5">
-            {nav.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-indigo-50 text-indigo-700"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`
-                  }
-                >
-                  <Icon size={18} className="shrink-0 opacity-80" />
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-slate-100">
-            <p className="text-xs font-medium text-slate-900 truncate">{admin?.name ?? "Operator"}</p>
-            <p className="text-xs text-slate-500 truncate">{admin?.email}</p>
-            <button
-              type="button"
-              onClick={logout}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              <LogOut size={16} /> Sign out
-            </button>
-          </div>
-        </aside>
-
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="lg:hidden flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">SO</div>
-                <span className="font-semibold">SchoolOS Platform</span>
-              </div>
-              <p className="hidden lg:block text-sm text-slate-500">
-                Manage schools, subscriptions, and platform operations
-              </p>
-              <div className="flex items-center gap-2 ml-auto">
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                >
-                  <RefreshCw size={16} /> Refresh
-                </button>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="lg:hidden inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600"
-                >
-                  <LogOut size={16} />
-                </button>
-              </div>
-            </div>
-          </header>
-
-          <nav className="lg:hidden flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-4 py-2">
-            {nav.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium ${
-                    isActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600"
-                  }`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          <main className="flex-1 p-4 sm:p-6 lg:p-8">
-            <Outlet />
-          </main>
         </div>
+
+        <div className="flex-1 py-4">
+          {navGroups.map((group, i) => (
+            <div key={i} className="mb-6 px-3">
+              <p className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                {group.label}
+              </p>
+              <nav className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                          isActive
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <Icon size={16} className={isActive ? "text-white" : "text-slate-400"} />
+                          {item.label}
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </nav>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#f4f6f8]">
+        {/* Top Header */}
+        <header className="sticky top-0 z-40 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-4">
+            <button className="lg:hidden text-slate-500 hover:text-slate-700">
+              <Menu size={20} />
+            </button>
+            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">Dashboard</h1>
+          </div>
+          
+          <div className="flex items-center gap-5">
+            {/* Search Bar */}
+            <div className="hidden md:flex relative group">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500" />
+              <input 
+                type="text" 
+                placeholder="Search schools, users, invoices..." 
+                className="w-80 bg-slate-50 border border-slate-200 rounded-full pl-9 pr-12 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-slate-200 text-slate-500">⌘</kbd>
+                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-slate-200 text-slate-500">K</kbd>
+              </div>
+            </div>
+
+            <button className="relative text-slate-500 hover:text-slate-700 transition-colors">
+              <Bell size={20} />
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">8</span>
+            </button>
+
+            <button className="text-slate-500 hover:text-slate-700 transition-colors hidden sm:block">
+              <HelpCircle size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-sm shadow-sm cursor-pointer" onClick={logout}>
+                PA
+              </div>
+              <div className="hidden sm:block cursor-pointer" onClick={logout}>
+                <p className="text-sm font-semibold text-slate-700 leading-tight">Platform Admin</p>
+                <p className="text-[11px] text-slate-500">Super Admin</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
+          <Outlet />
+        </main>
       </div>
     </div>
   );

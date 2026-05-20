@@ -27,16 +27,18 @@
   body:not(.marketing-active) ::-webkit-scrollbar-track { @apply bg-surface; }
   body:not(.marketing-active) ::-webkit-scrollbar-thumb { @apply bg-slate-600 rounded-full; }
 
-  /* Platform admin console — light enterprise shell */
+  /* Platform admin console — light enterprise theme */
   body.platform-active {
-    @apply bg-slate-50 text-slate-900;
+    background-color: #f4f6f8;
+    color: #1e293b;
   }
   body.platform-active .input {
-    @apply bg-white border-slate-200 text-slate-900 placeholder-slate-400;
+    @apply bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-indigo-500/25;
   }
   body.platform-active .btn-primary {
-    @apply bg-indigo-600 hover:bg-indigo-700 text-white;
+    @apply bg-blue-600 hover:bg-blue-700 text-white shadow-sm border border-transparent transition-all duration-300;
   }
+  body.platform-active ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
 }
 

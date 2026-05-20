@@ -28,13 +28,20 @@ import { PlatformLayout } from "./platform/PlatformLayout";
 import { PlatformDashboard } from "./platform/Dashboard";
 import { TenantHub } from "./platform/Tenants/TenantHub";
 import { TenantDetail } from "./platform/Tenants/TenantDetail";
+import { DomainsHub } from "./platform/Tenants/Domains";
 import { ImpersonateExchange } from "./pages/ImpersonateExchange";
 import { PlanManager } from "./platform/Subscriptions/PlanManager";
 import { RevenueLedger } from "./platform/Subscriptions/Ledger";
+import { AddonMarketplace } from "./platform/Marketplace";
 import { SupportHub } from "./platform/Support/SupportHub";
 import { QueueMonitor } from "./platform/System/QueueMonitor";
 import { AuditLogs } from "./platform/System/AuditLogs";
+import { PlatformPlaceholder } from "./platform/PlatformPlaceholder";
 import { Settings } from "./pages/Settings";
+
+const stub = (title: string, hint?: string) => (
+  <PlatformPlaceholder title={title} hint={hint} />
+);
 
 export const AppRoutes = () => {
   return (
@@ -57,11 +64,26 @@ export const AppRoutes = () => {
         <Route path="dashboard" element={<PlatformDashboard />} />
         <Route path="tenants" element={<TenantHub />} />
         <Route path="tenants/:slug" element={<TenantDetail />} />
+        <Route path="subscriptions" element={<Navigate to="/platform/subscriptions/plans" replace />} />
         <Route path="subscriptions/plans" element={<PlanManager />} />
         <Route path="subscriptions/ledger" element={<RevenueLedger />} />
+        <Route path="domains" element={<DomainsHub />} />
+        <Route path="custom-domains" element={<Navigate to="/platform/domains" replace />} />
+        <Route path="marketplace" element={<AddonMarketplace />} />
+        <Route path="invoices" element={stub("Invoices")} />
+        <Route path="transactions" element={stub("Transactions")} />
+        <Route path="payouts" element={stub("Payouts")} />
+        <Route path="users" element={stub("Platform users")} />
+        <Route path="roles" element={stub("Roles & permissions")} />
+        <Route path="logs" element={stub("System logs")} />
         <Route path="support" element={<SupportHub />} />
         <Route path="system/queue" element={<QueueMonitor />} />
         <Route path="system/audit" element={<AuditLogs />} />
+        <Route path="settings/general" element={stub("General settings", "Platform display currency is under Plans & Revenue for now.")} />
+        <Route path="settings/flags" element={<Navigate to="/platform/tenants" replace />} />
+        <Route path="settings/email" element={stub("Email templates")} />
+        <Route path="settings/integrations" element={stub("Integrations")} />
+        <Route path="settings/backup" element={stub("Backup & restore")} />
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 

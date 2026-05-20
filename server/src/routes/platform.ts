@@ -117,6 +117,7 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
     const [tenantsCount] = await db.select({ count: sql<number>`count(*)` }).from(tenants);
     const [activeTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "active"));
     const [suspendedTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "suspended"));
+    const [trialTenants] = await db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.status, "trial"));
     const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users).where(isNull(users.deletedAt));
     const [staffCount] = await db.select({ count: sql<number>`count(*)` }).from(staff).where(isNull(staff.deletedAt));
     const [studentsCount] = await db.select({ count: sql<number>`count(*)` }).from(students);
@@ -148,7 +149,9 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
         totalTenants: Number(tenantsCount?.count ?? 0),
         activeTenants: Number(activeTenants?.count ?? 0),
         suspendedTenants: Number(suspendedTenants?.count ?? 0),
+        trialTenants: Number(trialTenants?.count ?? 0),
         totalUsers: Number(usersCount?.count ?? 0),
+        totalStaff: Number(staffCount?.count ?? 0),
         totalStudents: Number(studentsCount?.count ?? 0),
         totalJobs: Number(jobsCount?.count ?? 0),
         failedJobs: Number(failedJobsCount?.count ?? 0),
