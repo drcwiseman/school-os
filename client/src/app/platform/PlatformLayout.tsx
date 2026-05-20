@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Building2, CreditCard, Globe, Link as LinkIcon,
   Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft,
   Landmark, Users, Shield, ScrollText, HardDrive,
   LifeBuoy, ListTodo, Settings, Flag, Mail,
-  Blocks, DatabaseBackup, Loader2, Search, Bell, HelpCircle, Menu,
+  Blocks, DatabaseBackup, Loader2, Search, HelpCircle, Menu,
 } from "lucide-react";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
 import { PlatformUserMenu } from "./components/PlatformUserMenu";
+import { PlatformNotifications } from "./components/PlatformNotifications";
 
 const PAGE_TITLES: Record<string, string> = {
   "/platform/dashboard": "Dashboard",
@@ -172,14 +173,15 @@ export const PlatformLayout: React.FC = () => {
               </div>
             </div>
 
-            <button type="button" className="relative text-slate-500 hover:text-slate-700">
-              <Bell size={20} />
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">8</span>
-            </button>
+            <PlatformNotifications />
 
-            <button type="button" className="text-slate-500 hover:text-slate-700 hidden sm:block">
+            <Link
+              to="/platform/support"
+              className="p-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 hidden sm:block transition-colors"
+              aria-label="Help and support"
+            >
               <HelpCircle size={20} />
-            </button>
+            </Link>
 
             <PlatformUserMenu admin={admin} onLogout={logout} />
           </div>

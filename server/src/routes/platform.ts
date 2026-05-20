@@ -5,7 +5,7 @@ import {
   tenants, tenantSettings, users, roles, rolePermissions, permissions,
   plans, tenantPlans, platformAdmins, students, jobs, payments, staff, userRoles,
 } from "../db/schema";
-import { eq, sql, isNull, asc } from "drizzle-orm";
+import { eq, sql, isNull } from "drizzle-orm";
 import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry } from "../lib/currencies";
 import { getExchangeRates, convertMinor } from "../services/currency-exchange";
 import { getPlatformDefaults, setPlatformDefaults } from "../services/platform-settings";
@@ -41,6 +41,7 @@ import {
 import {
   getTenantUsage, generateBillingLines, getBillingLines, currentBillingCycle,
 } from "../services/usage-billing";
+import { listPlatformTenants } from "../services/platform-tenants-list";
 
 const router = Router();
 
@@ -238,28 +239,36 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
     const [existing] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
     if (existing) throw new ConflictError("School slug already taken");
 
-    const [tenant] = await db.insert(tenants).values({
-      slug,
-      name,
-      status: "active",
-      subdomain: slug, // Auto-generated subdomain
-      domainVerified: false,
-      sslConfig: { status: "pending_dns_configuration", challengeType: "http-01" },
-    }).returning();
+    let tenant: typeof tenants.$inferSelect;
+    try {
+      [tenant] = await db.insert(tenants).values({
+        slug,
+        name,
+        status: "active",
+        subdomain: slug,
+        domainVerified: false,
+        sslConfig: { status: "pending_dns_configuration", challengeType: "http-01" },
+      }).returning();
+    } catch {
+      [tenant] = await db.insert(tenants).values({ slug, name, status: "active" }).returning();
+    }
 
     const cc = (country ?? "").toUpperCase();
     const cur = (currency?.toUpperCase() ?? (cc ? defaultCurrencyForCountry(cc) : "USD"));
     await db.insert(tenantSettings).values({ tenantId: tenant.id, country: cc, currency: cur });
     await enableDefaultFeaturesForTenant(tenant.id);
 
-    // Seed default usage-based billing metrics
-    const currentCycle = new Date().toISOString().slice(0, 7); // e.g. "2026-05"
-    const { tenantBillingUsage } = await import("../db/schema");
-    await db.insert(tenantBillingUsage).values([
-      { tenantId: tenant.id, metric: "sms_volume", quantityUsed: 0, billingCycle: currentCycle },
-      { tenantId: tenant.id, metric: "ai_credits", quantityUsed: 0, billingCycle: currentCycle },
-      { tenantId: tenant.id, metric: "storage_bytes", quantityUsed: 0, billingCycle: currentCycle },
-    ]);
+    try {
+      const currentCycle = new Date().toISOString().slice(0, 7);
+      const { tenantBillingUsage } = await import("../db/schema");
+      await db.insert(tenantBillingUsage).values([
+        { tenantId: tenant.id, metric: "sms_volume", quantityUsed: 0, billingCycle: currentCycle },
+        { tenantId: tenant.id, metric: "ai_credits", quantityUsed: 0, billingCycle: currentCycle },
+        { tenantId: tenant.id, metric: "storage_bytes", quantityUsed: 0, billingCycle: currentCycle },
+      ]);
+    } catch (seedErr) {
+      console.warn("[platform] tenant billing usage seed skipped:", seedErr);
+    }
 
     if (planCode) {
       const [plan] = await db.select().from(plans).where(eq(plans.code, planCode)).limit(1);
@@ -288,42 +297,7 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
 
 router.get("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.read"), async (_req, res, next) => {
   try {
-    const rows = await db
-      .select({
-        id: tenants.id,
-        slug: tenants.slug,
-        name: tenants.name,
-        status: tenants.status,
-        subdomain: tenants.subdomain,
-        customDomain: tenants.customDomain,
-        domainVerified: tenants.domainVerified,
-        createdAt: tenants.createdAt,
-        updatedAt: tenants.updatedAt,
-        country: tenantSettings.country,
-        currency: tenantSettings.currency,
-        timezone: tenantSettings.timezone,
-        planCode: plans.code,
-        planName: plans.name,
-        studentCount: sql<number>`(SELECT count(*)::int FROM students s WHERE s.tenant_id = ${tenants.id})`,
-        staffCount: sql<number>`(SELECT count(*)::int FROM staff st WHERE st.tenant_id = ${tenants.id} AND st.deleted_at IS NULL)`,
-        erpUserCount: sql<number>`(SELECT count(*)::int FROM users u WHERE u.tenant_id = ${tenants.id} AND u.deleted_at IS NULL)`,
-        adminEmail: sql<string | null>`(
-          (SELECT u.email FROM users u
-           INNER JOIN user_roles ur ON ur.user_id = u.id
-           INNER JOIN roles r ON r.id = ur.role_id
-           WHERE u.tenant_id = ${tenants.id}
-             AND r.name = 'School Administrator'
-             AND u.deleted_at IS NULL
-           ORDER BY u.created_at ASC
-           LIMIT 1)
-        `,
-      })
-      .from(tenants)
-      .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
-      .leftJoin(tenantPlans, eq(tenantPlans.tenantId, tenants.id))
-      .leftJoin(plans, eq(plans.id, tenantPlans.planId))
-      .orderBy(asc(tenants.name));
-    res.json({ success: true, data: rows });
+    res.json({ success: true, data: await listPlatformTenants() });
   } catch (err) { next(err); }
 });
 

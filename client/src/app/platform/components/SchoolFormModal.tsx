@@ -143,6 +143,7 @@ export const SchoolFormModal: React.FC<{
                 className="input text-sm sm:col-span-2"
                 type="email"
                 placeholder="Admin email"
+                autoComplete="off"
                 required
                 value={createForm.adminEmail}
                 onChange={(e) => setCreateForm({ ...createForm, adminEmail: e.target.value })}
@@ -151,6 +152,7 @@ export const SchoolFormModal: React.FC<{
                 className="input text-sm sm:col-span-2"
                 type="password"
                 placeholder="Admin password (min 8)"
+                autoComplete="new-password"
                 required
                 minLength={8}
                 value={createForm.adminPassword}

@@ -92,6 +92,7 @@ export const PlatformProfile: React.FC = () => {
             onChange={(e) => setCurrentPassword(e.target.value)}
             required
             autoComplete="current-password"
+            name="current-password"
           />
         </div>
         <div>
@@ -104,6 +105,7 @@ export const PlatformProfile: React.FC = () => {
             required
             minLength={8}
             autoComplete="new-password"
+            name="new-password"
           />
         </div>
         <button type="submit" disabled={savingPassword} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">

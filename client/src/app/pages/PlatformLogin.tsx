@@ -51,6 +51,7 @@ export const PlatformLogin: React.FC = () => {
             <input
               type="email"
               required
+              autoComplete="username"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -61,6 +62,7 @@ export const PlatformLogin: React.FC = () => {
             <input
               type="password"
               required
+              autoComplete="current-password"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
