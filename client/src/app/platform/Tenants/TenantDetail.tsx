@@ -1,23 +1,90 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Globe, Package, BarChart3, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  Globe,
+  Package,
+  BarChart3,
+  ExternalLink,
+  UserCog,
+  Save,
+  Loader2,
+  CheckCircle2,
+  SlidersHorizontal,
+  Users,
+  GraduationCap,
+} from "lucide-react";
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
+import {
+  COUNTRY_OPTIONS,
+  CURRENCY_OPTIONS,
+  DEFAULT_COUNTRY,
+  DEFAULT_CURRENCY,
+  currencyForCountry,
+  formatMoneyMinor,
+} from "../../../lib/currencies";
+
+const CARD = "rounded-lg border border-slate-200 bg-white p-4 sm:p-5 shadow-sm";
+
+const TIMEZONES = [
+  "Africa/Kampala",
+  "Africa/Nairobi",
+  "Africa/Lagos",
+  "Africa/Johannesburg",
+  "UTC",
+  "Europe/London",
+  "America/New_York",
+];
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    active: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+    trial: "bg-amber-50 text-amber-700 ring-amber-600/20",
+    suspended: "bg-red-50 text-red-700 ring-red-600/20",
+  };
+  const label = status === "active" ? "Active" : status === "trial" ? "Trial" : status === "suspended" ? "Suspended" : status;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${styles[status] ?? "bg-slate-100 text-slate-600"}`}>
+      {label}
+    </span>
+  );
+}
 
 export const TenantDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<any>(null);
+  const [plans, setPlans] = useState<{ id: string; code: string; name: string }[]>([]);
+
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState("active");
+  const [planCode, setPlanCode] = useState("starter");
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
+  const [timezone, setTimezone] = useState("Africa/Kampala");
   const [customDomain, setCustomDomain] = useState("");
 
   const load = async () => {
     if (!slug) return;
     setLoading(true);
     try {
-      const res = await api.get(`/api/platform/tenants/${slug}`);
-      setDetail(res.data);
-      setCustomDomain(res.data?.domain?.customDomain ?? "");
+      const [res] = await Promise.all([
+        api.get(`/api/platform/tenants/${slug}`),
+        api.get("/api/platform/plans").then((r) => setPlans(r.data ?? [])).catch(() => {}),
+      ]);
+      const d = res.data;
+      setDetail(d);
+      setName(d.tenant?.name ?? "");
+      setStatus(d.tenant?.status ?? "active");
+      setPlanCode(d.plan?.code ?? "starter");
+      setCountry(d.settings?.country || DEFAULT_COUNTRY);
+      setCurrency(d.settings?.currency ?? DEFAULT_CURRENCY);
+      setTimezone(d.settings?.timezone ?? "Africa/Kampala");
+      setCustomDomain(d.domain?.customDomain ?? "");
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -25,7 +92,30 @@ export const TenantDetail: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, [slug]);
+  useEffect(() => {
+    load();
+  }, [slug]);
+
+  const saveProfile = async () => {
+    if (!slug) return;
+    setSaving(true);
+    try {
+      await api.patch(`/api/platform/tenants/${slug}`, {
+        name: name.trim(),
+        status,
+        planCode,
+        country,
+        currency,
+        timezone,
+      });
+      toast("School profile saved", "success");
+      await load();
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const saveDomain = async () => {
     try {
@@ -57,6 +147,26 @@ export const TenantDetail: React.FC = () => {
     }
   };
 
+  const saveFeatures = async () => {
+    if (!detail?.features?.length) return;
+    try {
+      await api.patch(`/api/platform/tenants/${slug}/features`, {
+        features: detail.features.map((f: any) => ({ code: f.code, enabled: f.enabled })),
+      });
+      toast("Module flags saved", "success");
+      await load();
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
+  const setFeatureEnabled = (code: string, enabled: boolean) => {
+    setDetail((prev: any) => ({
+      ...prev,
+      features: prev.features.map((f: any) => (f.code === code ? { ...f, enabled } : f)),
+    }));
+  };
+
   const generateLines = async () => {
     try {
       const res = await api.post(`/api/platform/tenants/${slug}/usage/generate-lines`, {
@@ -73,127 +183,352 @@ export const TenantDetail: React.FC = () => {
     try {
       const res = await api.post(`/api/platform/tenants/${slug}/impersonate`);
       window.open(res.data.url, "_blank", "noopener,noreferrer");
-      toast("Shadow session opened in new tab (read-only)", "success");
+      toast("Opened school session (read-only)", "success");
     } catch (e: any) {
       toast(e.message, "error");
     }
   };
 
+  const schoolLoginUrl = useMemo(() => `/s/${slug}/login`, [slug]);
+
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      <div className="flex justify-center py-24">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
-  if (!detail) return <p className="text-slate-400">School not found.</p>;
+  if (!detail?.tenant) {
+    return (
+      <div className={`${CARD} text-center py-12`}>
+        <p className="text-slate-600">School not found.</p>
+        <Link to="/platform/tenants" className="text-blue-600 text-sm font-medium mt-2 inline-block">Back to schools</Link>
+      </div>
+    );
+  }
 
-  const { tenant, domain, addons, usage, billingLines, billingCycle, plan } = detail;
+  const { tenant, domain, addons, usage, billingLines, billingCycle, plan, stats, features } = detail;
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <Link to="/platform/tenants" className="text-slate-400 hover:text-slate-900">
+    <div className="max-w-[1200px] mx-auto space-y-4 sm:space-y-5 pb-8">
+      {/* Header */}
+      <div className={`${CARD} flex flex-col sm:flex-row sm:items-center gap-4`}>
+        <Link
+          to="/platform/tenants"
+          className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 shrink-0"
+          aria-label="Back to schools"
+        >
           <ArrowLeft size={18} />
         </Link>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">{tenant.name}</h2>
-          <p className="text-xs text-slate-500 font-mono">/s/{tenant.slug} · {plan?.name ?? "—"}</p>
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+            <Building2 size={22} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold text-slate-900 truncate">{tenant.name}</h1>
+              <StatusBadge status={tenant.status} />
+            </div>
+            <p className="text-sm text-slate-500 mt-0.5 font-mono truncate">
+              /s/{tenant.slug} · {plan?.name ?? "No plan"}
+            </p>
+            {stats?.adminEmail && (
+              <p className="text-xs text-slate-500 mt-1 truncate">Admin: {stats.adminEmail}</p>
+            )}
+          </div>
         </div>
-        <button type="button" onClick={shadow} className="ml-auto text-xs rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg">
-          Shadow (read-only)
-        </button>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <a
+            href={schoolLoginUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <ExternalLink size={15} />
+            Open school
+          </a>
+          <button
+            type="button"
+            onClick={shadow}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <UserCog size={15} />
+            Impersonate
+          </button>
+        </div>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm rounded-xl p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-          <Globe size={16} /> Domains & routing
-        </h3>
-        <p className="text-xs text-slate-400">
-          Subdomain: <span className="font-mono text-slate-300">{domain?.subdomain ?? tenant.slug}</span>
-          {domain?.suggestedSubdomainUrl && (
-            <> · <span className="font-mono text-blue-400">{domain.suggestedSubdomainUrl}</span></>
-          )}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <input
-            className="input text-sm flex-1 min-w-[200px]"
-            placeholder="erp.schoolname.ac.ug"
-            value={customDomain}
-            onChange={(e) => setCustomDomain(e.target.value)}
-          />
-          <button type="button" className="rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700" onClick={saveDomain}>Save domain</button>
-          <button type="button" className="text-sm border border-slate-700 px-3 py-2 rounded-lg text-slate-300" onClick={verifyDomain}>
-            Mark verified
-          </button>
-        </div>
-        {domain?.customDomain && (
-          <div className="text-xs text-slate-400 bg-slate-900/50 rounded-lg p-3 font-mono">
-            TXT {domain.dnsTxtRecord?.host} = {domain.dnsTxtRecord?.value}
-            <br />
-            Status: {domain.domainVerified ? "verified" : domain.sslStatus}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm rounded-xl p-6 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-          <Package size={16} /> Add-on marketplace
-        </h3>
-        {addons?.map((a: any) => (
-          <label key={a.code} className="flex justify-between items-center text-xs text-slate-300 border border-slate-800 rounded-lg px-3 py-2">
-            <span>
-              <strong className="text-slate-900">{a.name}</strong>
-              <span className="text-slate-500 ml-2">{a.code}</span>
-            </span>
-            <input
-              type="checkbox"
-              checked={a.active}
-              onChange={(e) => toggleAddon(a.code, e.target.checked)}
-            />
-          </label>
-        ))}
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm rounded-xl p-6 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-            <BarChart3 size={16} /> Usage billing — {billingCycle}
-          </h3>
-          <button type="button" className="rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700" onClick={generateLines}>
-            Generate overage lines
-          </button>
-        </div>
-        <div className="grid sm:grid-cols-3 gap-3">
-          {usage?.map((u: any) => (
-            <div key={u.metric} className="border border-slate-800 rounded-lg p-3">
-              <p className="text-[10px] uppercase text-slate-500">{u.metric}</p>
-              <p className="text-lg font-bold text-slate-900">{u.quantityUsed}</p>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Students", value: stats?.studentCount ?? 0, icon: GraduationCap },
+          { label: "Staff", value: stats?.staffCount ?? 0, icon: Users },
+          { label: "ERP users", value: stats?.erpUserCount ?? 0, icon: Users },
+        ].map((s) => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className={CARD}>
+              <div className="flex items-center gap-2 text-slate-500">
+                <Icon size={14} />
+                <span className="text-[11px] font-semibold uppercase tracking-wide">{s.label}</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-900 tabular-nums mt-1">{s.value}</p>
             </div>
-          ))}
-        </div>
-        {billingLines?.length > 0 && (
-          <table className="w-full text-xs text-slate-400">
-            <thead>
-              <tr className="text-left border-b border-slate-800">
-                <th className="py-2">Metric</th>
-                <th>Qty</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {billingLines.map((l: any) => (
-                <tr key={l.id} className="border-b border-slate-900/50">
-                  <td className="py-2">{l.metric}</td>
-                  <td>{l.quantity}</td>
-                  <td>{(l.amount / 100).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+          );
+        })}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* School profile CRUD */}
+        <section className={`${CARD} space-y-4 lg:col-span-2`}>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-slate-900">School profile</h2>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={saveProfile}
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Save size={15} />
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="sm:col-span-2">
+              <label className="text-xs font-medium text-slate-600">School name</label>
+              <input className="input text-sm mt-1 w-full" value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">URL slug</label>
+              <input className="input text-sm mt-1 w-full bg-slate-50 font-mono" value={tenant.slug} readOnly title="Auto-generated at creation" />
+              <p className="text-[10px] text-slate-400 mt-1">Generated automatically; used in /s/{tenant.slug}</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Status</label>
+              <select className="input text-sm mt-1 w-full" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="active">Active</option>
+                <option value="trial">Trial</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Subscription plan</label>
+              <select className="input text-sm mt-1 w-full" value={planCode} onChange={(e) => setPlanCode(e.target.value)}>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.code}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Country</label>
+              <select
+                className="input text-sm mt-1 w-full"
+                value={country}
+                onChange={(e) => {
+                  const c = e.target.value;
+                  setCountry(c);
+                  setCurrency(currencyForCountry(c));
+                }}
+              >
+                {COUNTRY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Currency</label>
+              <select className="input text-sm mt-1 w-full" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                {CURRENCY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>{c.code}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Timezone</label>
+              <select className="input text-sm mt-1 w-full" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                {TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* Domains */}
+        <section className={`${CARD} space-y-4`}>
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Globe size={16} className="text-blue-600" />
+            Domains & routing
+          </h2>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between gap-2 py-2 border-b border-slate-100">
+              <span className="text-slate-500">Subdomain</span>
+              <span className="font-mono text-slate-800">{domain?.subdomain ?? tenant.slug}</span>
+            </div>
+            {domain?.suggestedSubdomainUrl && (
+              <div className="flex justify-between gap-2 py-2 border-b border-slate-100">
+                <span className="text-slate-500">Path URL</span>
+                <a href={domain.suggestedSubdomainUrl} target="_blank" rel="noreferrer" className="text-blue-600 text-xs font-mono truncate max-w-[200px]">
+                  {domain.suggestedSubdomainUrl}
+                </a>
+              </div>
+            )}
+            <div className="flex justify-between gap-2 py-2">
+              <span className="text-slate-500">SSL / verify</span>
+              <span className={`text-xs font-medium ${domain?.domainVerified ? "text-emerald-600" : "text-amber-600"}`}>
+                {domain?.domainVerified ? "Verified" : domain?.sslStatus ?? "Pending"}
+              </span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600">Custom domain</label>
+            <input
+              className="input text-sm mt-1 w-full"
+              placeholder="erp.greenfield.ac.ug"
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={saveDomain} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              Save domain
+            </button>
+            <button
+              type="button"
+              onClick={verifyDomain}
+              disabled={!customDomain}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <CheckCircle2 size={15} />
+              Mark verified
+            </button>
+          </div>
+          {domain?.customDomain && domain?.dnsTxtRecord && (
+            <div className="rounded-md bg-slate-50 border border-slate-200 p-3 text-xs font-mono text-slate-600 break-all">
+              <p className="font-semibold text-slate-700 mb-1">DNS TXT record</p>
+              <p>{domain.dnsTxtRecord.host}</p>
+              <p className="mt-1 text-slate-800">{domain.dnsTxtRecord.value}</p>
+            </div>
+          )}
+        </section>
+
+        {/* Module flags */}
+        <section className={`${CARD} space-y-3`}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <SlidersHorizontal size={16} className="text-blue-600" />
+              Module flags
+            </h2>
+            <button type="button" onClick={saveFeatures} className="text-xs font-medium text-blue-600 hover:text-blue-700">
+              Save flags
+            </button>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {(features ?? []).map((f: any) => (
+              <label
+                key={f.code}
+                className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+              >
+                <span className="text-sm text-slate-800 min-w-0 truncate">{f.name}</span>
+                <input
+                  type="checkbox"
+                  checked={f.enabled}
+                  onChange={(e) => setFeatureEnabled(f.code, e.target.checked)}
+                  className="shrink-0 rounded border-slate-300 text-blue-600"
+                />
+              </label>
+            ))}
+            {(!features || features.length === 0) && (
+              <p className="text-sm text-slate-500">No modules configured.</p>
+            )}
+          </div>
+        </section>
+
+        {/* Add-ons */}
+        <section className={`${CARD} space-y-3 lg:col-span-2`}>
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Package size={16} className="text-blue-600" />
+            Add-on marketplace
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {addons?.map((a: any) => (
+              <label
+                key={a.code}
+                className={`flex items-start justify-between gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                  a.active ? "border-blue-200 bg-blue-50/50" : "border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">{a.name}</p>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">{a.code}</p>
+                  {a.priceMonthly != null && (
+                    <p className="text-xs text-slate-600 mt-1">{formatMoneyMinor(a.priceMonthly, currency)} / mo</p>
+                  )}
+                </div>
+                <input
+                  type="checkbox"
+                  checked={a.active}
+                  onChange={(e) => toggleAddon(a.code, e.target.checked)}
+                  className="shrink-0 mt-0.5 rounded border-slate-300 text-blue-600"
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {/* Usage billing */}
+        <section className={`${CARD} space-y-4 lg:col-span-2`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <BarChart3 size={16} className="text-blue-600" />
+              Usage billing — {billingCycle}
+            </h2>
+            <button
+              type="button"
+              onClick={generateLines}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Generate overage lines
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {usage?.map((u: any) => (
+              <div key={u.metric} className="rounded-md border border-slate-100 bg-slate-50/80 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 truncate">{u.metric}</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">{u.quantityUsed}</p>
+              </div>
+            ))}
+            {(!usage || usage.length === 0) && (
+              <p className="text-sm text-slate-500 col-span-full">No usage recorded this cycle.</p>
+            )}
+          </div>
+          {billingLines?.length > 0 && (
+            <div className="overflow-x-auto rounded-md border border-slate-100">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2">Metric</th>
+                    <th className="px-3 py-2">Qty</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {billingLines.map((l: any) => (
+                    <tr key={l.id}>
+                      <td className="px-3 py-2 text-slate-800">{l.description}</td>
+                      <td className="px-3 py-2 text-slate-500 font-mono text-xs">{l.metric ?? "—"}</td>
+                      <td className="px-3 py-2 tabular-nums">{l.quantity}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium">{formatMoneyMinor(l.amount, currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 };

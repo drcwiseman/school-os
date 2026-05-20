@@ -42,11 +42,12 @@ import {
   getTenantUsage, generateBillingLines, getBillingLines, currentBillingCycle,
 } from "../services/usage-billing";
 import { listPlatformTenants } from "../services/platform-tenants-list";
+import { slugifySchoolName, uniqueTenantSlug } from "../lib/slug";
 
 const router = Router();
 
 const createTenantSchema = z.object({
-  slug: z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+  slug: z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens").optional(),
   name: z.string().min(1),
   adminEmail: z.string().email(),
   adminPassword: z.string().min(8),
@@ -234,10 +235,10 @@ router.get("/plans", requirePlatformAuth, requirePlatformPermission("plans.read"
 
 router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.provision"), validate({ body: createTenantSchema }), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { slug, name, adminEmail, adminPassword, adminFirstName, adminLastName, planCode, country, currency } = req.body;
-
-    const [existing] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
-    if (existing) throw new ConflictError("School slug already taken");
+    const { name, adminEmail, adminPassword, adminFirstName, adminLastName, planCode, country, currency } = req.body;
+    const slug = req.body.slug?.trim()
+      ? slugifySchoolName(req.body.slug)
+      : await uniqueTenantSlug(name);
 
     let tenant: typeof tenants.$inferSelect;
     try {
@@ -336,6 +337,8 @@ router.get("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("ten
       .innerJoin(plans, eq(tenantPlans.planId, plans.id))
       .where(eq(tenantPlans.tenantId, tenant.id)).limit(1);
     const cycle = currentBillingCycle();
+    const listRow = (await listPlatformTenants()).find((t) => t.id === tenant.id);
+    const features = await getTenantFeaturesDetailed(tenant.id);
     res.json({
       success: true,
       data: {
@@ -344,9 +347,18 @@ router.get("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("ten
         plan: tp?.plan ?? null,
         domain: getDomainInstructions(tenant),
         addons: await getTenantAddonsDetailed(tenant.id),
+        features,
         usage: await getTenantUsage(tenant.id, cycle),
         billingLines: await getBillingLines(tenant.id, cycle),
         billingCycle: cycle,
+        stats: listRow
+          ? {
+              studentCount: listRow.studentCount,
+              staffCount: listRow.staffCount,
+              erpUserCount: listRow.erpUserCount,
+              adminEmail: listRow.adminEmail,
+            }
+          : { studentCount: 0, staffCount: 0, erpUserCount: 0, adminEmail: null },
       },
     });
   } catch (err) { next(err); }
@@ -521,16 +533,46 @@ router.patch("/tenants/:slug/feature-flags", requirePlatformAuth, requirePlatfor
 );
 
 router.patch("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("tenants.read"),
-  validate({ body: z.object({ name: z.string().min(1).max(200).optional() }) }),
+  validate({
+    body: z.object({
+      name: z.string().min(1).max(200).optional(),
+      status: z.enum(["active", "trial", "suspended"]).optional(),
+      planCode: z.string().optional(),
+      country: z.string().length(2).optional(),
+      currency: z.string().length(3).optional(),
+      timezone: z.string().optional(),
+    }),
+  }),
   async (req, res, next) => {
     try {
       const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
       if (!tenant) throw new NotFoundError("Tenant not found");
-      if (!req.body.name) return res.status(400).json({ success: false, message: "Nothing to update" });
-      const [updated] = await db.update(tenants)
-        .set({ name: req.body.name, updatedAt: new Date() })
-        .where(eq(tenants.id, tenant.id))
-        .returning();
+
+      if (req.body.name) {
+        await db.update(tenants).set({ name: req.body.name, updatedAt: new Date() }).where(eq(tenants.id, tenant.id));
+      }
+      if (req.body.status) {
+        await db.update(tenants).set({ status: req.body.status, updatedAt: new Date() }).where(eq(tenants.id, tenant.id));
+      }
+      if (req.body.planCode) {
+        const [plan] = await db.select().from(plans).where(eq(plans.code, req.body.planCode)).limit(1);
+        if (!plan) throw new NotFoundError("Plan not found");
+        await db.delete(tenantPlans).where(eq(tenantPlans.tenantId, tenant.id));
+        await db.insert(tenantPlans).values({ tenantId: tenant.id, planId: plan.id });
+      }
+      const settingsPatch: Record<string, unknown> = { updatedAt: new Date() };
+      if (req.body.country !== undefined) settingsPatch.country = req.body.country.toUpperCase();
+      if (req.body.currency !== undefined) {
+        const c = req.body.currency.toUpperCase();
+        if (!CURRENCY_CODES.has(c)) return res.status(400).json({ success: false, message: "Unsupported currency" });
+        settingsPatch.currency = c;
+      }
+      if (req.body.timezone !== undefined) settingsPatch.timezone = req.body.timezone;
+      if (Object.keys(settingsPatch).length > 1) {
+        await db.update(tenantSettings).set(settingsPatch).where(eq(tenantSettings.tenantId, tenant.id));
+      }
+
+      const [updated] = await db.select().from(tenants).where(eq(tenants.id, tenant.id)).limit(1);
       res.json({ success: true, data: updated });
     } catch (err) { next(err); }
   },

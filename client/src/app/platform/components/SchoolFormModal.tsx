@@ -9,6 +9,7 @@ import {
   DEFAULT_CURRENCY,
   currencyForCountry,
 } from "../../../lib/currencies";
+import { slugifySchoolName } from "../../../lib/slug";
 
 export type TenantRow = {
   id: string;
@@ -24,7 +25,6 @@ export type TenantRow = {
 type Plan = { id: string; code: string; name: string };
 
 const emptyCreate = {
-  slug: "",
   name: "",
   adminEmail: "",
   adminPassword: "",
@@ -121,20 +121,22 @@ export const SchoolFormModal: React.FC<{
         {mode === "create" ? (
           <form onSubmit={submitCreate} className="p-6 space-y-3">
             <div className="grid sm:grid-cols-2 gap-3">
-              <input
-                className="input text-sm"
-                placeholder="slug (school-a)"
-                required
-                value={createForm.slug}
-                onChange={(e) => setCreateForm({ ...createForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
-              />
-              <input
-                className="input text-sm"
-                placeholder="School name"
-                required
-                value={createForm.name}
-                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-              />
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-slate-600">School name</label>
+                <input
+                  className="input text-sm mt-1 w-full"
+                  placeholder="Greenfield Academy"
+                  required
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                />
+                {createForm.name.trim() && (
+                  <p className="text-[11px] text-slate-500 mt-1.5">
+                    URL slug: <span className="font-mono text-slate-700">{slugifySchoolName(createForm.name) || "—"}</span>
+                    <span className="text-slate-400"> (auto-generated)</span>
+                  </p>
+                )}
+              </div>
               <select
               className="input text-sm"
               value={createForm.country}
