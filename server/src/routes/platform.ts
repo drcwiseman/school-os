@@ -84,6 +84,12 @@ import {
   getPlatformDeliveryLogDetail,
 } from "../services/platform-system-logs";
 import {
+  getPlatformQueueHub,
+  getPlatformQueueJobDetail,
+  retryPlatformJob,
+  triggerQueueProcessing,
+} from "../services/platform-queue";
+import {
   getPlatformSupportHub,
   createPlatformSupportTicket,
   updatePlatformSupportTicket,
@@ -946,6 +952,46 @@ router.get("/logs/delivery/:id", requirePlatformAuth, requirePlatformPermission(
     const detail = await getPlatformDeliveryLogDetail(req.params.id);
     if (!detail) throw new NotFoundError("Delivery log not found");
     res.json({ success: true, data: detail });
+  } catch (err) { next(err); }
+});
+
+router.get("/queue", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const days = req.query.days != null ? Number(req.query.days) : undefined;
+    const data = await getPlatformQueueHub({
+      status: typeof req.query.status === "string" ? req.query.status : undefined,
+      type: typeof req.query.type === "string" ? req.query.type : undefined,
+      tenantId: typeof req.query.tenantId === "string" ? req.query.tenantId : undefined,
+      days: Number.isFinite(days) && days! > 0 ? days : undefined,
+      limit: req.query.limit != null ? Number(req.query.limit) : undefined,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
+
+router.post("/queue/process", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await triggerQueueProcessing() });
+  } catch (err) { next(err); }
+});
+
+router.get("/queue/:id", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformQueueJobDetail(req.params.id) });
+  } catch (err) { next(err); }
+});
+
+router.post("/queue/:id/retry", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+    const data = await retryPlatformJob(req.params.id);
+    await logPlatformAction(admin?.id, "queue.job.retry", {
+      tenantId: data.tenantId,
+      entityType: "job",
+      entityId: req.params.id,
+      ip: req.ip,
+    });
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 });
 

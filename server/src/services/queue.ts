@@ -2,6 +2,7 @@ import { db } from "../db";
 import { jobs } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { processCampaignJob } from "./campaign-worker";
+import { NotFoundError, BadRequestError } from "../middleware/error";
 
 let processing = false;
 
@@ -31,4 +32,19 @@ export async function tick() {
   } finally {
     processing = false;
   }
+}
+
+export async function retryJob(jobId: string) {
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+  if (!job) throw new NotFoundError("Job not found");
+  if (job.status === "running") {
+    throw new BadRequestError("Cannot retry a job that is currently running");
+  }
+  const [updated] = await db
+    .update(jobs)
+    .set({ status: "pending", error: null, updatedAt: new Date() })
+    .where(eq(jobs.id, jobId))
+    .returning();
+  tick();
+  return updated;
 }
