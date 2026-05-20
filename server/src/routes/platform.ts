@@ -18,7 +18,11 @@ import {
   enableDefaultFeaturesForTenant,
 } from "../services/tenant-features";
 import { hashPassword } from "../middleware/auth";
-import { createPlatformSession, requirePlatformAuth, verifyPassword } from "../middleware/platform-auth";
+import {
+  createPlatformSession, requirePlatformAuth, verifyPassword,
+  revokePlatformSession, clearPlatformSessionCookie,
+} from "../middleware/platform-auth";
+import { platformSessionCookieOptions } from "../lib/platform-cookie";
 import { validate } from "../utils/validate";
 import { NotFoundError, ConflictError, UnauthorizedError } from "../middleware/error";
 import { requirePlatformPermission } from "../lib/platform-permissions";
@@ -59,10 +63,7 @@ router.post("/auth/login", validate({ body: z.object({ email: z.string().email()
     const valid = await verifyPassword(req.body.password, admin.passwordHash);
     if (!valid) throw new UnauthorizedError("Invalid credentials");
     const session = await createPlatformSession(admin.id);
-    res.cookie("platform_session_token", session.token, {
-      httpOnly: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000,
-      secure: process.env.NODE_ENV === "production",
-    });
+    res.cookie("platform_session_token", session.token, platformSessionCookieOptions());
     res.json({ success: true, admin: platformAdminPublic(admin) });
   } catch (err) { next(err); }
 });
@@ -74,10 +75,40 @@ router.get("/auth/me", requirePlatformAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post("/auth/logout", requirePlatformAuth, async (req, res) => {
-  res.clearCookie("platform_session_token");
+router.post("/auth/logout", async (req, res) => {
+  const token = req.cookies?.platform_session_token as string | undefined;
+  await revokePlatformSession(token);
+  clearPlatformSessionCookie(res);
   res.json({ success: true });
 });
+
+router.patch("/auth/profile", requirePlatformAuth,
+  validate({ body: z.object({ name: z.string().min(1).max(120) }) }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as any).platformAdmin;
+      const [updated] = await db.update(platformAdmins)
+        .set({ name: req.body.name })
+        .where(eq(platformAdmins.id, admin.id))
+        .returning(platformAdminAuthColumns);
+      res.json({ success: true, admin: platformAdminPublic(updated) });
+    } catch (err) { next(err); }
+  },
+);
+
+router.patch("/auth/password", requirePlatformAuth,
+  validate({ body: z.object({ currentPassword: z.string(), newPassword: z.string().min(8) }) }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as any).platformAdmin;
+      const valid = await verifyPassword(req.body.currentPassword, admin.passwordHash);
+      if (!valid) throw new UnauthorizedError("Current password is incorrect");
+      const passwordHash = await hashPassword(req.body.newPassword);
+      await db.update(platformAdmins).set({ passwordHash }).where(eq(platformAdmins.id, admin.id));
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/currencies", requirePlatformAuth, async (_req, res) => {
   res.json({ success: true, data: SUPPORTED_CURRENCIES });
@@ -497,6 +528,22 @@ router.patch("/tenants/:slug/feature-flags", requirePlatformAuth, requirePlatfor
       res.json({ success: true, data: merged });
     } catch (err) { next(err); }
   }
+);
+
+router.patch("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("tenants.read"),
+  validate({ body: z.object({ name: z.string().min(1).max(200).optional() }) }),
+  async (req, res, next) => {
+    try {
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      if (!req.body.name) return res.status(400).json({ success: false, message: "Nothing to update" });
+      const [updated] = await db.update(tenants)
+        .set({ name: req.body.name, updatedAt: new Date() })
+        .where(eq(tenants.id, tenant.id))
+        .returning();
+      res.json({ success: true, data: updated });
+    } catch (err) { next(err); }
+  },
 );
 
 router.patch("/tenants/:slug/status", requirePlatformAuth, requirePlatformPermission("tenants.suspend"),

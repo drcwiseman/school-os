@@ -12,10 +12,13 @@ import {
   Download,
   Calendar,
   Activity,
+  Plus,
+  Pencil,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { formatMoneyMinor } from "../../lib/currencies";
+import { SchoolFormModal, type TenantRow as ModalTenant } from "./components/SchoolFormModal";
 
 type TenantRow = {
   id: string;
@@ -98,6 +101,9 @@ export const PlatformDashboard: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
+  const [editTenant, setEditTenant] = useState<TenantRow | null>(null);
 
   const load = async () => {
     try {
@@ -144,10 +150,32 @@ export const PlatformDashboard: React.FC = () => {
       .sort((a, b) => b.count - a.count);
   }, [tenants]);
 
-  const topSchools = useMemo(
-    () => [...tenants].sort((a, b) => (b.studentCount ?? 0) - (a.studentCount ?? 0)).slice(0, 5),
+  const sortedSchools = useMemo(
+    () => [...tenants].sort((a, b) => (b.studentCount ?? 0) - (a.studentCount ?? 0)),
     [tenants],
   );
+
+  const openCreate = () => {
+    setModalMode("create");
+    setEditTenant(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (t: TenantRow) => {
+    setModalMode("edit");
+    setEditTenant(t);
+    setModalOpen(true);
+  };
+
+  const updateStatus = async (slug: string, status: string) => {
+    try {
+      await api.patch(`/api/platform/tenants/${slug}/status`, { status });
+      toast("Status updated", "success");
+      await load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
 
   if (loading) {
     return (
@@ -413,32 +441,69 @@ export const PlatformDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
         {/* Top Schools Table */}
         <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col overflow-hidden min-h-0">
-          <div className="p-6 pb-4">
+          <div className="p-6 pb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-bold text-slate-900">Schools overview</h3>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              <Plus size={14} />
+              Add
+            </button>
           </div>
-          <div className="overflow-x-auto flex-1 px-2">
+          <div className="overflow-x-auto flex-1 px-2 max-h-[420px] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead>
+              <thead className="sticky top-0 bg-white z-[1]">
                 <tr className="border-b border-slate-100 text-xs font-semibold text-slate-500">
                   <th className="px-4 py-3 font-medium">School Name</th>
                   <th className="px-4 py-3 font-medium">Plan</th>
                   <th className="px-4 py-3 font-medium">Students</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {topSchools.map((t) => (
+                {sortedSchools.map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3.5 font-semibold text-slate-800">
                       <Link to={`/platform/tenants/${t.slug}`} className="hover:text-indigo-600">{t.name}</Link>
                     </td>
                     <td className="px-4 py-3.5 text-slate-600">{t.planName ?? t.planCode ?? "—"}</td>
                     <td className="px-4 py-3.5 font-medium text-slate-900">{t.studentCount ?? 0}</td>
-                    <td className="px-4 py-3.5"><StatusPill status={t.status} /></td>
+                    <td className="px-4 py-3.5">
+                      <select
+                        className="text-xs rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700"
+                        value={t.status}
+                        onChange={(e) => updateStatus(t.slug, e.target.value)}
+                      >
+                        <option value="active">Active</option>
+                        <option value="trial">Trial</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          title="Edit school"
+                          onClick={() => openEdit(t)}
+                          className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <Link
+                          to={`/platform/tenants/${t.slug}`}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </td>
                   </tr>
                 ))}
-                {topSchools.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">No schools yet</td></tr>
+                {sortedSchools.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">No schools yet — add your first school above.</td></tr>
                 )}
               </tbody>
             </table>
@@ -559,22 +624,15 @@ export const PlatformDashboard: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      <SchoolFormModal
+        open={modalOpen}
+        mode={modalMode}
+        tenant={editTenant as ModalTenant | null}
+        onClose={() => setModalOpen(false)}
+        onSaved={() => load()}
+      />
     </div>
   );
 };
 
-function StatusPill({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    active: "bg-emerald-50 text-emerald-700 font-semibold",
-    trial: "bg-amber-50 text-amber-700 font-semibold",
-    suspended: "bg-red-50 text-red-700 font-semibold",
-  };
-  
-  const displayStatus = status === "active" ? "Active" : status === "trial" ? "Trial" : status === "suspended" ? "Suspended" : status;
-  
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs ${styles[status] ?? "bg-slate-100 text-slate-600 font-semibold"}`}>
-      {displayStatus}
-    </span>
-  );
-}

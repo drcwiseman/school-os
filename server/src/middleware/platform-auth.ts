@@ -6,6 +6,16 @@ import { platformAdminAuthColumns } from "../db/platform-admin-columns";
 import { eq, and, gt } from "drizzle-orm";
 import { UnauthorizedError } from "./error";
 import { hashPassword, verifyPassword } from "./auth";
+import { platformSessionClearCookieOptions } from "../lib/platform-cookie";
+
+export async function revokePlatformSession(token: string | undefined) {
+  if (!token) return;
+  await db.delete(platformSessions).where(eq(platformSessions.token, token));
+}
+
+export function clearPlatformSessionCookie(res: import("express").Response) {
+  res.clearCookie("platform_session_token", platformSessionClearCookieOptions());
+}
 
 export async function createPlatformSession(adminId: string) {
   const token = crypto.randomBytes(48).toString("hex");

@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import React, { useEffect, useMemo } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Building2, CreditCard, Globe, Link as LinkIcon,
   Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft,
@@ -8,6 +8,20 @@ import {
   Blocks, DatabaseBackup, Loader2, Search, Bell, HelpCircle, Menu,
 } from "lucide-react";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
+import { PlatformUserMenu } from "./components/PlatformUserMenu";
+
+const PAGE_TITLES: Record<string, string> = {
+  "/platform/dashboard": "Dashboard",
+  "/platform/profile": "Profile",
+  "/platform/tenants": "Schools",
+  "/platform/subscriptions/plans": "Plans & Pricing",
+  "/platform/subscriptions/ledger": "Revenue",
+  "/platform/domains": "Domains",
+  "/platform/marketplace": "Add-ons Marketplace",
+  "/platform/system/audit": "Audit Logs",
+  "/platform/system/queue": "Job Queue",
+  "/platform/support": "Support Tickets",
+};
 
 const navGroups = [
   {
@@ -55,7 +69,14 @@ const navGroups = [
 ];
 
 export const PlatformLayout: React.FC = () => {
-  const { ready, logout } = usePlatformAuth();
+  const { ready, admin, logout } = usePlatformAuth();
+  const location = useLocation();
+  const pageTitle = useMemo(() => {
+    if (location.pathname.startsWith("/platform/tenants/") && location.pathname !== "/platform/tenants") {
+      return "School details";
+    }
+    return PAGE_TITLES[location.pathname] ?? "Platform";
+  }, [location.pathname]);
 
   useEffect(() => {
     document.body.classList.add("platform-active");
@@ -134,7 +155,7 @@ export const PlatformLayout: React.FC = () => {
             <button type="button" className="lg:hidden text-slate-500 hover:text-slate-700 shrink-0">
               <Menu size={20} />
             </button>
-            <h1 className="text-xl font-bold text-slate-800 hidden sm:block truncate">Dashboard</h1>
+            <h1 className="text-xl font-bold text-slate-800 hidden sm:block truncate">{pageTitle}</h1>
           </div>
 
           <div className="flex items-center gap-3 sm:gap-5 shrink-0">
@@ -160,19 +181,7 @@ export const PlatformLayout: React.FC = () => {
               <HelpCircle size={20} />
             </button>
 
-            <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
-              <button
-                type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-sm shadow-sm"
-                onClick={logout}
-              >
-                PA
-              </button>
-              <button type="button" className="hidden sm:block text-left" onClick={logout}>
-                <p className="text-sm font-semibold text-slate-700 leading-tight">Platform Admin</p>
-                <p className="text-[11px] text-slate-500">Super Admin</p>
-              </button>
-            </div>
+            <PlatformUserMenu admin={admin} onLogout={logout} />
           </div>
         </header>
 

@@ -6,6 +6,7 @@ export const platformAdminAuthColumns = {
   email: platformAdmins.email,
   passwordHash: platformAdmins.passwordHash,
   name: platformAdmins.name,
+  role: platformAdmins.role,
 };
 
 export function platformAdminPublic(row: {

@@ -26,6 +26,7 @@ import { PortalDashboard } from "./pages/PortalDashboard";
 import { PlatformLogin } from "./pages/PlatformLogin";
 import { PlatformLayout } from "./platform/PlatformLayout";
 import { PlatformDashboard } from "./platform/Dashboard";
+import { PlatformProfile } from "./platform/PlatformProfile";
 import { TenantHub } from "./platform/Tenants/TenantHub";
 import { TenantDetail } from "./platform/Tenants/TenantDetail";
 import { DomainsHub } from "./platform/Tenants/Domains";
@@ -62,6 +63,7 @@ export const AppRoutes = () => {
       <Route path="/platform/login" element={<PlatformLogin />} />
       <Route path="/platform" element={<PlatformLayout />}>
         <Route path="dashboard" element={<PlatformDashboard />} />
+        <Route path="profile" element={<PlatformProfile />} />
         <Route path="tenants" element={<TenantHub />} />
         <Route path="tenants/:slug" element={<TenantDetail />} />
         <Route path="subscriptions" element={<Navigate to="/platform/subscriptions/plans" replace />} />
