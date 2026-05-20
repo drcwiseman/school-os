@@ -110,6 +110,12 @@ import {
 } from "../services/platform-email-settings";
 import { listPlatformEmailLogs } from "../services/platform-email-log";
 import {
+  getPlatformIntegrationsHub,
+  getPlatformIntegrationConfig,
+  updatePlatformIntegrationConfig,
+  testPlatformIntegrationConnection,
+} from "../services/platform-integrations-settings";
+import {
   getPlatformSupportHub,
   createPlatformSupportTicket,
   updatePlatformSupportTicket,
@@ -472,6 +478,49 @@ router.get("/settings/email/logs", requirePlatformAuth, requirePlatformPermissio
     const status = typeof req.query.status === "string" ? req.query.status : "all";
     const limit = req.query.limit != null ? Number(req.query.limit) : 100;
     res.json({ success: true, data: await listPlatformEmailLogs({ status, limit }) });
+  } catch (err) { next(err); }
+});
+
+router.get("/settings/integrations", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformIntegrationsHub() });
+  } catch (err) { next(err); }
+});
+
+router.get("/settings/integrations/:code", requirePlatformAuth, requirePlatformPermission("plans.read"), async (req, res, next) => {
+  try {
+    const data = await getPlatformIntegrationConfig(req.params.code);
+    if (!data) return next(new NotFoundError("Integration not found"));
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
+
+router.patch("/settings/integrations/:code", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      enabled: z.boolean().optional(),
+      credentials: z.record(z.string()).optional(),
+      notes: z.string().max(2000).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await updatePlatformIntegrationConfig(req.params.code, req.body);
+      await logPlatformAction(admin?.id, "integration.update", {
+        entityType: "platform_integration",
+        entityId: req.params.code,
+        after: { enabled: data.enabled, configured: data.configured },
+      });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/settings/integrations/:code/test", requirePlatformAuth, requirePlatformPermission("plans.write"), async (req, res, next) => {
+  try {
+    const data = await testPlatformIntegrationConnection(req.params.code);
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 });
 

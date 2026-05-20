@@ -48,6 +48,7 @@ import { AuditLogs } from "./platform/System/AuditLogs";
 import { SystemLogsHub } from "./platform/System/SystemLogsHub";
 import { PlatformMediaLibrary } from "./platform/Media/PlatformMediaLibrary";
 import { PlatformEmailSettings } from "./platform/PlatformEmailSettings";
+import { PlatformIntegrationsSettings } from "./platform/PlatformIntegrationsSettings";
 import { PlatformPlaceholder } from "./platform/PlatformPlaceholder";
 import { Settings } from "./pages/Settings";
 import { FeatureRoute } from "./components/FeatureRoute";
@@ -100,7 +101,7 @@ export const AppRoutes = () => {
         <Route path="settings/marketing" element={<PlatformMarketing />} />
         <Route path="settings/flags" element={<Navigate to="/platform/tenants" replace />} />
         <Route path="settings/email" element={<PlatformEmailSettings />} />
-        <Route path="settings/integrations" element={stub("Integrations")} />
+        <Route path="settings/integrations" element={<PlatformIntegrationsSettings />} />
         <Route path="settings/backup" element={stub("Backup & restore")} />
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>

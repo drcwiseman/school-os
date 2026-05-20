@@ -33,6 +33,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/support": "Support Tickets",
   "/platform/media": "Media Library",
   "/platform/settings/email": "Email & Delivery",
+  "/platform/settings/integrations": "Integrations",
 };
 
 const navGroups = [
