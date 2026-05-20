@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "./index";
+import { FEATURE_CATALOG } from "../lib/feature-catalog";
 
 /**
  * Idempotent fixes for VPS DBs that lag behind code. Runs once at server boot.
@@ -110,6 +111,8 @@ export async function ensureRuntimeSchema() {
       ('white_label', 'White-Label Branding', 'Full custom domain, SMTP mail transport, and customized logo assets', 4900),
       ('multi_campus', 'Multi-Campus Nodes Scaling', 'Manage distinct geographical branches under a centralized dashboard', 9900)
     ON CONFLICT ("code") DO NOTHING`,
+    `ALTER TABLE "features" ADD COLUMN IF NOT EXISTS "category" text NOT NULL DEFAULT 'modules'`,
+    `ALTER TABLE "tenant_settings" ADD COLUMN IF NOT EXISTS "smtp_settings_json" jsonb NOT NULL DEFAULT '{}'::jsonb`,
   ];
 
   for (const stmt of statements) {
@@ -117,6 +120,21 @@ export async function ensureRuntimeSchema() {
       await db.execute(sql.raw(stmt));
     } catch (err) {
       console.warn("[ensureRuntimeSchema] skipped:", (err as Error).message?.slice(0, 120));
+    }
+  }
+
+  for (const f of FEATURE_CATALOG) {
+    try {
+      await db.execute(sql`
+        INSERT INTO "features" ("code", "name", "description", "category")
+        VALUES (${f.code}, ${f.name}, ${f.description}, ${f.category})
+        ON CONFLICT ("code") DO UPDATE SET
+          "name" = EXCLUDED."name",
+          "description" = EXCLUDED."description",
+          "category" = EXCLUDED."category"
+      `);
+    } catch (err) {
+      console.warn("[ensureRuntimeSchema] feature:", f.code, (err as Error).message?.slice(0, 80));
     }
   }
 }

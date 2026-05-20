@@ -21,6 +21,7 @@ import {
   DEFAULT_CURRENCY,
   currencyForCountry,
 } from "../../../lib/currencies";
+import { FEATURE_CATEGORY_LABELS, FEATURE_CATEGORY_ORDER } from "../../../lib/feature-catalog";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -29,7 +30,27 @@ type CatalogFeature = {
   code: string;
   name: string;
   description: string;
+  category?: string;
 };
+
+function categoryLabel(cat?: string) {
+  return FEATURE_CATEGORY_LABELS[cat ?? "modules"] ?? cat ?? "Other";
+}
+
+function groupCatalogByCategory(items: CatalogFeature[]) {
+  const groups = new Map<string, CatalogFeature[]>();
+  for (const f of items) {
+    const cat = f.category ?? "modules";
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat)!.push(f);
+  }
+  const order = [...FEATURE_CATEGORY_ORDER];
+  return [...groups.entries()].sort(([a], [b]) => {
+    const ia = order.indexOf(a as typeof FEATURE_CATEGORY_ORDER[number]);
+    const ib = order.indexOf(b as typeof FEATURE_CATEGORY_ORDER[number]);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
 
 type PlanRow = {
   id: string;
@@ -517,10 +538,24 @@ export const PlanManager: React.FC = () => {
                   </p>
                 )}
 
-                <div className="space-y-2 max-h-56 overflow-y-auto mb-3">
-                  {assignedCodes.map((code) => {
-                    const meta = catalog.find((f) => f.code === code);
-                    return (
+                <div className="space-y-3 max-h-64 overflow-y-auto mb-3">
+                  {groupCatalogByCategory(
+                    assignedCodes.map((code) => catalog.find((f) => f.code === code) ?? {
+                      id: code,
+                      code,
+                      name: code,
+                      description: "",
+                      category: "modules",
+                    }),
+                  ).map(([cat, items]) => (
+                    <div key={cat}>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                        {categoryLabel(cat)}
+                      </p>
+                      <div className="space-y-2">
+                        {items.map((meta) => {
+                          const code = meta.code;
+                          return (
                       <div
                         key={code}
                         className="rounded-md border border-slate-200 bg-slate-50/50 px-3 py-2.5"
@@ -554,8 +589,11 @@ export const PlanManager: React.FC = () => {
                           </span>
                         </label>
                       </div>
-                    );
-                  })}
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {unassignedCatalog.length > 0 ? (
@@ -566,8 +604,12 @@ export const PlanManager: React.FC = () => {
                       onChange={(e) => setAddFeatureCode(e.target.value)}
                     >
                       <option value="">Add feature to plan…</option>
-                      {unassignedCatalog.map((f) => (
-                        <option key={f.id} value={f.code}>{f.name} ({f.code})</option>
+                      {groupCatalogByCategory(unassignedCatalog).map(([cat, items]) => (
+                        <optgroup key={cat} label={categoryLabel(cat)}>
+                          {items.map((f) => (
+                            <option key={f.id} value={f.code}>{f.name}</option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                     <button
@@ -588,16 +630,23 @@ export const PlanManager: React.FC = () => {
                 {catalog.length > 0 && (
                   <details className="mt-3">
                     <summary className="text-[11px] text-slate-500 cursor-pointer hover:text-slate-700">
-                      View full feature catalog ({catalog.length})
+                      View full catalog ({catalog.length} services — Odoo-class ERP)
                     </summary>
-                    <ul className="mt-2 space-y-1 text-[11px] text-slate-500 max-h-32 overflow-y-auto">
-                      {catalog.map((f) => (
-                        <li key={f.id}>
-                          <span className="font-medium text-slate-700">{f.name}</span>
-                          <span className="font-mono ml-1">({f.code})</span>
-                        </li>
+                    <div className="mt-2 max-h-40 overflow-y-auto space-y-2">
+                      {groupCatalogByCategory(catalog).map(([cat, items]) => (
+                        <div key={cat}>
+                          <p className="text-[10px] font-bold text-slate-600">{categoryLabel(cat)}</p>
+                          <ul className="text-[11px] text-slate-500">
+                            {items.map((f) => (
+                              <li key={f.id} className="py-0.5">
+                                <span className="font-medium text-slate-700">{f.name}</span>
+                                <span className="font-mono text-slate-400 ml-1">{f.code}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </details>
                 )}
               </div>

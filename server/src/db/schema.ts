@@ -29,6 +29,7 @@ export const features = pgTable("features", {
   code:        text("code").notNull().unique(),
   name:        text("name").notNull(),
   description: text("description").notNull().default(""),
+  category:    text("category").notNull().default("modules"),
   createdAt:   timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   codeIdx: uniqueIndex("features_code_idx").on(t.code),
@@ -54,10 +55,23 @@ export const tenantSettings = pgTable("tenant_settings", {
   country:          text("country").notNull().default(""),
   currency:         text("currency").notNull().default("UGX"),
   timezone:         text("timezone").notNull().default("UTC"),
+  smtpSettingsJson: jsonb("smtp_settings_json").$type<TenantSmtpSettings>().default({}),
   updatedAt:        timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
   tenantIdx: uniqueIndex("tenant_settings_tenant_idx").on(t.tenantId),
 }));
+
+export type TenantSmtpSettings = {
+  enabled?: boolean;
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  fromEmail?: string;
+  fromName?: string;
+  /** Stored encrypted-at-rest in future; never returned in full from API */
+  password?: string;
+};
 
 // ─── Users & Sessions ─────────────────────────────────────────────────────────
 

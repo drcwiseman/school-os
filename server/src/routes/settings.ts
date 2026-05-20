@@ -2,18 +2,48 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { tenantSettings } from "../db/schema";
+import type { TenantSmtpSettings } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
+import { requireTenantFeature } from "../middleware/require-feature";
 import { validate } from "../utils/validate";
 import { createAuditLog } from "../services/audit";
-import { NotFoundError } from "../middleware/error";
-import { getTenantFeatureFlags, setTenantFeaturesBulk } from "../services/tenant-features";
+import { NotFoundError, ForbiddenError } from "../middleware/error";
+import { getTenantFeatureFlags, setTenantFeaturesBulk, isTenantFeatureEnabled } from "../services/tenant-features";
 import { CURRENCY_CODES, defaultCurrencyForCountry } from "../lib/currencies";
+import {
+  maskSmtpForApi,
+  sendTenantEmail,
+  verifyTenantSmtp,
+  assertCustomSmtpAllowed,
+} from "../services/tenant-email";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
+
+const smtpBodySchema = z.object({
+  enabled: z.boolean().optional(),
+  host: z.string().min(1).optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  secure: z.boolean().optional(),
+  user: z.string().optional(),
+  fromEmail: z.string().email().optional(),
+  fromName: z.string().optional(),
+  password: z.string().optional(),
+});
+
+function mergeSmtp(
+  existing: TenantSmtpSettings,
+  patch: z.infer<typeof smtpBodySchema>,
+): TenantSmtpSettings {
+  const next: TenantSmtpSettings = { ...existing, ...patch };
+  if (patch.password === "") delete next.password;
+  if (patch.password && patch.password.length > 0) next.password = patch.password;
+  else if (!patch.password) next.password = existing.password;
+  return next;
+}
 
 router.get("/", ...guard, requirePermission("settings.view"), async (req, res, next) => {
   try {
@@ -21,11 +51,16 @@ router.get("/", ...guard, requirePermission("settings.view"), async (req, res, n
     const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
     if (!settings) throw new NotFoundError("Settings not found");
     const flags = await getTenantFeatureFlags(tenant.id);
+    const smtpAllowed = await isTenantFeatureEnabled(tenant.id, "custom_smtp");
     res.json({
       success: true,
       data: {
         ...settings,
         featureFlagsJson: { ...(settings.featureFlagsJson as object ?? {}), ...flags },
+        smtpSettingsJson: smtpAllowed
+          ? maskSmtpForApi(settings.smtpSettingsJson as TenantSmtpSettings)
+          : null,
+        customSmtpAllowed: smtpAllowed,
       },
     });
   } catch (e) { next(e); }
@@ -39,6 +74,7 @@ router.patch("/", ...guard, requirePermission("settings.manage"),
       timezone: z.string().min(1).optional(),
       brandingJson: z.record(z.string()).optional(),
       featureFlagsJson: z.record(z.boolean()).optional(),
+      smtpSettingsJson: smtpBodySchema.optional(),
     }),
   }),
   async (req, res, next) => {
@@ -65,6 +101,15 @@ router.patch("/", ...guard, requirePermission("settings.manage"),
         const merged = await setTenantFeaturesBulk(tenant.id, updates);
         patch.featureFlagsJson = merged;
       }
+      if (patch.smtpSettingsJson) {
+        try {
+          await assertCustomSmtpAllowed(tenant.id);
+        } catch {
+          return next(new ForbiddenError("Custom SMTP is not included in your subscription plan"));
+        }
+        const existing = (before.smtpSettingsJson ?? {}) as TenantSmtpSettings;
+        patch.smtpSettingsJson = mergeSmtp(existing, patch.smtpSettingsJson as z.infer<typeof smtpBodySchema>);
+      }
       const [updated] = await db.update(tenantSettings)
         .set({ ...patch, updatedAt: new Date() })
         .where(eq(tenantSettings.tenantId, tenant.id))
@@ -73,7 +118,51 @@ router.patch("/", ...guard, requirePermission("settings.manage"),
         tenantId: tenant.id, actorUserId: user.id, action: "settings.update",
         entityType: "tenant_settings", entityId: updated.id, before, after: updated, ip: req.ip,
       });
-      res.json({ success: true, data: updated });
+      const smtpAllowed = await isTenantFeatureEnabled(tenant.id, "custom_smtp");
+      res.json({
+        success: true,
+        data: {
+          ...updated,
+          smtpSettingsJson: smtpAllowed
+            ? maskSmtpForApi(updated.smtpSettingsJson as TenantSmtpSettings)
+            : null,
+        },
+      });
+    } catch (e) { next(e); }
+  },
+);
+
+router.post(
+  "/smtp/test",
+  ...guard,
+  requirePermission("settings.manage"),
+  requireTenantFeature("custom_smtp"),
+  validate({
+    body: z.object({
+      testEmail: z.string().email().optional(),
+      smtpSettingsJson: smtpBodySchema.optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+      if (!settings) throw new NotFoundError("Settings not found");
+      const existing = (settings.smtpSettingsJson ?? {}) as TenantSmtpSettings;
+      const smtp = req.body.smtpSettingsJson
+        ? mergeSmtp(existing, req.body.smtpSettingsJson)
+        : existing;
+
+      await verifyTenantSmtp(smtp);
+      const to = req.body.testEmail || user.email;
+      await sendTenantEmail(tenant.id, smtp, {
+        to,
+        subject: "SchoolOS SMTP test",
+        text: "If you received this message, your school's SMTP settings are working correctly.",
+        html: "<p>If you received this message, your school's <strong>SMTP settings</strong> are working correctly.</p>",
+      });
+      res.json({ success: true, message: `Test email sent to ${to}` });
     } catch (e) { next(e); }
   },
 );

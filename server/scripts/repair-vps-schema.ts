@@ -66,6 +66,7 @@ async function main() {
   await runSqlFile("0008_phase15_announcement_schedule.sql");
   await runSqlFile("0009_platform_geo_currency.sql");
   await runSqlFile("0010_saas_ecosystem.sql");
+  await runSqlFile("0011_feature_catalog_expansion.sql");
 
   console.log("\n✅ Repair applied.");
   console.log("Next:");

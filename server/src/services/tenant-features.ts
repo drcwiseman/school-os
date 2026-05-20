@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { features, tenantFeatures, tenantSettings } from "../db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { DEFAULT_TENANT_FEATURE_CODES } from "../lib/feature-catalog";
 
 const LEGACY_FLAG_MAP: Record<string, string> = {
   results_visible: "results_visible",
@@ -63,13 +64,14 @@ export async function setTenantFeature(
 }
 
 export async function listFeatureCatalog() {
-  return db.select().from(features).orderBy(asc(features.code));
+  return db.select().from(features).orderBy(asc(features.category), asc(features.code));
 }
 
 export type TenantFeatureRow = {
   code: string;
   name: string;
   description: string;
+  category: string;
   enabled: boolean;
 };
 
@@ -81,6 +83,7 @@ export async function getTenantFeaturesDetailed(tenantId: string): Promise<Tenan
     code: f.code,
     name: f.name,
     description: f.description,
+    category: f.category ?? "modules",
     enabled: flags[f.code] !== false,
   }));
 }
@@ -100,10 +103,10 @@ export async function setTenantFeaturesBulk(
   return merged;
 }
 
-/** Seed all catalog features as enabled for a new tenant. */
+/** Seed core ERP features for a new tenant; plan-gated extras stay off until assigned. */
 export async function enableDefaultFeaturesForTenant(tenantId: string) {
   const catalog = await listFeatureCatalog();
   for (const f of catalog) {
-    await setTenantFeature(tenantId, f.code, true);
+    await setTenantFeature(tenantId, f.code, DEFAULT_TENANT_FEATURE_CODES.has(f.code));
   }
 }
