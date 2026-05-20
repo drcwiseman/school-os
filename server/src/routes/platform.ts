@@ -29,6 +29,7 @@ import {
 } from "../services/platform-subscriptions";
 import { getPlatformRevenueLedger } from "../services/platform-revenue-ledger";
 import { getPlatformInvoicesLedger } from "../services/platform-invoices";
+import { getPlatformTransactionsLedger } from "../services/platform-transactions";
 import {
   setTenantFeature,
   listFeatureCatalog,
@@ -289,6 +290,12 @@ router.get("/revenue/ledger", requirePlatformAuth, requirePlatformPermission("st
 router.get("/invoices", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
   try {
     res.json({ success: true, data: await getPlatformInvoicesLedger() });
+  } catch (err) { next(err); }
+});
+
+router.get("/transactions", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformTransactionsLedger() });
   } catch (err) { next(err); }
 });
 
