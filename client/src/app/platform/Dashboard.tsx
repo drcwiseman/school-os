@@ -80,8 +80,10 @@ function StatusDonut({
   );
 }
 
+const CARD = "rounded-lg border border-slate-200 bg-white p-4 shadow-sm overflow-hidden min-w-0";
+
 const Sparkline = ({ color }: { color: string }) => (
-  <svg className="w-full h-8 mt-4 max-w-full" preserveAspectRatio="none" viewBox="0 0 100 30">
+  <svg className="w-full h-5 mt-2 max-w-full" preserveAspectRatio="none" viewBox="0 0 100 30">
     <path
       d="M0,25 C10,20 20,28 30,15 C40,5 50,18 60,10 C70,2 80,22 90,12 C95,7 100,15 100,15"
       fill="none"
@@ -94,6 +96,44 @@ const Sparkline = ({ color }: { color: string }) => (
 );
 
 type AuditRow = { action: string; tenant_name?: string; created_at: string; source: string };
+
+function KpiCard({
+  icon: Icon,
+  iconClass,
+  label,
+  title,
+  value,
+  sub,
+  subClass = "text-slate-500",
+  sparkColor,
+}: {
+  icon: React.ComponentType<{ size?: number }>;
+  iconClass: string;
+  label: string;
+  title?: string;
+  value: React.ReactNode;
+  sub: React.ReactNode;
+  subClass?: string;
+  sparkColor: string;
+}) {
+  return (
+    <div className={CARD}>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white ${iconClass}`}>
+          <Icon size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate" title={title ?? label}>
+            {label}
+          </p>
+          <p className="text-xl font-bold text-slate-900 tabular-nums truncate leading-tight mt-0.5">{value}</p>
+          <p className={`text-[11px] mt-0.5 truncate ${subClass}`}>{sub}</p>
+        </div>
+      </div>
+      <Sparkline color={sparkColor} />
+    </div>
+  );
+}
 
 export const PlatformDashboard: React.FC = () => {
   const { toast } = useToast();
@@ -186,123 +226,104 @@ export const PlatformDashboard: React.FC = () => {
   }
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="max-w-[1600px] mx-auto space-y-4 sm:space-y-5 animate-fade-in pb-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
-          <p className="mt-1 text-sm text-slate-500">Platform summary and key metrics</p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Platform summary and key metrics</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
-            <Calendar size={16} className="text-slate-500" />
-            May 13, 2025 - May 20, 2025
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+          >
+            <Plus size={15} />
+            Add school
           </button>
-          <button className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
-            <Download size={16} />
-            Export Report
+          <button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+            <Calendar size={15} className="text-slate-500 shrink-0" />
+            <span className="hidden sm:inline">May 13 – May 20</span>
+            <span className="sm:hidden">Date range</span>
+          </button>
+          <button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+            <Download size={15} />
+            Export
           </button>
         </div>
       </div>
 
       {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
-        {/* Total Schools */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-sm shrink-0">
-              <Building2 size={24} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-600">Total Schools</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{stats?.totalTenants ?? 0}</p>
-              <p className="text-xs font-medium text-slate-500 mt-1">{statusBreakdown.active} active</p>
-            </div>
-          </div>
-          <Sparkline color="#6366f1" />
-        </div>
-
-        {/* Active Schools */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm shrink-0">
-              <Users size={24} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-600">Active Schools</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{stats?.activeTenants ?? 0}</p>
-              <p className="text-xs font-medium text-emerald-600 mt-1">{statusBreakdown.pct(statusBreakdown.active)}% of total</p>
-            </div>
-          </div>
-          <Sparkline color="#10b981" />
-        </div>
-
-        {/* Total Subscriptions */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm shrink-0">
-              <Briefcase size={24} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-600">Total Subscriptions</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{stats?.totalTenants ?? 0}</p>
-              <p className="text-xs font-medium text-slate-500 mt-1">All provisioned schools</p>
-            </div>
-          </div>
-          <Sparkline color="#f59e0b" />
-        </div>
-
-        {/* MRR */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500 text-white shadow-sm shrink-0">
-              <Wallet size={24} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-600">Monthly Recurring Revenue</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{fmtMinor(stats?.mrr ?? 0)}</p>
-              <p className="text-xs font-medium text-slate-500 mt-1">ARR {fmtMinor(stats?.totalRevenue ?? 0)}</p>
-            </div>
-          </div>
-          <Sparkline color="#3b82f6" />
-        </div>
-
-        {/* Total Users */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500 text-white shadow-sm shrink-0">
-              <GraduationCap size={24} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-600">Total Users</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{(stats?.totalUsers ?? 0).toLocaleString()}</p>
-              <p className="text-xs font-medium text-slate-500 mt-1">{stats?.totalStudents ?? 0} students</p>
-            </div>
-          </div>
-          <Sparkline color="#a855f7" />
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-5 gap-3">
+        <KpiCard
+          icon={Building2}
+          iconClass="bg-indigo-500"
+          label="Schools"
+          title="Total Schools"
+          value={stats?.totalTenants ?? 0}
+          sub={`${statusBreakdown.active} active`}
+          sparkColor="#6366f1"
+        />
+        <KpiCard
+          icon={Users}
+          iconClass="bg-emerald-500"
+          label="Active"
+          title="Active Schools"
+          value={stats?.activeTenants ?? 0}
+          sub={`${statusBreakdown.pct(statusBreakdown.active)}% of total`}
+          subClass="text-emerald-600"
+          sparkColor="#10b981"
+        />
+        <KpiCard
+          icon={Briefcase}
+          iconClass="bg-amber-500"
+          label="Subscriptions"
+          title="Total Subscriptions"
+          value={stats?.totalTenants ?? 0}
+          sub="Provisioned"
+          sparkColor="#f59e0b"
+        />
+        <KpiCard
+          icon={Wallet}
+          iconClass="bg-blue-500"
+          label="MRR"
+          title="Monthly Recurring Revenue"
+          value={fmtMinor(stats?.mrr ?? 0)}
+          sub={`ARR ${fmtMinor(stats?.totalRevenue ?? 0)}`}
+          sparkColor="#3b82f6"
+        />
+        <KpiCard
+          icon={GraduationCap}
+          iconClass="bg-purple-500"
+          label="Users"
+          title="Total Users"
+          value={(stats?.totalUsers ?? 0).toLocaleString()}
+          sub={`${stats?.totalStudents ?? 0} students`}
+          sparkColor="#a855f7"
+        />
       </div>
 
       {/* Middle Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
         {/* Revenue Chart */}
-        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col min-h-0">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Revenue Overview</h3>
-              <div className="flex items-baseline gap-2 mt-2">
-                <p className="text-2xl font-bold text-slate-900">{fmtMinor(stats?.mrr ?? 0)}</p>
-                <p className="text-sm font-medium text-slate-500">Consolidated in {cur}</p>
+        <div className={`lg:col-span-2 ${CARD} flex flex-col min-h-0`}>
+          <div className="flex justify-between items-start gap-2 mb-3 min-w-0">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-slate-900">Revenue Overview</h3>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1 min-w-0">
+                <p className="text-lg font-bold text-slate-900 tabular-nums truncate">{fmtMinor(stats?.mrr ?? 0)}</p>
+                <p className="text-xs text-slate-500 truncate">in {cur}</p>
               </div>
             </div>
-            <select className="rounded-md border border-slate-200 text-sm py-1.5 px-3 bg-white text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+            <select className="shrink-0 rounded-md border border-slate-200 text-xs py-1 px-2 bg-white text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
               <option>This Month</option>
               <option>Last Month</option>
               <option>This Year</option>
             </select>
           </div>
           
-          <div className="relative mt-2 h-56 sm:h-64 w-full overflow-hidden shrink-0">
+          <div className="relative h-40 sm:h-44 w-full overflow-hidden shrink-0">
             {/* Dummy Line Chart Grid */}
             <div className="absolute inset-0 flex flex-col justify-between pt-1 pb-10 pl-10 pr-3">
               {[60, 45, 30, 15, 0].map((val) => (
@@ -362,10 +383,10 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* Subscription Status */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col min-h-0">
-          <h3 className="text-base font-bold text-slate-900 mb-4 shrink-0">Subscription Status</h3>
-          <div className="flex flex-col items-center gap-5 flex-1 min-h-0 justify-center py-1">
-            <div className="relative w-32 h-32 shrink-0 p-1">
+        <div className={`${CARD} flex flex-col min-h-0`}>
+          <h3 className="text-sm font-bold text-slate-900 mb-3 shrink-0">Subscription Status</h3>
+          <div className="flex flex-col items-center gap-3 flex-1 min-h-0 justify-center">
+            <div className="relative w-24 h-24 shrink-0">
               <StatusDonut
                 active={statusBreakdown.active}
                 trial={statusBreakdown.trial}
@@ -373,41 +394,33 @@ export const PlatformDashboard: React.FC = () => {
                 total={statusBreakdown.total}
               />
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-2xl font-bold text-slate-900">{statusBreakdown.total}</span>
-                <span className="text-xs text-slate-500">Total</span>
+                <span className="text-lg font-bold text-slate-900">{statusBreakdown.total}</span>
+                <span className="text-[10px] text-slate-500">Total</span>
               </div>
             </div>
 
-            <div className="space-y-3 w-full max-w-[200px]">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Active</p>
-                  <p className="text-xs text-slate-500">{statusBreakdown.active} ({statusBreakdown.pct(statusBreakdown.active)}%)</p>
+            <div className="space-y-2 w-full px-1">
+              {[
+                { label: "Active", count: statusBreakdown.active, pct: statusBreakdown.pct(statusBreakdown.active), color: "bg-emerald-500" },
+                { label: "Trial", count: statusBreakdown.trial, pct: statusBreakdown.pct(statusBreakdown.trial), color: "bg-amber-500" },
+                { label: "Suspended", count: statusBreakdown.suspended, pct: statusBreakdown.pct(statusBreakdown.suspended), color: "bg-red-500" },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center gap-2 min-w-0">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${row.color}`} />
+                  <div className="min-w-0 flex-1 flex justify-between gap-2 text-xs">
+                    <span className="font-medium text-slate-800 truncate">{row.label}</span>
+                    <span className="text-slate-500 shrink-0 tabular-nums">{row.count} ({row.pct}%)</span>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Trial</p>
-                  <p className="text-xs text-slate-500">{statusBreakdown.trial} ({statusBreakdown.pct(statusBreakdown.trial)}%)</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Suspended</p>
-                  <p className="text-xs text-slate-500">{statusBreakdown.suspended} ({statusBreakdown.pct(statusBreakdown.suspended)}%)</p>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
 
         {/* Recent Activity */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col overflow-hidden min-h-0">
-          <h3 className="text-base font-bold text-slate-900 mb-6">Recent Activity</h3>
-          <div className="space-y-4 flex-1">
+        <div className={`${CARD} flex flex-col min-h-0`}>
+          <h3 className="text-sm font-bold text-slate-900 mb-3">Recent Activity</h3>
+          <div className="space-y-3 flex-1 min-h-0">
             {audit.length === 0 ? (
               <p className="text-sm text-slate-500">No recent platform events yet.</p>
             ) : (
@@ -438,11 +451,11 @@ export const PlatformDashboard: React.FC = () => {
       </div>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
         {/* Top Schools Table */}
-        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col overflow-hidden min-h-0">
-          <div className="p-6 pb-4 flex items-center justify-between gap-3">
-            <h3 className="text-base font-bold text-slate-900">Schools overview</h3>
+        <div className={`lg:col-span-2 ${CARD} !p-0 flex flex-col min-h-0`}>
+          <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-slate-100">
+            <h3 className="text-sm font-bold text-slate-900">Schools overview</h3>
             <button
               type="button"
               onClick={openCreate}
@@ -452,28 +465,28 @@ export const PlatformDashboard: React.FC = () => {
               Add
             </button>
           </div>
-          <div className="overflow-x-auto flex-1 px-2 max-h-[420px] overflow-y-auto">
-            <table className="w-full text-sm text-left">
+          <div className="overflow-x-auto flex-1 max-h-80 overflow-y-auto">
+            <table className="w-full text-xs text-left">
               <thead className="sticky top-0 bg-white z-[1]">
-                <tr className="border-b border-slate-100 text-xs font-semibold text-slate-500">
-                  <th className="px-4 py-3 font-medium">School Name</th>
-                  <th className="px-4 py-3 font-medium">Plan</th>
-                  <th className="px-4 py-3 font-medium">Students</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                <tr className="border-b border-slate-100 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                  <th className="px-3 py-2 font-medium">School</th>
+                  <th className="px-3 py-2 font-medium">Plan</th>
+                  <th className="px-3 py-2 font-medium">Students</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {sortedSchools.map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3.5 font-semibold text-slate-800">
-                      <Link to={`/platform/tenants/${t.slug}`} className="hover:text-indigo-600">{t.name}</Link>
+                    <td className="px-3 py-2 font-medium text-slate-800 max-w-[140px]">
+                      <Link to={`/platform/tenants/${t.slug}`} className="hover:text-indigo-600 truncate block" title={t.name}>{t.name}</Link>
                     </td>
-                    <td className="px-4 py-3.5 text-slate-600">{t.planName ?? t.planCode ?? "—"}</td>
-                    <td className="px-4 py-3.5 font-medium text-slate-900">{t.studentCount ?? 0}</td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-3 py-2 text-slate-600 truncate max-w-[100px]" title={t.planName ?? t.planCode ?? ""}>{t.planName ?? t.planCode ?? "—"}</td>
+                    <td className="px-3 py-2 font-medium text-slate-900 tabular-nums">{t.studentCount ?? 0}</td>
+                    <td className="px-3 py-2">
                       <select
-                        className="text-xs rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700"
+                        className="text-[11px] rounded border border-slate-200 bg-white px-1.5 py-0.5 text-slate-700 max-w-full"
                         value={t.status}
                         onChange={(e) => updateStatus(t.slug, e.target.value)}
                       >
@@ -482,19 +495,19 @@ export const PlatformDashboard: React.FC = () => {
                         <option value="suspended">Suspended</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
                           title="Edit school"
                           onClick={() => openEdit(t)}
-                          className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                          className="p-1 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                         >
-                          <Pencil size={14} />
+                          <Pencil size={13} />
                         </button>
                         <Link
                           to={`/platform/tenants/${t.slug}`}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                          className="text-[11px] font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
                         >
                           View
                         </Link>
@@ -503,12 +516,12 @@ export const PlatformDashboard: React.FC = () => {
                   </tr>
                 ))}
                 {sortedSchools.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">No schools yet — add your first school above.</td></tr>
+                  <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">No schools yet.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="p-4 pt-2 text-right">
+          <div className="px-4 py-2 border-t border-slate-100 text-right">
             <Link to="/platform/tenants" className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1">
               View all schools <ChevronRight size={14} />
             </Link>
@@ -516,15 +529,15 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* Plan Distribution */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col overflow-hidden min-h-0">
-          <h3 className="text-base font-bold text-slate-900 mb-6">Plan Distribution</h3>
-          <div className="space-y-6 flex-1">
+        <div className={`${CARD} flex flex-col min-h-0`}>
+          <h3 className="text-sm font-bold text-slate-900 mb-3">Plan Distribution</h3>
+          <div className="space-y-4 flex-1">
             {planDistribution.map((p, i) => (
               <div key={p.name}>
-                <div className="flex justify-between text-sm mb-1.5">
-                  <span className="font-semibold text-slate-800">{p.name}</span>
-                  <span className="text-slate-600 font-medium">
-                    {p.count} <span className="text-slate-400 font-normal">({p.pct.toFixed(1)}%)</span>
+                <div className="flex justify-between gap-2 text-xs mb-1 min-w-0">
+                  <span className="font-semibold text-slate-800 truncate">{p.name}</span>
+                  <span className="text-slate-600 shrink-0 tabular-nums">
+                    {p.count} <span className="text-slate-400">({p.pct.toFixed(1)}%)</span>
                   </span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2">
@@ -547,63 +560,39 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* System Health */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col overflow-hidden min-h-0">
-          <h3 className="text-base font-bold text-slate-900 mb-6">System Health</h3>
-          <div className="space-y-5 flex-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Activity size={16} className="text-slate-400" />
-                <span className="text-sm font-medium text-slate-700">Server Status</span>
+        <div className={`${CARD} flex flex-col min-h-0`}>
+          <h3 className="text-sm font-bold text-slate-900 mb-3">System Health</h3>
+          <div className="space-y-3 flex-1">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Activity size={14} className="text-slate-400 shrink-0" />
+                <span className="text-xs font-medium text-slate-700 truncate">Server Status</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-emerald-600">All systems operational</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] font-medium text-emerald-600 truncate max-w-[120px]">Operational</span>
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
               </div>
             </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Globe size={16} className="text-slate-400" />
-                <span className="text-sm font-medium text-slate-700">Database</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-emerald-600">Healthy</span>
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Wallet size={16} className="text-slate-400" />
-                <span className="text-sm font-medium text-slate-700">Storage Usage</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-slate-600">62% used</span>
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <RefreshCw size={16} className="text-slate-400" />
-                <span className="text-sm font-medium text-slate-700">Background Jobs</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-amber-600">{stats?.failedJobs ?? 0} failed</span>
-                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users size={16} className="text-slate-400" />
-                <span className="text-sm font-medium text-slate-700">Email Queue</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-slate-600">{stats?.pendingJobs ?? 0} pending</span>
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              </div>
-            </div>
+            {[
+              { icon: Globe, label: "Database", value: "Healthy", valueClass: "text-emerald-600", dot: "bg-emerald-500" },
+              { icon: Wallet, label: "Storage", value: "62% used", valueClass: "text-slate-600", dot: "bg-emerald-500" },
+              { icon: RefreshCw, label: "Jobs", value: `${stats?.failedJobs ?? 0} failed`, valueClass: "text-amber-600", dot: "bg-amber-500" },
+              { icon: Users, label: "Email", value: `${stats?.pendingJobs ?? 0} pending`, valueClass: "text-slate-600", dot: "bg-emerald-500" },
+            ].map((row) => {
+              const Icon = row.icon;
+              return (
+                <div key={row.label} className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon size={14} className="text-slate-400 shrink-0" />
+                    <span className="text-xs font-medium text-slate-700 truncate">{row.label}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`text-[11px] font-medium truncate max-w-[100px] ${row.valueClass}`}>{row.value}</span>
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${row.dot}`} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="mt-4 text-right">
             <Link to="/platform/system/queue" className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1">
@@ -614,7 +603,7 @@ export const PlatformDashboard: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <footer className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-sm text-slate-500">
+      <footer className="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
         <p>© 2025 SchoolOS. All rights reserved.</p>
         <div className="flex items-center gap-6 mt-4 sm:mt-0">
           <span>Platform Version: v2.1.0</span>

@@ -185,7 +185,7 @@ export const PlatformLayout: React.FC = () => {
           </div>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6">
           <Outlet />
         </main>
       </div>
