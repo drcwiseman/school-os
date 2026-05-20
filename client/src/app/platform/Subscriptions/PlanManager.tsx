@@ -9,6 +9,7 @@ import {
   Check,
   Globe,
   Loader2,
+  MinusCircle,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
@@ -23,18 +24,11 @@ import {
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
-const FEATURE_LABELS: Record<string, string> = {
-  portal_enabled: "Parent portal",
-  messaging_enabled: "Messaging",
-  results_visible: "Results & reports",
-  fees_must_be_clear: "Fees transparency",
-};
-
-const DEFAULT_FEATURES: Record<string, boolean> = {
-  portal_enabled: false,
-  messaging_enabled: true,
-  results_visible: true,
-  fees_must_be_clear: false,
+type CatalogFeature = {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
 };
 
 type PlanRow = {
@@ -71,17 +65,35 @@ function slugifyCode(name: string) {
     .slice(0, 48);
 }
 
-function FeatureList({ features }: { features: Record<string, boolean> }) {
+function featureLabel(catalog: CatalogFeature[], code: string) {
+  return catalog.find((f) => f.code === code)?.name ?? code.replace(/_/g, " ");
+}
+
+function FeatureList({
+  features,
+  catalog,
+}: {
+  features: Record<string, boolean>;
+  catalog: CatalogFeature[];
+}) {
+  const assigned = Object.keys(features);
+  if (assigned.length === 0) {
+    return <p className="mt-3 text-xs text-slate-400">No features assigned — edit plan to add.</p>;
+  }
+  const ordered = catalog.length
+    ? catalog.filter((f) => f.code in features).map((f) => f.code)
+    : assigned;
+  const extra = assigned.filter((c) => !ordered.includes(c));
   return (
     <ul className="mt-3 space-y-1.5">
-      {Object.entries(FEATURE_LABELS).map(([key, label]) => {
-        const on = features[key] ?? DEFAULT_FEATURES[key] ?? false;
+      {[...ordered, ...extra].map((key) => {
+        const on = features[key];
         return (
           <li key={key} className="flex items-center gap-2 text-xs">
             <span className={`flex h-4 w-4 items-center justify-center rounded-full ${on ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
               {on ? <Check size={10} /> : <X size={10} />}
             </span>
-            <span className={on ? "text-slate-700" : "text-slate-400"}>{label}</span>
+            <span className={on ? "text-slate-700" : "text-slate-400"}>{featureLabel(catalog, key)}</span>
           </li>
         );
       })}
@@ -92,6 +104,7 @@ function FeatureList({ features }: { features: Record<string, boolean> }) {
 export const PlanManager: React.FC = () => {
   const { toast } = useToast();
   const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [catalog, setCatalog] = useState<CatalogFeature[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
@@ -105,9 +118,55 @@ export const PlanManager: React.FC = () => {
   const [formCode, setFormCode] = useState("");
   const [formName, setFormName] = useState("");
   const [formPriceMajor, setFormPriceMajor] = useState(0);
-  const [formFeatures, setFormFeatures] = useState<Record<string, boolean>>({ ...DEFAULT_FEATURES });
+  const [formFeatures, setFormFeatures] = useState<Record<string, boolean>>({});
+  const [addFeatureCode, setAddFeatureCode] = useState("");
   const [regionalRows, setRegionalRows] = useState<RegionalRow[]>([]);
   const [newRegional, setNewRegional] = useState({ countryCode: "UG", currency: "UGX", priceMajor: 0 });
+
+  const assignedCodes = useMemo(() => {
+    const keys = Object.keys(formFeatures);
+    if (!catalog.length) return keys.sort();
+    const order = catalog.map((f) => f.code);
+    return keys.sort((a, b) => {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+  }, [formFeatures, catalog]);
+  const unassignedCatalog = useMemo(
+    () => catalog.filter((f) => !(f.code in formFeatures)),
+    [catalog, formFeatures],
+  );
+
+  const loadCatalog = useCallback(async () => {
+    try {
+      const res = await api.get("/api/platform/plans/meta/features");
+      setCatalog(res.data ?? []);
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+
+  const addFeatureToPlan = (code: string) => {
+    if (!code || code in formFeatures) return;
+    setFormFeatures((prev) => ({ ...prev, [code]: true }));
+    setAddFeatureCode("");
+  };
+
+  const removeFeatureFromPlan = (code: string) => {
+    setFormFeatures((prev) => {
+      const next = { ...prev };
+      delete next[code];
+      return next;
+    });
+  };
+
+  const setFeatureEnabled = (code: string, enabled: boolean) => {
+    setFormFeatures((prev) => ({ ...prev, [code]: enabled }));
+  };
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -125,6 +184,10 @@ export const PlanManager: React.FC = () => {
   }, [country, currency, toast]);
 
   useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
+
+  useEffect(() => {
     load();
   }, [load]);
 
@@ -134,7 +197,8 @@ export const PlanManager: React.FC = () => {
     setFormCode("");
     setFormName("");
     setFormPriceMajor(0);
-    setFormFeatures({ ...DEFAULT_FEATURES });
+    setFormFeatures({});
+    setAddFeatureCode("");
     setRegionalRows([]);
     setModalOpen(true);
   };
@@ -145,10 +209,12 @@ export const PlanManager: React.FC = () => {
     setFormCode(plan.code);
     setFormName(plan.name);
     setFormPriceMajor(minorToMajor(plan.priceMonthly));
-    setFormFeatures({ ...DEFAULT_FEATURES, ...(plan.featuresJson ?? {}) });
+    setFormFeatures({ ...(plan.featuresJson ?? {}) });
+    setAddFeatureCode("");
     setModalOpen(true);
     try {
       const res = await api.get(`/api/platform/plans/${plan.code}`);
+      setFormFeatures({ ...(res.data?.featuresJson ?? {}) });
       setRegionalRows(res.data?.regionalPrices ?? []);
     } catch (e: any) {
       toast(e.message, "error");
@@ -313,7 +379,7 @@ export const PlanManager: React.FC = () => {
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
         {plans.map((p) => {
           const resolved = p.resolvedPrice ?? { priceMonthly: p.priceMonthly, currency, source: "base" };
-          const features = { ...DEFAULT_FEATURES, ...(p.featuresJson ?? {}) };
+          const features = p.featuresJson ?? {};
           return (
             <article key={p.id} className={`${CARD} p-5 flex flex-col`}>
               <div className="flex items-start justify-between gap-2">
@@ -347,7 +413,8 @@ export const PlanManager: React.FC = () => {
               <p className="text-[10px] text-slate-500 mt-1">
                 Source: {resolved.source} · base {formatMoneyMinor(p.priceMonthly, currency)}
               </p>
-              <FeatureList features={features} />
+              <p className="text-[10px] text-slate-500 mt-2">{Object.keys(features).length} feature(s) on plan</p>
+              <FeatureList features={features} catalog={catalog} />
               {(p.regionalPrices?.length ?? 0) > 0 && (
                 <div className="mt-4 pt-3 border-t border-slate-100">
                   <p className="text-[10px] font-semibold uppercase text-slate-500 mb-2">Regional overrides</p>
@@ -377,7 +444,7 @@ export const PlanManager: React.FC = () => {
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40" onClick={() => setModalOpen(false)}>
           <div
-            className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-xl rounded-xl bg-white shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
@@ -435,20 +502,104 @@ export const PlanManager: React.FC = () => {
               </div>
 
               <div>
-                <p className="text-xs font-medium text-slate-600 mb-2">Plan features</p>
-                <div className="space-y-2">
-                  {Object.entries(FEATURE_LABELS).map(([key, label]) => (
-                    <label key={key} className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 cursor-pointer hover:bg-slate-50">
-                      <span className="text-sm text-slate-800">{label}</span>
-                      <input
-                        type="checkbox"
-                        checked={formFeatures[key] ?? false}
-                        onChange={(e) => setFormFeatures({ ...formFeatures, [key]: e.target.checked })}
-                        className="rounded border-slate-300 text-blue-600"
-                      />
-                    </label>
-                  ))}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-xs font-medium text-slate-600">
+                    Plan features ({assignedCodes.length} assigned)
+                  </p>
                 </div>
+                <p className="text-[10px] text-slate-400 mb-3">
+                  Assign modules from the global catalog. Enabled = included on this tier; disabled = blocked for subscribers.
+                </p>
+
+                {assignedCodes.length === 0 && (
+                  <p className="text-xs text-slate-500 rounded-md border border-dashed border-slate-200 px-3 py-4 text-center mb-3">
+                    No features yet. Add from the catalog below.
+                  </p>
+                )}
+
+                <div className="space-y-2 max-h-56 overflow-y-auto mb-3">
+                  {assignedCodes.map((code) => {
+                    const meta = catalog.find((f) => f.code === code);
+                    return (
+                      <div
+                        key={code}
+                        className="rounded-md border border-slate-200 bg-slate-50/50 px-3 py-2.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-900">{meta?.name ?? code}</p>
+                            <p className="text-[10px] font-mono text-slate-500">{code}</p>
+                            {meta?.description && (
+                              <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{meta.description}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFeatureFromPlan(code)}
+                            className="shrink-0 text-slate-400 hover:text-red-600 p-0.5"
+                            title="Remove from plan"
+                          >
+                            <MinusCircle size={18} />
+                          </button>
+                        </div>
+                        <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formFeatures[code] ?? false}
+                            onChange={(e) => setFeatureEnabled(code, e.target.checked)}
+                            className="rounded border-slate-300 text-blue-600"
+                          />
+                          <span className="text-xs text-slate-600">
+                            {formFeatures[code] ? "Enabled on this plan" : "Disabled on this plan"}
+                          </span>
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {unassignedCatalog.length > 0 ? (
+                  <div className="flex gap-2">
+                    <select
+                      className="input text-sm flex-1"
+                      value={addFeatureCode}
+                      onChange={(e) => setAddFeatureCode(e.target.value)}
+                    >
+                      <option value="">Add feature to plan…</option>
+                      {unassignedCatalog.map((f) => (
+                        <option key={f.id} value={f.code}>{f.name} ({f.code})</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={!addFeatureCode}
+                      onClick={() => addFeatureToPlan(addFeatureCode)}
+                      className="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : catalog.length > 0 ? (
+                  <p className="text-[11px] text-emerald-600">All catalog features are assigned to this plan.</p>
+                ) : (
+                  <p className="text-[11px] text-amber-600">Feature catalog empty — run DB seed/migrations.</p>
+                )}
+
+                {catalog.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="text-[11px] text-slate-500 cursor-pointer hover:text-slate-700">
+                      View full feature catalog ({catalog.length})
+                    </summary>
+                    <ul className="mt-2 space-y-1 text-[11px] text-slate-500 max-h-32 overflow-y-auto">
+                      {catalog.map((f) => (
+                        <li key={f.id}>
+                          <span className="font-medium text-slate-700">{f.name}</span>
+                          <span className="font-mono ml-1">({f.code})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </div>
 
               {modalMode === "edit" && editCode && (

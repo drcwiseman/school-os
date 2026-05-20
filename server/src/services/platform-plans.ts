@@ -4,21 +4,18 @@ import { plans, planRegionalPrices, tenantPlans } from "../db/schema";
 import { ConflictError, NotFoundError } from "../middleware/error";
 import { CURRENCY_CODES } from "../lib/currencies";
 import { getPlansWithRegionalPricing, listRegionalPricesForPlan } from "./plan-pricing";
+import { listFeatureCatalog } from "./tenant-features";
 
-export const PLAN_FEATURE_KEYS = [
-  "portal_enabled",
-  "messaging_enabled",
-  "results_visible",
-  "fees_must_be_clear",
-] as const;
+export async function getPlanFeatureCatalog() {
+  return listFeatureCatalog();
+}
 
-export function defaultPlanFeatures(): Record<string, boolean> {
-  return {
-    portal_enabled: false,
-    messaging_enabled: true,
-    results_visible: true,
-    fees_must_be_clear: false,
-  };
+async function validatePlanFeatures(featuresJson: Record<string, boolean>) {
+  const catalog = await listFeatureCatalog();
+  const codes = new Set(catalog.map((f) => f.code));
+  for (const key of Object.keys(featuresJson)) {
+    if (!codes.has(key)) throw new ConflictError(`Unknown feature: ${key}`);
+  }
 }
 
 export function normalizePlanCode(raw: string): string {
@@ -45,6 +42,7 @@ export async function createPlan(input: {
 }) {
   const code = normalizePlanCode(input.code);
   if (code.length < 2) throw new ConflictError("Plan code must be at least 2 characters");
+  if (input.featuresJson) await validatePlanFeatures(input.featuresJson);
 
   const [existing] = await db.select({ id: plans.id }).from(plans).where(eq(plans.code, code)).limit(1);
   if (existing) throw new ConflictError("Plan code already exists");
@@ -53,7 +51,7 @@ export async function createPlan(input: {
     code,
     name: input.name.trim(),
     priceMonthly: input.priceMonthly,
-    featuresJson: { ...defaultPlanFeatures(), ...input.featuresJson },
+    featuresJson: input.featuresJson ?? {},
   }).returning();
 
   return plan;
@@ -71,7 +69,8 @@ export async function updatePlan(code: string, input: {
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.priceMonthly !== undefined) patch.priceMonthly = input.priceMonthly;
   if (input.featuresJson !== undefined) {
-    patch.featuresJson = { ...(plan.featuresJson as Record<string, boolean>), ...input.featuresJson };
+    await validatePlanFeatures(input.featuresJson);
+    patch.featuresJson = input.featuresJson;
   }
 
   const [updated] = await db.update(plans).set(patch).where(eq(plans.id, plan.id)).returning();

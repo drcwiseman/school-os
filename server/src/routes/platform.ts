@@ -18,7 +18,7 @@ import {
   upsertRegionalPrice,
   deleteRegionalPrice,
   normalizePlanCode,
-  PLAN_FEATURE_KEYS,
+  getPlanFeatureCatalog,
 } from "../services/platform-plans";
 import {
   setTenantFeature,
@@ -243,8 +243,10 @@ router.get("/plans", requirePlatformAuth, requirePlatformPermission("plans.read"
   } catch (err) { next(err); }
 });
 
-router.get("/plans/meta/features", requirePlatformAuth, requirePlatformPermission("plans.read"), (_req, res) => {
-  res.json({ success: true, data: PLAN_FEATURE_KEYS });
+router.get("/plans/meta/features", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlanFeatureCatalog() });
+  } catch (err) { next(err); }
 });
 
 router.get("/plans/:code", requirePlatformAuth, requirePlatformPermission("plans.read"), async (req, res, next) => {
