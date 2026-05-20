@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Mail,
@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import {
+  EmailRichTextEditor,
+  type EmailRichTextEditorHandle,
+} from "./components/EmailRichTextEditor";
+import "./components/email-editor.css";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -87,6 +92,10 @@ const EMPTY_SMTP: SmtpForm = {
   source: "none",
 };
 
+function applyMergeVars(text: string, vars: Record<string, string>) {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
+}
+
 function formatDate(iso: string) {
   try {
     return new Date(iso).toLocaleString(undefined, {
@@ -142,11 +151,33 @@ export const PlatformEmailSettings: React.FC = () => {
   const [tplText, setTplText] = useState("");
   const [tplEnabled, setTplEnabled] = useState(true);
   const [savingTpl, setSavingTpl] = useState(false);
-  const [previewHtml, setPreviewHtml] = useState("");
-  const [previewSubject, setPreviewSubject] = useState("");
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [testTplTo, setTestTplTo] = useState("");
   const [sendingTestTpl, setSendingTestTpl] = useState(false);
+  const editorRef = useRef<EmailRichTextEditorHandle>(null);
+
+  const previewSampleVars = useMemo(
+    () => ({
+      siteName: smtp.fromName?.replace(/ Platform$/i, "") || "SchoolOS",
+      name: "Alex Operator",
+      loginUrl: `${typeof window !== "undefined" ? window.location.origin : ""}/platform/login`,
+      email: "operator@example.com",
+      password: "TempPass-42",
+      newPassword: "NewPass-99",
+      roleLabel: "Support",
+      sentAt: new Date().toLocaleString(),
+    }),
+    [smtp.fromName],
+  );
+
+  const livePreviewSubject = useMemo(
+    () => applyMergeVars(tplSubject, previewSampleVars),
+    [tplSubject, previewSampleVars],
+  );
+  const livePreviewHtml = useMemo(
+    () => applyMergeVars(tplHtml, previewSampleVars),
+    [tplHtml, previewSampleVars],
+  );
 
   const loadHub = useCallback(async () => {
     const r = await api.get("/api/platform/settings/email");
@@ -174,32 +205,16 @@ export const PlatformEmailSettings: React.FC = () => {
     setTplHtml(selectedTemplate.bodyHtml);
     setTplText(selectedTemplate.bodyText ?? "");
     setTplEnabled(selectedTemplate.enabled);
-    setLoadingPreview(true);
-    api
-      .get(`/api/platform/settings/email/templates/${selectedTemplate.code}/preview`)
-      .then((r) => {
-        setPreviewSubject(r.data.subject);
-        setPreviewHtml(r.data.html);
-      })
-      .catch(() => {
-        setPreviewSubject(selectedTemplate.subject);
-        setPreviewHtml(selectedTemplate.bodyHtml);
-      })
-      .finally(() => setLoadingPreview(false));
   }, [selectedTemplate?.code]);
 
   const refreshPreview = async () => {
     if (!selectedCode) return;
     setLoadingPreview(true);
     try {
-      await api.patch(`/api/platform/settings/email/templates/${selectedCode}`, {
-        subject: tplSubject,
-        bodyHtml: tplHtml,
-        bodyText: tplText || undefined,
-      });
       const r = await api.get(`/api/platform/settings/email/templates/${selectedCode}/preview`);
-      setPreviewSubject(r.data.subject);
-      setPreviewHtml(r.data.html);
+      setTplSubject(r.data.subject);
+      setTplHtml(r.data.html);
+      toast("Preview synced from server", "success");
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -283,7 +298,6 @@ export const PlatformEmailSettings: React.FC = () => {
       });
       toast("Template saved", "success");
       await loadHub();
-      await refreshPreview();
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -347,7 +361,7 @@ export const PlatformEmailSettings: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 max-w-7xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Email & delivery</h1>
@@ -660,8 +674,8 @@ export const PlatformEmailSettings: React.FC = () => {
       )}
 
       {tab === "templates" && selectedTemplate && (
-        <div className="grid gap-4 lg:grid-cols-5">
-          <div className={`${CARD} lg:col-span-1 p-3`}>
+        <div className="grid gap-4 lg:grid-cols-12">
+          <div className={`${CARD} lg:col-span-3 p-3`}>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-2 py-1">Templates</p>
             <ul className="mt-1 space-y-0.5">
               {hub?.templates.map((t) => (
@@ -680,7 +694,7 @@ export const PlatformEmailSettings: React.FC = () => {
             </ul>
           </div>
 
-          <div className="lg:col-span-3 space-y-4">
+          <div className="lg:col-span-9 space-y-4">
             <div className={`${CARD} p-5 space-y-4`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -711,11 +725,16 @@ export const PlatformEmailSettings: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-slate-600">HTML body</label>
-                <textarea
-                  className="input text-sm mt-1 w-full font-mono min-h-[220px]"
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Email body</label>
+                <p className="text-[11px] text-slate-400 mb-2">
+                  Rich text editor — use the toolbar for styling. Click merge tags to insert at cursor, or switch to HTML source for advanced edits.
+                </p>
+                <EmailRichTextEditor
+                  key={selectedCode ?? "editor"}
+                  ref={editorRef}
                   value={tplHtml}
-                  onChange={(e) => setTplHtml(e.target.value)}
+                  onChange={setTplHtml}
+                  placeholder="Compose your email…"
                 />
               </div>
 
@@ -730,20 +749,20 @@ export const PlatformEmailSettings: React.FC = () => {
               </div>
 
               <div>
-                <p className="text-xs font-medium text-slate-600 mb-2">Merge variables</p>
+                <p className="text-xs font-medium text-slate-600 mb-2">Merge variables — click to insert</p>
                 <div className="flex flex-wrap gap-1.5">
                   {selectedTemplate.variables.map((v) => (
-                    <code
+                    <button
                       key={v}
-                      className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded cursor-pointer hover:bg-blue-50"
-                      title="Click to copy"
+                      type="button"
+                      className="text-[11px] bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-800 font-mono"
                       onClick={() => {
-                        navigator.clipboard.writeText(`{{${v}}}`);
-                        toast(`Copied {{${v}}}`, "success");
+                        editorRef.current?.insertMergeTag(v);
+                        toast(`Inserted {{${v}}}`, "success");
                       }}
                     >
                       {`{{${v}}}`}
-                    </code>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -765,7 +784,7 @@ export const PlatformEmailSettings: React.FC = () => {
                   onClick={refreshPreview}
                 >
                   {loadingPreview ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
-                  Refresh preview
+                  Reset from saved
                 </button>
               </div>
 
@@ -790,24 +809,24 @@ export const PlatformEmailSettings: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className={`${CARD} lg:col-span-1 p-4 flex flex-col`}>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Preview</p>
-            <p className="text-xs font-medium text-slate-700 mt-2 truncate" title={previewSubject}>
-              {previewSubject || "—"}
-            </p>
-            <div className="mt-3 flex-1 min-h-[280px] rounded border border-slate-200 bg-slate-50 overflow-auto p-3">
-              {loadingPreview ? (
-                <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-                  <Loader2 className="animate-spin mr-2" size={16} /> Loading…
+            <div className={`${CARD} p-5`}>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <Eye size={16} className="text-slate-500" />
+                  Live preview
+                </h3>
+                <span className="text-[11px] text-slate-400">Sample merge data applied</span>
+              </div>
+              <div className="email-preview-frame">
+                <div className="email-preview-inbox">
+                  <div className="email-preview-inbox-header">{livePreviewSubject || "—"}</div>
+                  <div
+                    className="email-preview-inbox-body"
+                    dangerouslySetInnerHTML={{ __html: livePreviewHtml }}
+                  />
                 </div>
-              ) : (
-                <div
-                  className="text-sm prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: previewHtml }}
-                />
-              )}
+              </div>
             </div>
           </div>
         </div>
