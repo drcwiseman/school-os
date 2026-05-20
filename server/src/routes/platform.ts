@@ -28,6 +28,7 @@ import {
   removeTenantPlan,
 } from "../services/platform-subscriptions";
 import { getPlatformRevenueLedger } from "../services/platform-revenue-ledger";
+import { getPlatformInvoicesLedger } from "../services/platform-invoices";
 import {
   setTenantFeature,
   listFeatureCatalog,
@@ -282,6 +283,12 @@ router.patch("/tenants/:slug/features", requirePlatformAuth, requirePlatformPerm
 router.get("/revenue/ledger", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
   try {
     res.json({ success: true, data: await getPlatformRevenueLedger() });
+  } catch (err) { next(err); }
+});
+
+router.get("/invoices", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformInvoicesLedger() });
   } catch (err) { next(err); }
 });
 

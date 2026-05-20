@@ -36,6 +36,7 @@ import { ImpersonateExchange } from "./pages/ImpersonateExchange";
 import { PlanManager } from "./platform/Subscriptions/PlanManager";
 import { SubscriptionHub } from "./platform/Subscriptions/SubscriptionHub";
 import { RevenueLedger } from "./platform/Subscriptions/Ledger";
+import { InvoicesHub } from "./platform/Finance/InvoicesHub";
 import { AddonMarketplace } from "./platform/Marketplace";
 import { SupportHub } from "./platform/Support/SupportHub";
 import { QueueMonitor } from "./platform/System/QueueMonitor";
@@ -78,7 +79,7 @@ export const AppRoutes = () => {
         <Route path="domains" element={<DomainsHub />} />
         <Route path="custom-domains" element={<Navigate to="/platform/domains" replace />} />
         <Route path="marketplace" element={<AddonMarketplace />} />
-        <Route path="invoices" element={stub("Invoices")} />
+        <Route path="invoices" element={<InvoicesHub />} />
         <Route path="transactions" element={stub("Transactions")} />
         <Route path="payouts" element={stub("Payouts")} />
         <Route path="users" element={stub("Platform users")} />

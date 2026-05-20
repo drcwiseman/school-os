@@ -41,16 +41,46 @@ type AssignOpts = {
 export async function listPlatformSubscriptions(): Promise<PlatformSubscriptionRow[]> {
   const tenantsList = await listPlatformTenants();
 
-  const subRows = await db
-    .select({
-      tenantId: tenantPlans.tenantId,
-      startedAt: tenantPlans.startedAt,
-      planId: tenantPlans.planId,
-      billingInterval: tenantPlans.billingInterval,
-      renewsAt: tenantPlans.renewsAt,
-      oneTimeAmount: tenantPlans.oneTimeAmount,
-    })
-    .from(tenantPlans);
+  type SubRow = {
+    tenantId: string;
+    startedAt: Date;
+    planId: string;
+    billingInterval: string | null;
+    renewsAt: Date | null;
+    oneTimeAmount: number | null;
+  };
+
+  let subRows: SubRow[];
+  try {
+    subRows = await db
+      .select({
+        tenantId: tenantPlans.tenantId,
+        startedAt: tenantPlans.startedAt,
+        planId: tenantPlans.planId,
+        billingInterval: tenantPlans.billingInterval,
+        renewsAt: tenantPlans.renewsAt,
+        oneTimeAmount: tenantPlans.oneTimeAmount,
+      })
+      .from(tenantPlans);
+  } catch (err) {
+    const msg = String((err as Error).message ?? "");
+    if (!msg.includes("billing_interval") && !msg.includes("renews_at") && !msg.includes("one_time_amount")) {
+      throw err;
+    }
+    const basic = await db
+      .select({
+        tenantId: tenantPlans.tenantId,
+        startedAt: tenantPlans.startedAt,
+        planId: tenantPlans.planId,
+      })
+      .from(tenantPlans);
+    subRows = basic.map((r) => ({
+      ...r,
+      billingInterval: "monthly",
+      renewsAt: null,
+      oneTimeAmount: null,
+    }));
+  }
 
   const subMap = new Map(subRows.map((r) => [r.tenantId, r]));
 
