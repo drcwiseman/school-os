@@ -4,18 +4,14 @@ import { eq, sql, gt, desc, and } from "drizzle-orm";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../middleware/error";
 import { hashPassword } from "../middleware/auth";
 import { platformAdminPublic } from "../db/platform-admin-columns";
-import {
-  PLATFORM_ROLES,
-  type PlatformRole,
-  isPlatformRole,
-  getPlatformRolesMeta,
-} from "../lib/platform-permissions";
+import { getPlatformRolesMeta } from "../lib/platform-permissions";
+import { PLATFORM_ROLES, type PlatformRole, isPlatformRole } from "../lib/platform-permission-defaults";
 import {
   sendPlatformAdminInviteEmail,
   sendPlatformAdminPasswordResetEmail,
 } from "./platform-email";
 
-export { PLATFORM_ROLES, type PlatformRole, isPlatformRole } from "../lib/platform-permissions";
+export { PLATFORM_ROLES, type PlatformRole, isPlatformRole } from "../lib/platform-permission-defaults";
 
 export type PlatformAdminRow = {
   id: string;

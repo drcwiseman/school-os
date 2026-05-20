@@ -1,11 +1,11 @@
 import { listPlatformAdmins } from "./platform-admins";
+import { getPlatformRolesMeta } from "../lib/platform-permissions";
 import {
-  getPlatformRolesMeta,
   PLATFORM_PERMISSION_CATALOG,
   PLATFORM_ROLES,
   type PlatformRole,
   isPlatformRole,
-} from "../lib/platform-permissions";
+} from "../lib/platform-permission-defaults";
 import {
   loadEffectiveRolePermissions,
   updateRolePermissions,

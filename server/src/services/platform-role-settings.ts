@@ -4,11 +4,11 @@ import { platformSettings } from "../db/schema";
 import { BadRequestError } from "../middleware/error";
 import {
   PLATFORM_ROLES,
-  PLATFORM_ROLE_PERMISSIONS as DEFAULT_ROLE_PERMISSIONS,
+  DEFAULT_ROLE_PERMISSIONS,
   PLATFORM_PERMISSION_CATALOG,
   type PlatformRole,
   isPlatformRole,
-} from "../lib/platform-permissions";
+} from "../lib/platform-permission-defaults";
 
 const SETTINGS_KEY = "role_permissions";
 

@@ -74,12 +74,15 @@ app.use(errorHandler);
 
 if (process.env.NODE_ENV !== "test") {
   setInterval(() => { processJobs().catch(() => {}); }, 5000);
+
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || "development"} mode`);
+  });
+
   void ensureRuntimeSchema()
     .then(() => warmRolePermissionsCache())
-    .then(() => {
-      app.listen(PORT, () => {
-        console.log(`🚀 Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || "development"} mode`);
-      });
+    .catch((err) => {
+      console.error("[startup] schema/permissions warmup failed:", (err as Error).message ?? err);
     });
 }
 
