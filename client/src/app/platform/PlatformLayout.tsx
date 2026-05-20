@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Building2, CreditCard, Globe, Link as LinkIcon,
+  LayoutDashboard, Building2, CreditCard, Globe,
   Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft,
   Landmark, Users, Shield, ScrollText, HardDrive,
   LifeBuoy, ListTodo, Settings, Flag, Mail,
@@ -36,7 +36,6 @@ const navGroups = [
       { to: "/platform/subscriptions/plans", label: "Plans & Pricing", icon: Tags },
       { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, end: true },
       { to: "/platform/domains", label: "Domains", icon: Globe },
-      { to: "/platform/custom-domains", label: "Custom Domains", icon: LinkIcon },
       { to: "/platform/marketplace", label: "Add-ons Marketplace", icon: LayoutTemplate },
     ],
   },
