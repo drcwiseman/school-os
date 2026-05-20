@@ -137,8 +137,22 @@ function rowToSnapshot(r: typeof platformBackups.$inferSelect): BackupSnapshotRo
 
 export async function getPlatformBackupHub(): Promise<PlatformBackupHub> {
   const policy = await getBackupPolicy();
-  const rows = await db.select().from(platformBackups).orderBy(desc(platformBackups.createdAt)).limit(50);
-  const snapshots = rows.map(rowToSnapshot);
+  const pgDump = await pgDumpAvailable();
+
+  let snapshots: BackupSnapshotRow[] = [];
+  try {
+    const rows = await db.select().from(platformBackups).orderBy(desc(platformBackups.createdAt)).limit(50);
+    snapshots = rows.map(rowToSnapshot);
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    const missing =
+      e.code === "42P01" ||
+      e.message?.includes("does not exist") ||
+      e.message?.includes("offsite_key") ||
+      e.message?.includes("offsite_status");
+    if (!missing) throw err;
+    console.warn("[backup] platform_backups not ready:", e.message?.slice(0, 120));
+  }
 
   const completed = snapshots.filter((s) => s.status === "completed");
   const totalStorageBytes = completed.reduce((sum, s) => sum + s.sizeBytes, 0);
@@ -154,7 +168,7 @@ export async function getPlatformBackupHub(): Promise<PlatformBackupHub> {
       lastSuccessAt: lastSuccess,
       totalStorageBytes,
       totalStorageHuman: formatBytes(totalStorageBytes),
-      pgDumpAvailable: await pgDumpAvailable(),
+      pgDumpAvailable: pgDump,
     },
     snapshots,
   };

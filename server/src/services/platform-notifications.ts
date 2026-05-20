@@ -17,75 +17,96 @@ export type PlatformNotificationsHub = {
   alerts: PlatformAlert[];
 };
 
+const EMPTY_HUB: PlatformNotificationsHub = { unreadCount: 0, alerts: [] };
+
+function isMissingRelation(err: unknown): boolean {
+  const e = err as { code?: string; message?: string };
+  return e.code === "42P01" || Boolean(e.message?.includes("does not exist"));
+}
+
 export async function getPlatformNotificationsHub(): Promise<PlatformNotificationsHub> {
   const alerts: PlatformAlert[] = [];
 
-  const failedJobs = await db
-    .select({
-      id: jobs.id,
-      type: jobs.type,
-      error: jobs.error,
-      createdAt: jobs.createdAt,
-    })
-    .from(jobs)
-    .where(eq(jobs.status, "failed"))
-    .orderBy(desc(jobs.createdAt))
-    .limit(8);
+  try {
+    const failedJobs = await db
+      .select({
+        id: jobs.id,
+        type: jobs.type,
+        error: jobs.error,
+        createdAt: jobs.createdAt,
+      })
+      .from(jobs)
+      .where(eq(jobs.status, "failed"))
+      .orderBy(desc(jobs.createdAt))
+      .limit(8);
 
-  for (const j of failedJobs) {
-    alerts.push({
-      id: j.id,
-      type: "job_failed",
-      severity: "error",
-      title: `Failed job: ${j.type}`,
-      message: j.error?.slice(0, 120) ?? "Unknown error",
-      href: "/platform/system/queue",
-      createdAt: j.createdAt.toISOString(),
-    });
+    for (const j of failedJobs) {
+      alerts.push({
+        id: j.id,
+        type: "job_failed",
+        severity: "error",
+        title: `Failed job: ${j.type}`,
+        message: j.error?.slice(0, 120) ?? "Unknown error",
+        href: "/platform/system/queue",
+        createdAt: j.createdAt.toISOString(),
+      });
+    }
+  } catch (err) {
+    if (!isMissingRelation(err)) console.warn("[notifications] jobs:", (err as Error).message);
   }
 
-  const failedBackups = await db
-    .select()
-    .from(platformBackups)
-    .where(eq(platformBackups.status, "failed"))
-    .orderBy(desc(platformBackups.createdAt))
-    .limit(5);
+  try {
+    const failedBackups = await db
+      .select()
+      .from(platformBackups)
+      .where(eq(platformBackups.status, "failed"))
+      .orderBy(desc(platformBackups.createdAt))
+      .limit(5);
 
-  for (const b of failedBackups) {
-    alerts.push({
-      id: b.id,
-      type: "backup_failed",
-      severity: "error",
-      title: "Backup failed",
-      message: b.error?.slice(0, 120) ?? b.label,
-      href: "/platform/settings/backup",
-      createdAt: b.createdAt.toISOString(),
-    });
+    for (const b of failedBackups) {
+      alerts.push({
+        id: b.id,
+        type: "backup_failed",
+        severity: "error",
+        title: "Backup failed",
+        message: b.error?.slice(0, 120) ?? b.label,
+        href: "/platform/settings/backup",
+        createdAt: b.createdAt.toISOString(),
+      });
+    }
+  } catch (err) {
+    if (!isMissingRelation(err)) console.warn("[notifications] backups:", (err as Error).message);
   }
 
-  const openTickets = await db
-    .select({
-      id: platformSupportTickets.id,
-      subject: platformSupportTickets.subject,
-      priority: platformSupportTickets.priority,
-      createdAt: platformSupportTickets.createdAt,
-    })
-    .from(platformSupportTickets)
-    .where(sql`${platformSupportTickets.status} IN ('open', 'in_progress')`)
-    .orderBy(desc(platformSupportTickets.updatedAt))
-    .limit(8);
+  try {
+    const openTickets = await db
+      .select({
+        id: platformSupportTickets.id,
+        subject: platformSupportTickets.subject,
+        priority: platformSupportTickets.priority,
+        createdAt: platformSupportTickets.createdAt,
+      })
+      .from(platformSupportTickets)
+      .where(sql`${platformSupportTickets.status} IN ('open', 'in_progress')`)
+      .orderBy(desc(platformSupportTickets.updatedAt))
+      .limit(8);
 
-  for (const t of openTickets) {
-    alerts.push({
-      id: t.id,
-      type: "support_open",
-      severity: t.priority === "urgent" ? "error" : "warn",
-      title: t.subject,
-      message: `Priority: ${t.priority}`,
-      href: "/platform/support",
-      createdAt: t.createdAt.toISOString(),
-    });
+    for (const t of openTickets) {
+      alerts.push({
+        id: t.id,
+        type: "support_open",
+        severity: t.priority === "urgent" ? "error" : "warn",
+        title: t.subject,
+        message: `Priority: ${t.priority}`,
+        href: "/platform/support",
+        createdAt: t.createdAt.toISOString(),
+      });
+    }
+  } catch (err) {
+    if (!isMissingRelation(err)) console.warn("[notifications] support:", (err as Error).message);
   }
+
+  if (!alerts.length) return EMPTY_HUB;
 
   alerts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 

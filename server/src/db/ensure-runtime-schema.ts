@@ -1,6 +1,26 @@
+import fs from "fs";
+import path from "path";
 import { sql } from "drizzle-orm";
 import { db } from "./index";
 import { FEATURE_CATALOG } from "../lib/feature-catalog";
+import { splitMigrationSql } from "./sql-runner";
+
+const MIGRATIONS_DIR = path.join(__dirname, "migrations");
+
+async function runMigrationFile(filename: string) {
+  const filePath = path.join(MIGRATIONS_DIR, filename);
+  if (!fs.existsSync(filePath)) return;
+  const parts = splitMigrationSql(fs.readFileSync(filePath, "utf8"));
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    try {
+      await db.execute(sql.raw(trimmed));
+    } catch (err) {
+      console.warn(`[ensureRuntimeSchema] ${filename}:`, (err as Error).message?.slice(0, 100));
+    }
+  }
+}
 
 /**
  * Idempotent fixes for VPS DBs that lag behind code. Runs once at server boot.
@@ -209,5 +229,14 @@ export async function ensureRuntimeSchema() {
     `);
   } catch (err) {
     console.warn("[ensureRuntimeSchema] plan features:", (err as Error).message?.slice(0, 120));
+  }
+
+  for (const file of [
+    "0014_platform_support_tickets.sql",
+    "0016_platform_email.sql",
+    "0017_platform_backups.sql",
+    "0018_platform_extras.sql",
+  ]) {
+    await runMigrationFile(file);
   }
 }
