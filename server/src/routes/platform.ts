@@ -98,6 +98,18 @@ import {
   servePlatformMediaFile,
 } from "../services/platform-media";
 import {
+  getPlatformEmailHub,
+  getPlatformSmtpPublic,
+  setPlatformSmtp,
+  updatePlatformEmailTemplate,
+  previewPlatformEmailTemplate,
+  sendPlatformSmtpTest,
+  verifyPlatformSmtpConnection,
+  sendPlatformEmailWithTemplate,
+  getPlatformEmailTemplate,
+} from "../services/platform-email-settings";
+import { listPlatformEmailLogs } from "../services/platform-email-log";
+import {
   getPlatformSupportHub,
   createPlatformSupportTicket,
   updatePlatformSupportTicket,
@@ -317,6 +329,151 @@ router.patch("/settings/marketing", requirePlatformAuth, requirePlatformPermissi
     } catch (err) { next(err); }
   },
 );
+
+router.get("/settings/email", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformEmailHub() });
+  } catch (err) { next(err); }
+});
+
+router.patch("/settings/email/smtp", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      host: z.string().optional(),
+      port: z.number().int().min(1).max(65535).optional(),
+      secure: z.boolean().optional(),
+      user: z.string().optional(),
+      password: z.string().optional(),
+      fromEmail: z.string().email().optional(),
+      fromName: z.string().optional(),
+      enabled: z.boolean().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await setPlatformSmtp(req.body);
+      await logPlatformAction(admin?.id, "email.smtp.update", { entityType: "platform_settings", entityId: "smtp" });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/settings/email/smtp/verify", requirePlatformAuth, requirePlatformPermission("plans.write"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await verifyPlatformSmtpConnection() });
+  } catch (err) { next(err); }
+});
+
+router.post("/settings/email/smtp/test", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      testEmail: z.string().email(),
+      host: z.string().min(1).optional(),
+      port: z.number().int().optional(),
+      secure: z.boolean().optional(),
+      user: z.string().optional(),
+      password: z.string().optional(),
+      fromEmail: z.string().email().optional(),
+      fromName: z.string().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const { testEmail, ...smtpPatch } = req.body;
+      const smtpPublic = await getPlatformSmtpPublic();
+      const useOverride = Boolean(smtpPatch.host && smtpPatch.fromEmail);
+      let overridePassword = smtpPatch.password;
+      if (useOverride && !overridePassword && smtpPublic?.passwordConfigured) {
+        const { getPlatformSmtpConfig } = await import("../services/platform-smtp-config");
+        overridePassword = (await getPlatformSmtpConfig())?.password;
+      }
+      const override = useOverride
+        ? {
+            host: smtpPatch.host!,
+            port: smtpPatch.port ?? 587,
+            secure: smtpPatch.secure ?? false,
+            user: smtpPatch.user,
+            password: overridePassword,
+            fromEmail: smtpPatch.fromEmail!,
+            fromName: smtpPatch.fromName ?? smtpPublic?.fromName ?? "SchoolOS Platform",
+          }
+        : undefined;
+      const data = await sendPlatformSmtpTest(testEmail, override);
+      await logPlatformAction(admin?.id, "email.smtp.test", { entityType: "platform_email", entityId: testEmail });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/settings/email/templates/:code", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const tpl = await getPlatformEmailTemplate(req.params.code);
+    if (!tpl) return next(new NotFoundError("Template not found"));
+    res.json({ success: true, data: tpl });
+  } catch (err) { next(err); }
+});
+
+router.patch("/settings/email/templates/:code", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      subject: z.string().min(1).optional(),
+      bodyHtml: z.string().min(1).optional(),
+      bodyText: z.string().optional(),
+      enabled: z.boolean().optional(),
+      name: z.string().optional(),
+      description: z.string().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await updatePlatformEmailTemplate(req.params.code, req.body);
+      await logPlatformAction(admin?.id, "email.template.update", {
+        entityType: "platform_email_template",
+        entityId: req.params.code,
+      });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/settings/email/templates/:code/preview", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await previewPlatformEmailTemplate(req.params.code) });
+  } catch (err) { next(err); }
+});
+
+router.post("/settings/email/templates/:code/send-test", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({ body: z.object({ to: z.string().email() }) }),
+  async (req, res, next) => {
+    try {
+      const marketing = await getPlatformMarketing();
+      const base = (process.env.CLIENT_ORIGIN || marketing.siteUrl || "https://school.bclimaxtech.com").replace(/\/$/, "");
+      const vars: Record<string, string> = {
+        siteName: marketing.siteName,
+        name: "Test Recipient",
+        loginUrl: `${base}/platform/login`,
+        email: req.body.to,
+        password: "••••••••",
+        newPassword: "••••••••",
+        roleLabel: "Support",
+        sentAt: new Date().toLocaleString(),
+      };
+      await sendPlatformEmailWithTemplate({ to: req.body.to, templateCode: req.params.code, vars });
+      res.json({ success: true, message: "Test email sent" });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/settings/email/logs", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : "all";
+    const limit = req.query.limit != null ? Number(req.query.limit) : 100;
+    res.json({ success: true, data: await listPlatformEmailLogs({ status, limit }) });
+  } catch (err) { next(err); }
+});
 
 router.get("/media", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
   try {

@@ -32,6 +32,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/system/queue": "Job Queue",
   "/platform/support": "Support Tickets",
   "/platform/media": "Media Library",
+  "/platform/settings/email": "Email & Delivery",
 };
 
 const navGroups = [
@@ -72,7 +73,7 @@ const navGroups = [
       { to: "/platform/media", label: "Media Library", icon: Images },
       { to: "/platform/settings/marketing", label: "Marketing & SEO", icon: Settings },
       { to: "/platform/settings/flags", label: "Feature Flags", icon: Flag },
-      { to: "/platform/settings/email", label: "Email Templates", icon: Mail },
+      { to: "/platform/settings/email", label: "Email & Delivery", icon: Mail },
       { to: "/platform/settings/integrations", label: "Integrations", icon: Blocks },
       { to: "/platform/settings/backup", label: "Backup & Restore", icon: DatabaseBackup },
     ],

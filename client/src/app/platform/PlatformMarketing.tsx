@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Save, Loader2, BarChart3, Globe, ImageIcon, Upload, Images } from "lucide-react";
+import { Save, Loader2, BarChart3, Globe } from "lucide-react";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { MediaPickerModal, type MediaItem } from "./components/MediaPickerModal";
+import { ImageUploadField } from "./components/ImageUploadField";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm p-5";
 
@@ -39,28 +40,15 @@ const EMPTY: MarketingForm = {
   twitterHandle: "",
 };
 
+/** Resolve preview src for platform admin (static public files + media API). */
 function previewUrl(siteUrl: string, path: string) {
   const p = path?.trim();
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
-  if (p.startsWith("/api/")) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    if (origin) return `${origin}${p}`;
-  }
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  if (origin && p.startsWith("/")) return `${origin}${p}`;
   const base = siteUrl.replace(/\/$/, "");
   return base ? `${base}${p.startsWith("/") ? p : `/${p}`}` : p;
-}
-
-function ImagePreview({ src, alt, label }: { src: string; alt: string; label: string }) {
-  if (!src) return null;
-  return (
-    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <p className="text-[10px] font-semibold uppercase text-slate-500 mb-2">{label}</p>
-      <img src={src} alt={alt || label} className="max-h-24 max-w-full object-contain rounded" />
-      <p className="mt-2 text-[10px] text-slate-500 font-mono break-all">{src}</p>
-      {alt && <p className="mt-1 text-[10px] text-slate-600"><span className="font-semibold">alt:</span> {alt}</p>}
-    </div>
-  );
 }
 
 async function fileToPayload(file: File) {
@@ -75,11 +63,9 @@ async function fileToPayload(file: File) {
 
 export const PlatformMarketing: React.FC = () => {
   const { toast } = useToast();
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const ogInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadingTarget, setUploadingTarget] = useState<"logo" | "og" | null>(null);
   const [pickerFor, setPickerFor] = useState<"logo" | "og" | null>(null);
   const [form, setForm] = useState<MarketingForm>(EMPTY);
 
@@ -101,7 +87,7 @@ export const PlatformMarketing: React.FC = () => {
 
   const save = async () => {
     if (form.orgLogoUrl.trim() && !form.orgLogoAlt.trim()) {
-      toast("Organization logo alt text is required when a logo URL is set (SEO & accessibility).", "error");
+      toast("Organization logo alt text is required when a logo is set.", "error");
       return;
     }
     if (form.ogImage.trim() && !form.ogImageAlt.trim()) {
@@ -121,7 +107,7 @@ export const PlatformMarketing: React.FC = () => {
 
   const set = (key: keyof MarketingForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
-  const applyMedia = (target: "logo" | "og", item: MediaItem, absoluteUrl: string) => {
+  const applyMedia = (target: "logo" | "og", item: MediaItem) => {
     const path = item.url;
     if (target === "logo") {
       setForm((f) => ({
@@ -136,26 +122,26 @@ export const PlatformMarketing: React.FC = () => {
         ogImageAlt: item.altText?.trim() || f.ogImageAlt || item.title || "Social share preview",
       }));
     }
-    toast(`Using ${item.fileName}`, "success");
-    void absoluteUrl;
+    toast(`Image set: ${item.fileName}. Click Save marketing settings.`, "success");
   };
 
   const uploadToLibrary = async (file: File, target: "logo" | "og") => {
-    setUploading(true);
+    setUploadingTarget(target);
     try {
       const payload = await fileToPayload(file);
-      const alt = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+      const altFromName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
       const res = await api.post("/api/platform/media", {
         ...payload,
-        altText: target === "logo" ? `${form.siteName || "SchoolOS"} logo` : alt,
+        altText: target === "logo"
+          ? `${form.siteName || "SchoolOS"} logo`
+          : `${form.siteName || "SchoolOS"} — ${altFromName}`,
         title: file.name,
       });
-      const item = res.data as MediaItem;
-      applyMedia(target, item, "");
+      applyMedia(target, res.data as MediaItem);
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
-      setUploading(false);
+      setUploadingTarget(null);
     }
   };
 
@@ -175,16 +161,16 @@ export const PlatformMarketing: React.FC = () => {
           Marketing, SEO &amp; analytics
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Controls the public marketing site — upload images in{" "}
-          <Link to="/platform/media" className="text-blue-600 hover:underline">Media Library</Link>
-          , then assign logo &amp; OG image with alt text for SEO.
+          Upload images directly below or manage all files in{" "}
+          <Link to="/platform/media" className="text-blue-600 hover:underline">Media Library</Link>.
+          Remember to <strong>Save marketing settings</strong> after uploading.
         </p>
       </div>
 
       <MediaPickerModal
         open={pickerFor !== null}
         onClose={() => setPickerFor(null)}
-        onSelect={(item, abs) => pickerFor && applyMedia(pickerFor, item, abs)}
+        onSelect={(item) => pickerFor && applyMedia(pickerFor, item)}
         imagesOnly
         siteUrl={form.siteUrl}
       />
@@ -210,126 +196,36 @@ export const PlatformMarketing: React.FC = () => {
         ))}
       </div>
 
-      <div className={`${CARD} space-y-4`}>
-        <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <ImageIcon size={16} className="text-blue-600" />
-          Organization logo (SEO &amp; accessibility)
-        </h2>
-        <p className="text-xs text-slate-500">
-          Used in the public header and footer with proper <code className="text-[10px] bg-slate-100 px-1 rounded">alt</code> text,
-          and in JSON-LD <code className="text-[10px] bg-slate-100 px-1 rounded">Organization</code> schema for search engines.
-          Use a path like <code className="text-[10px] bg-slate-100 px-1 rounded">/schoolos-logo.svg</code> or a full HTTPS URL.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => logoInputRef.current?.click()}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <Upload size={12} /> Upload
-          </button>
-          <button
-            type="button"
-            onClick={() => setPickerFor("logo")}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
-          >
-            <Images size={12} /> Media Library
-          </button>
-          <input
-            ref={logoInputRef}
-            type="file"
-            accept="image/*,.svg"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadToLibrary(f, "logo");
-              e.target.value = "";
-            }}
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-slate-600">Logo URL</label>
-          <input
-            className="input text-sm mt-1 w-full font-mono"
-            placeholder="/api/public/media/…/file"
-            value={form.orgLogoUrl}
-            onChange={(e) => set("orgLogoUrl", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-slate-600">
-            Logo alt text <span className="text-rose-600">*</span>
-          </label>
-          <input
-            className="input text-sm mt-1 w-full"
-            placeholder="SchoolOS logo — academy management platform for schools"
-            value={form.orgLogoAlt}
-            onChange={(e) => set("orgLogoAlt", e.target.value)}
-          />
-          <p className="text-[10px] text-slate-400 mt-1">Describe the logo for screen readers and image SEO (required if logo URL is set).</p>
-        </div>
-        <ImagePreview src={logoPreview} alt={form.orgLogoAlt} label="Logo preview" />
+      <div className={CARD}>
+        <ImageUploadField
+          label="Organization logo"
+          hint="Shown in the public site header and footer. Used in Organization schema for Google."
+          url={form.orgLogoUrl}
+          alt={form.orgLogoAlt}
+          previewSrc={logoPreview}
+          uploading={uploadingTarget === "logo"}
+          onUrlChange={(v) => set("orgLogoUrl", v)}
+          onAltChange={(v) => set("orgLogoAlt", v)}
+          onUpload={(f) => uploadToLibrary(f, "logo")}
+          onPickLibrary={() => setPickerFor("logo")}
+          altRequired={!!form.orgLogoUrl.trim()}
+        />
       </div>
 
-      <div className={`${CARD} space-y-4`}>
-        <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <ImageIcon size={16} className="text-emerald-600" />
-          Social share image (Open Graph)
-        </h2>
-        <p className="text-xs text-slate-500">
-          Recommended 1200×630 PNG or JPG for Facebook/LinkedIn; SVG works for some crawlers.
-          Sets <code className="text-[10px] bg-slate-100 px-1 rounded">og:image</code> and <code className="text-[10px] bg-slate-100 px-1 rounded">og:image:alt</code>.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => ogInputRef.current?.click()}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <Upload size={12} /> Upload
-          </button>
-          <button
-            type="button"
-            onClick={() => setPickerFor("og")}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
-          >
-            <Images size={12} /> Media Library
-          </button>
-          <input
-            ref={ogInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadToLibrary(f, "og");
-              e.target.value = "";
-            }}
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-slate-600">OG image URL</label>
-          <input
-            className="input text-sm mt-1 w-full font-mono"
-            placeholder="/api/public/media/…/file"
-            value={form.ogImage}
-            onChange={(e) => set("ogImage", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-slate-600">
-            OG image alt text <span className="text-rose-600">*</span>
-          </label>
-          <input
-            className="input text-sm mt-1 w-full"
-            placeholder="SchoolOS dashboard preview — school management software"
-            value={form.ogImageAlt}
-            onChange={(e) => set("ogImageAlt", e.target.value)}
-          />
-        </div>
-        <ImagePreview src={ogPreview} alt={form.ogImageAlt} label="OG preview" />
+      <div className={CARD}>
+        <ImageUploadField
+          label="Social share image (Open Graph)"
+          hint="Recommended 1200×630 PNG or JPG for Facebook and LinkedIn."
+          url={form.ogImage}
+          alt={form.ogImageAlt}
+          previewSrc={ogPreview}
+          uploading={uploadingTarget === "og"}
+          onUrlChange={(v) => set("ogImage", v)}
+          onAltChange={(v) => set("ogImageAlt", v)}
+          onUpload={(f) => uploadToLibrary(f, "og")}
+          onPickLibrary={() => setPickerFor("og")}
+          altRequired={!!form.ogImage.trim()}
+        />
       </div>
 
       <div className={`${CARD} space-y-4`}>
@@ -369,7 +265,7 @@ export const PlatformMarketing: React.FC = () => {
       <button
         type="button"
         onClick={save}
-        disabled={saving}
+        disabled={saving || uploadingTarget !== null}
         className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
       >
         <Save size={16} />

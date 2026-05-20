@@ -71,6 +71,7 @@ async function main() {
   await runSqlFile("0013_platform_payouts.sql");
   await runSqlFile("0014_platform_support_tickets.sql");
   await runSqlFile("0015_platform_media.sql");
+  await runSqlFile("0016_platform_email.sql");
 
   console.log("\n✅ Repair applied.");
   console.log("Next:");

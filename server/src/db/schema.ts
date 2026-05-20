@@ -1225,6 +1225,32 @@ export const platformMedia = pgTable("platform_media", {
   mimeIdx:    index("platform_media_mime_idx").on(t.mimeType),
 }));
 
+export const platformEmailTemplates = pgTable("platform_email_templates", {
+  code:          text("code").primaryKey(),
+  name:          text("name").notNull(),
+  description:   text("description"),
+  category:      text("category").notNull().default("transactional"),
+  subject:       text("subject").notNull(),
+  bodyHtml:      text("body_html").notNull(),
+  bodyText:      text("body_text"),
+  variablesJson: jsonb("variables_json").$type<string[]>().notNull().default([]),
+  enabled:       boolean("enabled").notNull().default(true),
+  updatedAt:     timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const platformEmailLogs = pgTable("platform_email_logs", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  templateCode: text("template_code"),
+  recipient:    text("recipient").notNull(),
+  subject:      text("subject").notNull(),
+  status:       text("status").notNull().default("sent"),
+  error:        text("error"),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index("platform_email_logs_created_idx").on(t.createdAt),
+  statusIdx:  index("platform_email_logs_status_idx").on(t.status),
+}));
+
 export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {
   id:              uuid("id").primaryKey().defaultRandom(),
   token:           text("token").notNull().unique(),
