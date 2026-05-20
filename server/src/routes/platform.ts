@@ -90,6 +90,14 @@ import {
   triggerQueueProcessing,
 } from "../services/platform-queue";
 import {
+  listPlatformMedia,
+  createPlatformMedia,
+  updatePlatformMedia,
+  deletePlatformMedia,
+  getPlatformMediaById,
+  servePlatformMediaFile,
+} from "../services/platform-media";
+import {
   getPlatformSupportHub,
   createPlatformSupportTicket,
   updatePlatformSupportTicket,
@@ -309,6 +317,85 @@ router.patch("/settings/marketing", requirePlatformAuth, requirePlatformPermissi
     } catch (err) { next(err); }
   },
 );
+
+router.get("/media", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const type = req.query.type === "images" || req.query.type === "documents" ? req.query.type : "all";
+    const data = await listPlatformMedia({
+      search: typeof req.query.search === "string" ? req.query.search : undefined,
+      type,
+      limit: req.query.limit != null ? Number(req.query.limit) : undefined,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
+
+router.post("/media", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      fileName: z.string().min(1),
+      contentBase64: z.string().min(1),
+      mimeType: z.string().optional(),
+      altText: z.string().max(300).optional(),
+      title: z.string().max(200).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await createPlatformMedia(admin?.id, req.body);
+      await logPlatformAction(admin?.id, "media.upload", {
+        entityType: "platform_media",
+        entityId: data.id,
+        after: { fileName: data.fileName },
+        ip: req.ip,
+      });
+      res.status(201).json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/media/:id/file", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const file = await servePlatformMediaFile(req.params.id);
+    res.setHeader("Content-Type", file.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.sendFile(file.absPath);
+  } catch (err) { next(err); }
+});
+
+router.get("/media/:id", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformMediaById(req.params.id) });
+  } catch (err) { next(err); }
+});
+
+router.patch("/media/:id", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      altText: z.string().max(300).nullable().optional(),
+      title: z.string().max(200).nullable().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      res.json({ success: true, data: await updatePlatformMedia(req.params.id, req.body) });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/media/:id", requirePlatformAuth, requirePlatformPermission("plans.write"), async (req, res, next) => {
+  try {
+    const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+    await deletePlatformMedia(req.params.id);
+    await logPlatformAction(admin?.id, "media.delete", {
+      entityType: "platform_media",
+      entityId: req.params.id,
+      ip: req.ip,
+    });
+    res.json({ success: true, data: { deleted: true } });
+  } catch (err) { next(err); }
+});
 
 router.get("/features", requirePlatformAuth, requirePlatformPermission("tenants.features"), async (_req, res, next) => {
   try {

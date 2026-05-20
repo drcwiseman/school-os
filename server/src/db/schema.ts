@@ -1210,6 +1210,21 @@ export const platformSupportTicketMessages = pgTable("platform_support_ticket_me
   ticketIdx: index("platform_support_ticket_messages_ticket_idx").on(t.ticketId),
 }));
 
+export const platformMedia = pgTable("platform_media", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  fileName:    text("file_name").notNull(),
+  storedPath:  text("stored_path").notNull(),
+  mimeType:    text("mime_type").notNull(),
+  sizeBytes:   integer("size_bytes").notNull().default(0),
+  altText:     text("alt_text"),
+  title:       text("title"),
+  uploadedBy:  uuid("uploaded_by").references(() => platformAdmins.id, { onDelete: "set null" }),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index("platform_media_created_idx").on(t.createdAt),
+  mimeIdx:    index("platform_media_mime_idx").on(t.mimeType),
+}));
+
 export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {
   id:              uuid("id").primaryKey().defaultRandom(),
   token:           text("token").notNull().unique(),

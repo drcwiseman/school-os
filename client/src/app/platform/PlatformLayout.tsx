@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, CreditCard, Globe,
   Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft,
   Landmark, Users, Shield, ScrollText, HardDrive,
-  LifeBuoy, ListTodo, Settings, Flag, Mail,
+  LifeBuoy, ListTodo, Settings, Flag, Mail, Images,
   Blocks, DatabaseBackup, Loader2, Search, HelpCircle, Menu,
 } from "lucide-react";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
@@ -31,6 +31,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/logs": "System Logs",
   "/platform/system/queue": "Job Queue",
   "/platform/support": "Support Tickets",
+  "/platform/media": "Media Library",
 };
 
 const navGroups = [
@@ -68,6 +69,7 @@ const navGroups = [
   {
     label: "SETTINGS",
     items: [
+      { to: "/platform/media", label: "Media Library", icon: Images },
       { to: "/platform/settings/marketing", label: "Marketing & SEO", icon: Settings },
       { to: "/platform/settings/flags", label: "Feature Flags", icon: Flag },
       { to: "/platform/settings/email", label: "Email Templates", icon: Mail },

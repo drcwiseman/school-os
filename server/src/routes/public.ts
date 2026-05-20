@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getPlatformMarketing, resolveMarketingAssetUrls } from "../services/platform-settings";
+import { servePlatformMediaFile } from "../services/platform-media";
 import { INTEGRATIONS_CATALOG } from "../lib/integrations-catalog";
 
 const router = Router();
@@ -14,6 +15,15 @@ router.get("/site-config", async (_req, res, next) => {
         integrations: INTEGRATIONS_CATALOG.filter((i) => i.popular).slice(0, 8),
       },
     });
+  } catch (e) { next(e); }
+});
+
+router.get("/media/:id/file", async (req, res, next) => {
+  try {
+    const file = await servePlatformMediaFile(req.params.id);
+    res.setHeader("Content-Type", file.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.sendFile(file.absPath);
   } catch (e) { next(e); }
 });
 

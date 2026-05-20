@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Save, Loader2, BarChart3, Globe, ImageIcon } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { Save, Loader2, BarChart3, Globe, ImageIcon, Upload, Images } from "lucide-react";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { MediaPickerModal, type MediaItem } from "./components/MediaPickerModal";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm p-5";
 
@@ -41,6 +43,10 @@ function previewUrl(siteUrl: string, path: string) {
   const p = path?.trim();
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
+  if (p.startsWith("/api/")) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    if (origin) return `${origin}${p}`;
+  }
   const base = siteUrl.replace(/\/$/, "");
   return base ? `${base}${p.startsWith("/") ? p : `/${p}`}` : p;
 }
@@ -57,10 +63,24 @@ function ImagePreview({ src, alt, label }: { src: string; alt: string; label: st
   );
 }
 
+async function fileToPayload(file: File) {
+  const contentBase64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  return { fileName: file.name, contentBase64, mimeType: file.type || undefined };
+}
+
 export const PlatformMarketing: React.FC = () => {
   const { toast } = useToast();
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const ogInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [pickerFor, setPickerFor] = useState<"logo" | "og" | null>(null);
   const [form, setForm] = useState<MarketingForm>(EMPTY);
 
   useEffect(() => {
@@ -101,6 +121,44 @@ export const PlatformMarketing: React.FC = () => {
 
   const set = (key: keyof MarketingForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
+  const applyMedia = (target: "logo" | "og", item: MediaItem, absoluteUrl: string) => {
+    const path = item.url;
+    if (target === "logo") {
+      setForm((f) => ({
+        ...f,
+        orgLogoUrl: path,
+        orgLogoAlt: item.altText?.trim() || f.orgLogoAlt || item.title || "Organization logo",
+      }));
+    } else {
+      setForm((f) => ({
+        ...f,
+        ogImage: path,
+        ogImageAlt: item.altText?.trim() || f.ogImageAlt || item.title || "Social share preview",
+      }));
+    }
+    toast(`Using ${item.fileName}`, "success");
+    void absoluteUrl;
+  };
+
+  const uploadToLibrary = async (file: File, target: "logo" | "og") => {
+    setUploading(true);
+    try {
+      const payload = await fileToPayload(file);
+      const alt = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+      const res = await api.post("/api/platform/media", {
+        ...payload,
+        altText: target === "logo" ? `${form.siteName || "SchoolOS"} logo` : alt,
+        title: file.name,
+      });
+      const item = res.data as MediaItem;
+      applyMedia(target, item, "");
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-24">
@@ -117,9 +175,19 @@ export const PlatformMarketing: React.FC = () => {
           Marketing, SEO &amp; analytics
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Controls the public marketing site — brand images with alt text, meta tags, structured data, and analytics IDs.
+          Controls the public marketing site — upload images in{" "}
+          <Link to="/platform/media" className="text-blue-600 hover:underline">Media Library</Link>
+          , then assign logo &amp; OG image with alt text for SEO.
         </p>
       </div>
+
+      <MediaPickerModal
+        open={pickerFor !== null}
+        onClose={() => setPickerFor(null)}
+        onSelect={(item, abs) => pickerFor && applyMedia(pickerFor, item, abs)}
+        imagesOnly
+        siteUrl={form.siteUrl}
+      />
 
       <div className={`${CARD} space-y-4`}>
         <h2 className="text-sm font-bold text-slate-900">Site identity</h2>
@@ -152,11 +220,39 @@ export const PlatformMarketing: React.FC = () => {
           and in JSON-LD <code className="text-[10px] bg-slate-100 px-1 rounded">Organization</code> schema for search engines.
           Use a path like <code className="text-[10px] bg-slate-100 px-1 rounded">/schoolos-logo.svg</code> or a full HTTPS URL.
         </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => logoInputRef.current?.click()}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Upload size={12} /> Upload
+          </button>
+          <button
+            type="button"
+            onClick={() => setPickerFor("logo")}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+          >
+            <Images size={12} /> Media Library
+          </button>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*,.svg"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadToLibrary(f, "logo");
+              e.target.value = "";
+            }}
+          />
+        </div>
         <div>
           <label className="text-xs font-medium text-slate-600">Logo URL</label>
           <input
             className="input text-sm mt-1 w-full font-mono"
-            placeholder="/schoolos-logo.svg"
+            placeholder="/api/public/media/…/file"
             value={form.orgLogoUrl}
             onChange={(e) => set("orgLogoUrl", e.target.value)}
           />
@@ -185,11 +281,39 @@ export const PlatformMarketing: React.FC = () => {
           Recommended 1200×630 PNG or JPG for Facebook/LinkedIn; SVG works for some crawlers.
           Sets <code className="text-[10px] bg-slate-100 px-1 rounded">og:image</code> and <code className="text-[10px] bg-slate-100 px-1 rounded">og:image:alt</code>.
         </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => ogInputRef.current?.click()}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Upload size={12} /> Upload
+          </button>
+          <button
+            type="button"
+            onClick={() => setPickerFor("og")}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+          >
+            <Images size={12} /> Media Library
+          </button>
+          <input
+            ref={ogInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadToLibrary(f, "og");
+              e.target.value = "";
+            }}
+          />
+        </div>
         <div>
           <label className="text-xs font-medium text-slate-600">OG image URL</label>
           <input
             className="input text-sm mt-1 w-full font-mono"
-            placeholder="/og-schoolos.svg"
+            placeholder="/api/public/media/…/file"
             value={form.ogImage}
             onChange={(e) => set("ogImage", e.target.value)}
           />
