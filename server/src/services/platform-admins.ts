@@ -4,18 +4,18 @@ import { eq, sql, gt, desc, and } from "drizzle-orm";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../middleware/error";
 import { hashPassword } from "../middleware/auth";
 import { platformAdminPublic } from "../db/platform-admin-columns";
-import { PLATFORM_ROLE_PERMISSIONS } from "../lib/platform-permissions";
+import {
+  PLATFORM_ROLES,
+  type PlatformRole,
+  isPlatformRole,
+  getPlatformRolesMeta,
+} from "../lib/platform-permissions";
 import {
   sendPlatformAdminInviteEmail,
   sendPlatformAdminPasswordResetEmail,
 } from "./platform-email";
 
-export const PLATFORM_ROLES = ["super_admin", "support", "billing"] as const;
-export type PlatformRole = (typeof PLATFORM_ROLES)[number];
-
-export function isPlatformRole(v: string): v is PlatformRole {
-  return (PLATFORM_ROLES as readonly string[]).includes(v);
-}
+export { PLATFORM_ROLES, type PlatformRole, isPlatformRole } from "../lib/platform-permissions";
 
 export type PlatformAdminRow = {
   id: string;
@@ -196,8 +196,5 @@ export async function deletePlatformAdmin(adminId: string, actorId: string) {
 }
 
 export function getRoleMeta() {
-  return PLATFORM_ROLES.map((role) => ({
-    role,
-    permissions: PLATFORM_ROLE_PERMISSIONS[role] ?? [],
-  }));
+  return getPlatformRolesMeta();
 }

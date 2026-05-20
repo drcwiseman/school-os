@@ -45,6 +45,7 @@ import {
   isPlatformRole,
   getRoleMeta,
 } from "../services/platform-admins";
+import { getPlatformRolesOverview } from "../services/platform-roles";
 import {
   setTenantFeature,
   listFeatureCatalog,
@@ -355,6 +356,12 @@ router.patch("/payouts/:id", requirePlatformAuth, requirePlatformPermission("sta
     } catch (err) { next(err); }
   },
 );
+
+router.get("/roles", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformRolesOverview() });
+  } catch (err) { next(err); }
+});
 
 router.get("/users", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
   try {

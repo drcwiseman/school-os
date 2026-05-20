@@ -40,6 +40,7 @@ import { InvoicesHub } from "./platform/Finance/InvoicesHub";
 import { TransactionsHub } from "./platform/Finance/TransactionsHub";
 import { PayoutsHub } from "./platform/Finance/PayoutsHub";
 import { PlatformUsersHub } from "./platform/Users/PlatformUsersHub";
+import { RolesHub } from "./platform/Users/RolesHub";
 import { AddonMarketplace } from "./platform/Marketplace";
 import { SupportHub } from "./platform/Support/SupportHub";
 import { QueueMonitor } from "./platform/System/QueueMonitor";
@@ -86,7 +87,7 @@ export const AppRoutes = () => {
         <Route path="transactions" element={<TransactionsHub />} />
         <Route path="payouts" element={<PayoutsHub />} />
         <Route path="users" element={<PlatformUsersHub />} />
-        <Route path="roles" element={stub("Roles & permissions")} />
+        <Route path="roles" element={<RolesHub />} />
         <Route path="logs" element={stub("System logs")} />
         <Route path="support" element={<SupportHub />} />
         <Route path="system/queue" element={<QueueMonitor />} />
