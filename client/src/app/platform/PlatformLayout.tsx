@@ -20,6 +20,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/subscriptions/ledger": "Revenue",
   "/platform/invoices": "Invoices",
   "/platform/transactions": "Transactions",
+  "/platform/payouts": "Payouts",
   "/platform/domains": "Domains",
   "/platform/marketplace": "Marketplace",
   "/platform/settings/general": "Marketing & SEO",

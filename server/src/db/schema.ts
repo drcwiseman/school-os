@@ -1065,6 +1065,25 @@ export const planRegionalPrices = pgTable("plan_regional_prices", {
   planIdx: index("plan_regional_prices_plan_idx").on(t.planId),
 }));
 
+export const platformPayouts = pgTable("platform_payouts", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  amount:      integer("amount").notNull(),
+  currency:    text("currency").notNull(),
+  status:      text("status").notNull().default("pending"),
+  reference:   text("reference"),
+  note:        text("note"),
+  periodFrom:  timestamp("period_from"),
+  periodTo:    timestamp("period_to"),
+  createdBy:   uuid("created_by").references(() => platformAdmins.id, { onDelete: "set null" }),
+  completedAt: timestamp("completed_at"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+  updatedAt:   timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantIdx:  index("platform_payouts_tenant_idx").on(t.tenantId),
+  statusIdx:  index("platform_payouts_status_idx").on(t.status),
+}));
+
 export const tenantPlans = pgTable("tenant_plans", {
   tenantId:       uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   planId:         uuid("plan_id").notNull().references(() => plans.id),

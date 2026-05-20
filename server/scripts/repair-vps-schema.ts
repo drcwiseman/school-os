@@ -68,6 +68,7 @@ async function main() {
   await runSqlFile("0010_saas_ecosystem.sql");
   await runSqlFile("0011_feature_catalog_expansion.sql");
   await runSqlFile("0012_subscription_billing_interval.sql");
+  await runSqlFile("0013_platform_payouts.sql");
 
   console.log("\n✅ Repair applied.");
   console.log("Next:");

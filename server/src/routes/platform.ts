@@ -31,6 +31,12 @@ import { getPlatformRevenueLedger } from "../services/platform-revenue-ledger";
 import { getPlatformInvoicesLedger } from "../services/platform-invoices";
 import { getPlatformTransactionsLedger } from "../services/platform-transactions";
 import {
+  getPlatformPayoutsLedger,
+  createPlatformPayout,
+  updatePlatformPayoutStatus,
+  type PayoutStatus,
+} from "../services/platform-payouts";
+import {
   setTenantFeature,
   listFeatureCatalog,
   getTenantFeaturesDetailed,
@@ -298,6 +304,48 @@ router.get("/transactions", requirePlatformAuth, requirePlatformPermission("stat
     res.json({ success: true, data: await getPlatformTransactionsLedger() });
   } catch (err) { next(err); }
 });
+
+router.get("/payouts", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformPayoutsLedger() });
+  } catch (err) { next(err); }
+});
+
+router.post("/payouts", requirePlatformAuth, requirePlatformPermission("stats.read"),
+  validate({
+    body: z.object({
+      tenantSlug: z.string().min(1),
+      amount: z.number().int().positive(),
+      reference: z.string().optional(),
+      note: z.string().optional(),
+      status: z.enum(["pending", "processing", "completed", "failed", "cancelled"]).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const row = await createPlatformPayout({
+        tenantSlug: req.body.tenantSlug,
+        amount: req.body.amount,
+        reference: req.body.reference,
+        note: req.body.note,
+        status: req.body.status as PayoutStatus | undefined,
+        createdById: admin?.id,
+      });
+      res.status(201).json({ success: true, data: row });
+    } catch (err) { next(err); }
+  },
+);
+
+router.patch("/payouts/:id", requirePlatformAuth, requirePlatformPermission("stats.read"),
+  validate({ body: z.object({ status: z.enum(["pending", "processing", "completed", "failed", "cancelled"]) }) }),
+  async (req, res, next) => {
+    try {
+      const row = await updatePlatformPayoutStatus(req.params.id, req.body.status as PayoutStatus);
+      res.json({ success: true, data: row });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/subscriptions", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
   try {
