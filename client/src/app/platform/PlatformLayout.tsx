@@ -19,7 +19,9 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/subscriptions/plans": "Plans & Pricing",
   "/platform/subscriptions/ledger": "Revenue",
   "/platform/domains": "Domains",
-  "/platform/marketplace": "Add-ons Marketplace",
+  "/platform/marketplace": "Marketplace",
+  "/platform/settings/general": "Marketing & SEO",
+  "/platform/settings/marketing": "Marketing & SEO",
   "/platform/system/audit": "Audit Logs",
   "/platform/system/queue": "Job Queue",
   "/platform/support": "Support Tickets",
@@ -61,7 +63,7 @@ const navGroups = [
   {
     label: "SETTINGS",
     items: [
-      { to: "/platform/settings/general", label: "General Settings", icon: Settings },
+      { to: "/platform/settings/marketing", label: "Marketing & SEO", icon: Settings },
       { to: "/platform/settings/flags", label: "Feature Flags", icon: Flag },
       { to: "/platform/settings/email", label: "Email Templates", icon: Mail },
       { to: "/platform/settings/integrations", label: "Integrations", icon: Blocks },

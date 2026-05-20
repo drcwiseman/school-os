@@ -6,6 +6,8 @@ import { Features } from "./public/Features";
 import { Pricing } from "./public/Pricing";
 import { About } from "./public/About";
 import { Contact } from "./public/Contact";
+import { IntegrationsPage } from "./public/Integrations";
+import { PlatformMarketing } from "./platform/PlatformMarketing";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { StudentsList } from "./pages/StudentsList";
@@ -40,6 +42,8 @@ import { QueueMonitor } from "./platform/System/QueueMonitor";
 import { AuditLogs } from "./platform/System/AuditLogs";
 import { PlatformPlaceholder } from "./platform/PlatformPlaceholder";
 import { Settings } from "./pages/Settings";
+import { FeatureRoute } from "./components/FeatureRoute";
+import { MODULE_FEATURE_CODES } from "../lib/module-features";
 
 const stub = (title: string, hint?: string) => (
   <PlatformPlaceholder title={title} hint={hint} />
@@ -54,6 +58,7 @@ export const AppRoutes = () => {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
+        <Route path="/integrations" element={<IntegrationsPage />} />
       </Route>
 
       <Route path="/s/:schoolSlug/login" element={<Login />} />
@@ -82,7 +87,8 @@ export const AppRoutes = () => {
         <Route path="support" element={<SupportHub />} />
         <Route path="system/queue" element={<QueueMonitor />} />
         <Route path="system/audit" element={<AuditLogs />} />
-        <Route path="settings/general" element={stub("General settings", "Platform display currency is under Plans & Revenue for now.")} />
+        <Route path="settings/general" element={<PlatformMarketing />} />
+        <Route path="settings/marketing" element={<PlatformMarketing />} />
         <Route path="settings/flags" element={<Navigate to="/platform/tenants" replace />} />
         <Route path="settings/email" element={stub("Email templates")} />
         <Route path="settings/integrations" element={stub("Integrations")} />
@@ -92,24 +98,24 @@ export const AppRoutes = () => {
 
       <Route path="/s/:schoolSlug/*" element={<DashboardLayout />}>
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="students" element={<StudentsList />} />
-        <Route path="students/:studentId" element={<StudentDetail />} />
-        <Route path="admissions" element={<Admissions />} />
-        <Route path="attendance" element={<Attendance />} />
-        <Route path="academics" element={<Academics />} />
-        <Route path="exams" element={<Exams />} />
-        <Route path="finance" element={<Finance />} />
-        <Route path="hr" element={<HR />} />
-        <Route path="payroll" element={<Payroll />} />
-        <Route path="ops/discipline" element={<OperationModulePage moduleId="discipline" />} />
-        <Route path="ops/health" element={<OperationModulePage moduleId="health" />} />
-        <Route path="ops/library" element={<OperationModulePage moduleId="library" />} />
-        <Route path="ops/inventory" element={<OperationModulePage moduleId="inventory" />} />
-        <Route path="ops/transport" element={<OperationModulePage moduleId="transport" />} />
-        <Route path="ops/boarding" element={<OperationModulePage moduleId="boarding" />} />
+        <Route path="students" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><StudentsList /></FeatureRoute>} />
+        <Route path="students/:studentId" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><StudentDetail /></FeatureRoute>} />
+        <Route path="admissions" element={<FeatureRoute feature={MODULE_FEATURE_CODES.admissions}><Admissions /></FeatureRoute>} />
+        <Route path="attendance" element={<FeatureRoute feature={MODULE_FEATURE_CODES.attendance}><Attendance /></FeatureRoute>} />
+        <Route path="academics" element={<FeatureRoute feature={MODULE_FEATURE_CODES.academics}><Academics /></FeatureRoute>} />
+        <Route path="exams" element={<FeatureRoute feature={MODULE_FEATURE_CODES.exams}><Exams /></FeatureRoute>} />
+        <Route path="finance" element={<FeatureRoute feature={MODULE_FEATURE_CODES.finance}><Finance /></FeatureRoute>} />
+        <Route path="hr" element={<FeatureRoute feature={MODULE_FEATURE_CODES.hr}><HR /></FeatureRoute>} />
+        <Route path="payroll" element={<FeatureRoute feature={MODULE_FEATURE_CODES.payroll}><Payroll /></FeatureRoute>} />
+        <Route path="ops/discipline" element={<FeatureRoute feature={MODULE_FEATURE_CODES.discipline}><OperationModulePage moduleId="discipline" /></FeatureRoute>} />
+        <Route path="ops/health" element={<FeatureRoute feature={MODULE_FEATURE_CODES.health}><OperationModulePage moduleId="health" /></FeatureRoute>} />
+        <Route path="ops/library" element={<FeatureRoute feature={MODULE_FEATURE_CODES.library}><OperationModulePage moduleId="library" /></FeatureRoute>} />
+        <Route path="ops/inventory" element={<FeatureRoute feature={MODULE_FEATURE_CODES.inventory}><OperationModulePage moduleId="inventory" /></FeatureRoute>} />
+        <Route path="ops/transport" element={<FeatureRoute feature={MODULE_FEATURE_CODES.transport}><OperationModulePage moduleId="transport" /></FeatureRoute>} />
+        <Route path="ops/boarding" element={<FeatureRoute feature={MODULE_FEATURE_CODES.boarding}><OperationModulePage moduleId="boarding" /></FeatureRoute>} />
         <Route path="operations" element={<Navigate to="ops/discipline" replace />} />
-        <Route path="messaging" element={<Messaging />} />
-        <Route path="reports" element={<Reports />} />
+        <Route path="messaging" element={<FeatureRoute feature={MODULE_FEATURE_CODES.messaging}><Messaging /></FeatureRoute>} />
+        <Route path="reports" element={<FeatureRoute feature={MODULE_FEATURE_CODES.reports}><Reports /></FeatureRoute>} />
         <Route path="admin" element={<Admin />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="dashboard" replace />} />

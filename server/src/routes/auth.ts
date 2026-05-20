@@ -10,7 +10,7 @@ import { registerSchema, loginSchema } from "./auth.schemas";
 import { ConflictError, UnauthorizedError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
 import { getUserPermissions } from "../middleware/rbac";
-import { isFeatureAllowedForTenant } from "../services/plan-features";
+import { getTenantModuleAccess } from "../services/plan-features";
 import { exchangeImpersonationToken } from "../services/impersonation";
 import { isReadOnlyImpersonation } from "../middleware/auth";
 
@@ -79,17 +79,14 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       .from(userRoles)
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(eq(userRoles.userId, user.id));
-    const [messaging, portal] = await Promise.all([
-      isFeatureAllowedForTenant(user.tenantId, "messaging_enabled"),
-      isFeatureAllowedForTenant(user.tenantId, "portal_enabled"),
-    ]);
+    const modules = await getTenantModuleAccess(user.tenantId);
     const session = (req as any).session;
     res.json({
       success: true,
       user: safeUser,
       permissions,
       roles: roleRows,
-      modules: { messaging_enabled: messaging, portal_enabled: portal },
+      modules,
       impersonation: isReadOnlyImpersonation(session) ? { readOnly: true } : null,
     });
   } catch (err) { next(err); }

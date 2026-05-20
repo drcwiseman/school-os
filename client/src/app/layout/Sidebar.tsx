@@ -7,6 +7,7 @@ import {
   ShieldAlert, HeartPulse, Library, Package, Home, ExternalLink,
 } from "lucide-react";
 import { OPERATIONS_MODULES } from "../pages/operations-modules";
+import { MODULE_FEATURE_CODES } from "../../lib/module-features";
 
 const OPS_ICONS: Record<string, React.ElementType> = {
   discipline: ShieldAlert,
@@ -21,31 +22,41 @@ export const Sidebar: React.FC = () => {
   const { schoolSlug, logout, user, hasPermission, moduleEnabled } = useAuth();
   const location = useLocation();
 
-  const allLinks = [
+  type NavLink = {
+    name: string;
+    path: string;
+    icon: React.ElementType;
+    perm?: string;
+    feature?: string;
+    external?: boolean;
+  };
+
+  const allLinks: NavLink[] = [
     { name: "Dashboard", path: `/s/${schoolSlug}/dashboard`, icon: LayoutDashboard },
-    { name: "Admissions", path: `/s/${schoolSlug}/admissions`, icon: UserCog, perm: "admissions.view" },
-    { name: "Students", path: `/s/${schoolSlug}/students`, icon: GraduationCap, perm: "students.view" },
-    { name: "Attendance", path: `/s/${schoolSlug}/attendance`, icon: CalendarCheck, perm: "attendance.view" },
-    { name: "Academics", path: `/s/${schoolSlug}/academics`, icon: BookOpen, perm: "academics.view" },
-    { name: "Exams", path: `/s/${schoolSlug}/exams`, icon: ClipboardList, perm: "exams.view" },
-    { name: "Finance", path: `/s/${schoolSlug}/finance`, icon: DollarSign, perm: "finance.view" },
-    { name: "HR", path: `/s/${schoolSlug}/hr`, icon: Briefcase, perm: "hr.view" },
-    { name: "Payroll", path: `/s/${schoolSlug}/payroll`, icon: Wallet, perm: "payroll.view" },
+    { name: "Admissions", path: `/s/${schoolSlug}/admissions`, icon: UserCog, perm: "admissions.view", feature: MODULE_FEATURE_CODES.admissions },
+    { name: "Students", path: `/s/${schoolSlug}/students`, icon: GraduationCap, perm: "students.view", feature: MODULE_FEATURE_CODES.students },
+    { name: "Attendance", path: `/s/${schoolSlug}/attendance`, icon: CalendarCheck, perm: "attendance.view", feature: MODULE_FEATURE_CODES.attendance },
+    { name: "Academics", path: `/s/${schoolSlug}/academics`, icon: BookOpen, perm: "academics.view", feature: MODULE_FEATURE_CODES.academics },
+    { name: "Exams", path: `/s/${schoolSlug}/exams`, icon: ClipboardList, perm: "exams.view", feature: MODULE_FEATURE_CODES.exams },
+    { name: "Finance", path: `/s/${schoolSlug}/finance`, icon: DollarSign, perm: "finance.view", feature: MODULE_FEATURE_CODES.finance },
+    { name: "HR", path: `/s/${schoolSlug}/hr`, icon: Briefcase, perm: "hr.view", feature: MODULE_FEATURE_CODES.hr },
+    { name: "Payroll", path: `/s/${schoolSlug}/payroll`, icon: Wallet, perm: "payroll.view", feature: MODULE_FEATURE_CODES.payroll },
     ...OPERATIONS_MODULES.map((m) => ({
       name: m.label,
       path: `/s/${schoolSlug}/ops/${m.id}`,
       icon: OPS_ICONS[m.id] ?? Bus,
       perm: m.perm,
+      feature: MODULE_FEATURE_CODES[m.id],
     })),
-    { name: "Messaging", path: `/s/${schoolSlug}/messaging`, icon: Megaphone, perm: "messaging.view", module: "messaging_enabled" as const },
-    { name: "Parent portal", path: `/s/${schoolSlug}/portal/login`, icon: ExternalLink, module: "portal_enabled" as const, external: true },
-    { name: "Reports", path: `/s/${schoolSlug}/reports`, icon: FileBarChart, perm: "reports.view" },
+    { name: "Messaging", path: `/s/${schoolSlug}/messaging`, icon: Megaphone, perm: "messaging.view", feature: MODULE_FEATURE_CODES.messaging },
+    { name: "Parent portal", path: `/s/${schoolSlug}/portal/login`, icon: ExternalLink, feature: MODULE_FEATURE_CODES.portal, external: true },
+    { name: "Reports", path: `/s/${schoolSlug}/reports`, icon: FileBarChart, perm: "reports.view", feature: MODULE_FEATURE_CODES.reports },
     { name: "Users & Roles", path: `/s/${schoolSlug}/admin`, icon: Users, perm: "rbac.manage.roles" },
     { name: "Settings", path: `/s/${schoolSlug}/settings`, icon: Settings, perm: "settings.view" },
   ];
   const links = allLinks.filter((l) => {
     if (l.perm && !hasPermission(l.perm)) return false;
-    if ("module" in l && l.module && !moduleEnabled(l.module)) return false;
+    if (l.feature && !moduleEnabled(l.feature)) return false;
     return true;
   });
 
@@ -60,7 +71,7 @@ export const Sidebar: React.FC = () => {
         {links.map((item) => {
           const active = location.pathname.startsWith(item.path);
           const Icon = item.icon;
-          const external = "external" in item && item.external;
+          const external = item.external;
           return (
             <Link
               key={item.name}

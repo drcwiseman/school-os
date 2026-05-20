@@ -8,7 +8,8 @@ import {
 import { eq, sql, isNull } from "drizzle-orm";
 import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry, DEFAULT_CURRENCY } from "../lib/currencies";
 import { getExchangeRates, convertMinor } from "../services/currency-exchange";
-import { getPlatformDefaults, setPlatformDefaults } from "../services/platform-settings";
+import { getPlatformDefaults, setPlatformDefaults, getPlatformMarketing, setPlatformMarketing } from "../services/platform-settings";
+import { INTEGRATIONS_CATALOG } from "../lib/integrations-catalog";
 import { getPlansWithRegionalPricing } from "../services/plan-pricing";
 import {
   createPlan,
@@ -213,6 +214,38 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
     });
   } catch (err) { next(err); }
 });
+
+router.get("/integrations/catalog", requirePlatformAuth, requirePlatformPermission("plans.read"), (_req, res) => {
+  res.json({ success: true, data: INTEGRATIONS_CATALOG });
+});
+
+router.get("/settings/marketing", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformMarketing() });
+  } catch (err) { next(err); }
+});
+
+router.patch("/settings/marketing", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      siteName: z.string().optional(),
+      siteUrl: z.string().url().optional(),
+      defaultTitle: z.string().optional(),
+      defaultDescription: z.string().optional(),
+      defaultKeywords: z.string().optional(),
+      ogImage: z.string().optional(),
+      gaMeasurementId: z.string().optional(),
+      gtmContainerId: z.string().optional(),
+      plausibleDomain: z.string().optional(),
+      twitterHandle: z.string().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      res.json({ success: true, data: await setPlatformMarketing(req.body) });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/features", requirePlatformAuth, requirePlatformPermission("tenants.features"), async (_req, res, next) => {
   try {

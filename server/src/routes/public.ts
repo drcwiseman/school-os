@@ -1,6 +1,25 @@
 import { Router } from "express";
+import { getPlatformMarketing } from "../services/platform-settings";
+import { INTEGRATIONS_CATALOG } from "../lib/integrations-catalog";
 
 const router = Router();
+
+router.get("/site-config", async (_req, res, next) => {
+  try {
+    const marketing = await getPlatformMarketing();
+    res.json({
+      success: true,
+      data: {
+        marketing,
+        integrations: INTEGRATIONS_CATALOG.filter((i) => i.popular).slice(0, 8),
+      },
+    });
+  } catch (e) { next(e); }
+});
+
+router.get("/integrations", (_req, res) => {
+  res.json({ success: true, data: INTEGRATIONS_CATALOG });
+});
 
 type LeadPayload = {
   fullName: string;

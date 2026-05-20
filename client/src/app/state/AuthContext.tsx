@@ -8,7 +8,7 @@ interface User {
   lastName: string;
 }
 
-export type TenantModules = { messaging_enabled: boolean; portal_enabled: boolean };
+export type TenantModules = Record<string, boolean>;
 
 interface AuthContextType {
   user: User | null;
@@ -26,7 +26,7 @@ interface AuthContextType {
     modules?: TenantModules,
   ) => void;
   hasPermission: (code: string) => boolean;
-  moduleEnabled: (key: keyof TenantModules) => boolean;
+  moduleEnabled: (featureCode: string) => boolean;
   logout: () => Promise<void>;
 }
 
@@ -37,7 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [permissions, setPermissions] = useState<string[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [schoolSlug, setSchoolSlug] = useState<string | null>(null);
-  const [modules, setModules] = useState<TenantModules>({ messaging_enabled: true, portal_enabled: true });
+  const [modules, setModules] = useState<TenantModules>({});
   const [impersonationReadOnly, setImpersonationReadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -83,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const hasPermission = (code: string) => permissions.includes(code);
-  const moduleEnabled = (key: keyof TenantModules) => modules[key] !== false;
+  const moduleEnabled = (featureCode: string) => modules[featureCode] === true;
 
   const logout = async () => {
     if (schoolSlug) {

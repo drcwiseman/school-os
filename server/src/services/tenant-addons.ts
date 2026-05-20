@@ -79,9 +79,14 @@ export async function deactivateTenantAddon(tenantId: string, addonCode: string)
     .where(and(eq(tenantAddons.tenantId, tenantId), eq(tenantAddons.addonId, addon.id)));
 }
 
-/** Feature allowed if not addon-gated, or addon is active. */
+/** Feature allowed if not addon-gated, included on plan, or addon purchased. */
 export async function isAddonFeatureAllowed(tenantId: string, featureCode: string): Promise<boolean> {
   const requiredAddon = ADDON_GATED_FEATURES[featureCode];
   if (!requiredAddon) return true;
+
+  const { getTenantPlanFeatures } = await import("./plan-features");
+  const planFlags = await getTenantPlanFeatures(tenantId);
+  if (planFlags?.[featureCode] === true) return true;
+
   return isTenantAddonActive(tenantId, requiredAddon);
 }

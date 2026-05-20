@@ -1,0 +1,40 @@
+/** Maps API route prefixes and permission modules → subscription feature codes. */
+export const API_ROUTE_FEATURES: Record<string, string> = {
+  students: "students",
+  admissions: "admissions",
+  attendance: "attendance",
+  academics: "timetable",
+  finance: "finance_fees",
+  exams: "exams_results",
+  hr: "staff_hr",
+  payroll: "staff_hr",
+  discipline: "students",
+  health: "students",
+  library: "library",
+  inventory: "inventory",
+  transport: "transport",
+  boarding: "hostel",
+  messaging: "messaging_enabled",
+  reports: "advanced_reporting",
+};
+
+/** Client sidebar / route feature keys. */
+export const SIDEBAR_MODULE_FEATURES: Record<string, string> = {
+  admissions: "admissions",
+  students: "students",
+  attendance: "attendance",
+  academics: "timetable",
+  exams: "exams_results",
+  finance: "finance_fees",
+  hr: "staff_hr",
+  payroll: "staff_hr",
+  discipline: "students",
+  health: "students",
+  library: "library",
+  inventory: "inventory",
+  transport: "transport",
+  boarding: "hostel",
+  messaging: "messaging_enabled",
+  portal: "portal_enabled",
+  reports: "advanced_reporting",
+};

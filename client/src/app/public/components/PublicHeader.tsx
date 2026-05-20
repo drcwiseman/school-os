@@ -39,6 +39,7 @@ export const PublicHeader: React.FC = () => {
               <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${featuresOpen ? "rotate-180" : ""}`} />
             </button>
             <NavLink to="/pricing" className={linkClass} onClick={closeAll}>Pricing</NavLink>
+            <NavLink to="/integrations" className={linkClass} onClick={closeAll}>Integrations</NavLink>
             <NavLink to="/about" className={linkClass} onClick={closeAll}>About</NavLink>
             <NavLink to="/contact" className={linkClass} onClick={closeAll}>Contact</NavLink>
           </nav>

@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { Loader2, Save, Mail, Send } from "lucide-react";
+import { useAuth } from "../state/AuthContext";
 import { COUNTRY_OPTIONS, CURRENCY_OPTIONS, DEFAULT_COUNTRY, DEFAULT_CURRENCY } from "../../lib/currencies";
 
 type SmtpForm = {
@@ -31,6 +32,7 @@ const emptySmtp: SmtpForm = {
 export const Settings: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
+  const { moduleEnabled } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
@@ -41,7 +43,6 @@ export const Settings: React.FC = () => {
   const [footer, setFooter] = useState("");
   const [resultsVisible, setResultsVisible] = useState(true);
   const [feesMustBeClear, setFeesMustBeClear] = useState(false);
-  const [customSmtpAllowed, setCustomSmtpAllowed] = useState(false);
   const [smtp, setSmtp] = useState<SmtpForm>(emptySmtp);
   const [testEmail, setTestEmail] = useState("");
 
@@ -59,7 +60,6 @@ export const Settings: React.FC = () => {
         const flags = (s.featureFlagsJson ?? {}) as Record<string, boolean>;
         setResultsVisible(flags.results_visible !== false);
         setFeesMustBeClear(flags.fees_must_be_clear === true);
-        setCustomSmtpAllowed(Boolean(s.customSmtpAllowed));
         const raw = (s.smtpSettingsJson ?? {}) as SmtpForm;
         setSmtp({
           ...emptySmtp,
@@ -85,7 +85,7 @@ export const Settings: React.FC = () => {
         brandingJson: { logoText: schoolName, footer },
         featureFlagsJson: { results_visible: resultsVisible, fees_must_be_clear: feesMustBeClear },
       };
-      if (customSmtpAllowed) {
+      if (moduleEnabled("custom_smtp")) {
         const smtpPayload: Record<string, unknown> = {
           enabled: smtp.enabled,
           host: smtp.host,
@@ -199,7 +199,7 @@ export const Settings: React.FC = () => {
           <Mail className="w-5 h-5 text-primary-400" />
           <h3 className="text-white font-semibold">Custom email (SMTP)</h3>
         </div>
-        {!customSmtpAllowed ? (
+        {!moduleEnabled("custom_smtp") ? (
           <p className="text-sm text-slate-400">
             Custom SMTP is not on your plan. Ask your platform admin to assign the{" "}
             <span className="font-mono text-slate-300">custom_smtp</span> feature to your subscription tier.

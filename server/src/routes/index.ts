@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { resolveTenant } from "../middleware/tenant";
 import { blockWriteIfImpersonationReadOnly } from "../middleware/auth";
+import { requireTenantFeature } from "../middleware/require-feature";
+import { API_ROUTE_FEATURES } from "../lib/feature-module-map";
 import authRoutes     from "./auth";
 import tenantRoutes   from "./tenant";
 import studentRoutes  from "./students";
@@ -43,27 +45,32 @@ router.use("/s/:schoolSlug", resolveTenant, (req, res, next) => {
 
 const schoolApi = [resolveTenant, blockWriteIfImpersonationReadOnly];
 
+function featureGuard(routeKey: string) {
+  const code = API_ROUTE_FEATURES[routeKey];
+  return code ? [requireTenantFeature(code)] : [];
+}
+
 router.use("/s/:schoolSlug/api/auth",       ...schoolApi, authRoutes);
 router.use("/s/:schoolSlug/api/admin",      ...schoolApi, tenantRoutes);
-router.use("/s/:schoolSlug/api/students",   ...schoolApi, studentRoutes);
-router.use("/s/:schoolSlug/api/admissions", ...schoolApi, admissionsRouter);
-router.use("/s/:schoolSlug/api/attendance", ...schoolApi, attendanceRouter);
-router.use("/s/:schoolSlug/api/academics",   ...schoolApi, academicsRoutes);
-router.use("/s/:schoolSlug/api/finance",     ...schoolApi, financeRoutes);
-router.use("/s/:schoolSlug/api/exams",       ...schoolApi, examsRoutes);
-router.use("/s/:schoolSlug/api/hr",          ...schoolApi, hrRoutes);
-router.use("/s/:schoolSlug/api/payroll",     ...schoolApi, payrollRoutes);
-router.use("/s/:schoolSlug/api/discipline",  ...schoolApi, disciplineRoutes);
-router.use("/s/:schoolSlug/api/health",      ...schoolApi, healthRoutes);
-router.use("/s/:schoolSlug/api/library",     ...schoolApi, libraryRoutes);
-router.use("/s/:schoolSlug/api/inventory",   ...schoolApi, inventoryRoutes);
-router.use("/s/:schoolSlug/api/transport",   ...schoolApi, transportRoutes);
-router.use("/s/:schoolSlug/api/boarding",    ...schoolApi, boardingRoutes);
-router.use("/s/:schoolSlug/api/messaging",   ...schoolApi, messagingRoutes);
-router.use("/s/:schoolSlug/api/reports",     ...schoolApi, reportsRoutes);
-router.use("/s/:schoolSlug/api/portal",      resolveTenant, portalRoutes);
-router.use("/s/:schoolSlug/api/settings",    ...schoolApi, settingsRoutes);
 router.use("/s/:schoolSlug/api/dashboard",   ...schoolApi, dashboardRoutes);
+router.use("/s/:schoolSlug/api/settings",    ...schoolApi, settingsRoutes);
+router.use("/s/:schoolSlug/api/students",   ...schoolApi, ...featureGuard("students"), studentRoutes);
+router.use("/s/:schoolSlug/api/admissions", ...schoolApi, ...featureGuard("admissions"), admissionsRouter);
+router.use("/s/:schoolSlug/api/attendance", ...schoolApi, ...featureGuard("attendance"), attendanceRouter);
+router.use("/s/:schoolSlug/api/academics",   ...schoolApi, ...featureGuard("academics"), academicsRoutes);
+router.use("/s/:schoolSlug/api/finance",     ...schoolApi, ...featureGuard("finance"), financeRoutes);
+router.use("/s/:schoolSlug/api/exams",       ...schoolApi, ...featureGuard("exams"), examsRoutes);
+router.use("/s/:schoolSlug/api/hr",          ...schoolApi, ...featureGuard("hr"), hrRoutes);
+router.use("/s/:schoolSlug/api/payroll",     ...schoolApi, ...featureGuard("payroll"), payrollRoutes);
+router.use("/s/:schoolSlug/api/discipline",  ...schoolApi, ...featureGuard("discipline"), disciplineRoutes);
+router.use("/s/:schoolSlug/api/health",      ...schoolApi, ...featureGuard("health"), healthRoutes);
+router.use("/s/:schoolSlug/api/library",     ...schoolApi, ...featureGuard("library"), libraryRoutes);
+router.use("/s/:schoolSlug/api/inventory",   ...schoolApi, ...featureGuard("inventory"), inventoryRoutes);
+router.use("/s/:schoolSlug/api/transport",   ...schoolApi, ...featureGuard("transport"), transportRoutes);
+router.use("/s/:schoolSlug/api/boarding",    ...schoolApi, ...featureGuard("boarding"), boardingRoutes);
+router.use("/s/:schoolSlug/api/messaging",   ...schoolApi, ...featureGuard("messaging"), messagingRoutes);
+router.use("/s/:schoolSlug/api/reports",     ...schoolApi, ...featureGuard("reports"), reportsRoutes);
+router.use("/s/:schoolSlug/api/portal",      resolveTenant, requireTenantFeature("portal_enabled"), portalRoutes);
 router.use("/s/:schoolSlug/api/saas",        ...schoolApi, saasRoutes);
 
 export default router;

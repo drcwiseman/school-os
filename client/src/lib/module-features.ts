@@ -1,0 +1,20 @@
+/** Sidebar route id → subscription feature code (matches server SIDEBAR_MODULE_FEATURES). */
+export const MODULE_FEATURE_CODES: Record<string, string> = {
+  admissions: "admissions",
+  students: "students",
+  attendance: "attendance",
+  academics: "timetable",
+  exams: "exams_results",
+  finance: "finance_fees",
+  hr: "staff_hr",
+  payroll: "staff_hr",
+  discipline: "students",
+  health: "students",
+  library: "library",
+  inventory: "inventory",
+  transport: "transport",
+  boarding: "hostel",
+  messaging: "messaging_enabled",
+  portal: "portal_enabled",
+  reports: "advanced_reporting",
+};
