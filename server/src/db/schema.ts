@@ -1066,9 +1066,13 @@ export const planRegionalPrices = pgTable("plan_regional_prices", {
 }));
 
 export const tenantPlans = pgTable("tenant_plans", {
-  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  planId:    uuid("plan_id").notNull().references(() => plans.id),
-  startedAt: timestamp("started_at").notNull().defaultNow(),
+  tenantId:       uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  planId:         uuid("plan_id").notNull().references(() => plans.id),
+  startedAt:      timestamp("started_at").notNull().defaultNow(),
+  billingInterval: text("billing_interval").notNull().default("monthly"),
+  renewsAt:       timestamp("renews_at"),
+  /** One-time buyoff amount in minor units (when billing_interval = lifetime) */
+  oneTimeAmount:  integer("one_time_amount"),
 }, (t) => ({
   pk: uniqueIndex("tenant_plans_pk").on(t.tenantId),
 }));

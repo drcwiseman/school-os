@@ -113,6 +113,9 @@ export async function ensureRuntimeSchema() {
     ON CONFLICT ("code") DO NOTHING`,
     `ALTER TABLE "features" ADD COLUMN IF NOT EXISTS "category" text NOT NULL DEFAULT 'modules'`,
     `ALTER TABLE "tenant_settings" ADD COLUMN IF NOT EXISTS "smtp_settings_json" jsonb NOT NULL DEFAULT '{}'::jsonb`,
+    `ALTER TABLE "tenant_plans" ADD COLUMN IF NOT EXISTS "billing_interval" text NOT NULL DEFAULT 'monthly'`,
+    `ALTER TABLE "tenant_plans" ADD COLUMN IF NOT EXISTS "renews_at" timestamp`,
+    `ALTER TABLE "tenant_plans" ADD COLUMN IF NOT EXISTS "one_time_amount" integer`,
   ];
 
   for (const stmt of statements) {

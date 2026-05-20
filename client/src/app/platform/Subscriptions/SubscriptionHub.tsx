@@ -16,6 +16,12 @@ import {
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
 import { formatMoneyMinor, COUNTRY_OPTIONS } from "../../../lib/currencies";
+import {
+  BILLING_INTERVALS,
+  BILLING_INTERVAL_LABELS,
+  formatPeriodPrice,
+  type BillingInterval,
+} from "../../../lib/billing-intervals";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -28,6 +34,10 @@ type SubscriptionRow = {
   planCode: string | null;
   planName: string | null;
   priceMonthly: number | null;
+  billingInterval: BillingInterval | null;
+  renewsAt: string | null;
+  oneTimeAmount: number | null;
+  periodAmount: number | null;
   resolvedCurrency: string | null;
   country: string | null;
   currency: string | null;
@@ -70,12 +80,15 @@ export const SubscriptionHub: React.FC = () => {
   const [planFilter, setPlanFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "trial" | "suspended">("all");
   const [showUnassigned, setShowUnassigned] = useState(false);
+  const [intervalFilter, setIntervalFilter] = useState<"all" | BillingInterval>("all");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState<SubscriptionRow | null>(null);
   const [formSlug, setFormSlug] = useState("");
   const [formPlan, setFormPlan] = useState("starter");
   const [formStarted, setFormStarted] = useState("");
+  const [formInterval, setFormInterval] = useState<BillingInterval>("monthly");
+  const [formOneTimeMajor, setFormOneTimeMajor] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
@@ -109,6 +122,7 @@ export const SubscriptionHub: React.FC = () => {
       unassigned: unassigned.length,
       active: rows.filter((r) => r.status === "active").length,
       trial: rows.filter((r) => r.status === "trial").length,
+      lifetime: rows.filter((r) => r.billingInterval === "lifetime").length,
     };
   }, [rows]);
 
@@ -116,6 +130,7 @@ export const SubscriptionHub: React.FC = () => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (intervalFilter !== "all" && r.billingInterval !== intervalFilter) return false;
       if (planFilter === "unassigned" && r.planCode) return false;
       if (planFilter !== "all" && planFilter !== "unassigned" && (r.planCode ?? "") !== planFilter) return false;
       if (!showUnassigned && !r.planCode) return false;
@@ -124,16 +139,21 @@ export const SubscriptionHub: React.FC = () => {
         r.name.toLowerCase().includes(q) ||
         r.slug.toLowerCase().includes(q) ||
         (r.planName?.toLowerCase().includes(q) ?? false) ||
-        (r.adminEmail?.toLowerCase().includes(q) ?? false)
+        (r.adminEmail?.toLowerCase().includes(q) ?? false) ||
+        (r.billingInterval?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [rows, search, planFilter, statusFilter, showUnassigned]);
+  }, [rows, search, planFilter, statusFilter, showUnassigned, intervalFilter]);
 
   const openAssign = (row?: SubscriptionRow) => {
     setEditRow(row ?? null);
     setFormSlug(row?.slug ?? "");
     setFormPlan(row?.planCode ?? plans[0]?.code ?? "starter");
     setFormStarted(row?.startedAt ? row.startedAt.slice(0, 10) : new Date().toISOString().slice(0, 10));
+    setFormInterval(row?.billingInterval ?? "monthly");
+    setFormOneTimeMajor(
+      row?.oneTimeAmount != null ? String(row.oneTimeAmount / 100) : "",
+    );
     setModalOpen(true);
   };
 
@@ -143,18 +163,23 @@ export const SubscriptionHub: React.FC = () => {
     setSaving(true);
     try {
       const startedAt = formStarted ? new Date(formStarted).toISOString() : undefined;
+      const oneTimeAmount =
+        formInterval === "lifetime" && formOneTimeMajor.trim()
+          ? Math.round(parseFloat(formOneTimeMajor) * 100)
+          : undefined;
+      const body = {
+        planCode: formPlan,
+        startedAt,
+        billingInterval: formInterval,
+        ...(formInterval === "lifetime" && oneTimeAmount != null && !Number.isNaN(oneTimeAmount)
+          ? { oneTimeAmount }
+          : {}),
+      };
       if (editRow?.planCode) {
-        await api.patch(`/api/platform/subscriptions/${formSlug}`, {
-          planCode: formPlan,
-          startedAt,
-        });
+        await api.patch(`/api/platform/subscriptions/${formSlug}`, body);
         toast("Subscription updated", "success");
       } else {
-        await api.post("/api/platform/subscriptions", {
-          tenantSlug: formSlug,
-          planCode: formPlan,
-          startedAt,
-        });
+        await api.post("/api/platform/subscriptions", { tenantSlug: formSlug, ...body });
         toast("Subscription assigned", "success");
       }
       setModalOpen(false);
@@ -229,11 +254,12 @@ export const SubscriptionHub: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         {[
           { label: "Schools", value: stats.total },
           { label: "Subscribed", value: stats.subscribed },
           { label: "Unassigned", value: stats.unassigned },
+          { label: "Lifetime buyoff", value: stats.lifetime },
           { label: "Active", value: stats.active },
           { label: "Trial", value: stats.trial },
         ].map((s) => (
@@ -267,6 +293,12 @@ export const SubscriptionHub: React.FC = () => {
           <option value="trial">Trial</option>
           <option value="suspended">Suspended</option>
         </select>
+        <select className="input text-sm w-auto" value={intervalFilter} onChange={(e) => setIntervalFilter(e.target.value as typeof intervalFilter)}>
+          <option value="all">All billing</option>
+          {BILLING_INTERVALS.map((i) => (
+            <option key={i} value={i}>{BILLING_INTERVAL_LABELS[i]}</option>
+          ))}
+        </select>
         <label className="inline-flex items-center gap-2 text-xs text-slate-600 px-2">
           <input type="checkbox" checked={showUnassigned} onChange={(e) => setShowUnassigned(e.target.checked)} />
           Show schools without a plan
@@ -280,7 +312,9 @@ export const SubscriptionHub: React.FC = () => {
               <tr>
                 <th className="px-4 py-3">School</th>
                 <th className="px-4 py-3">Plan</th>
-                <th className="px-4 py-3">MRR</th>
+                <th className="px-4 py-3">Billing</th>
+                <th className="px-4 py-3">Amount</th>
+                <th className="px-4 py-3">Renews</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Started</th>
                 <th className="px-4 py-3">Region</th>
@@ -310,10 +344,26 @@ export const SubscriptionHub: React.FC = () => {
                     )}
                     {r.planCode && <p className="text-[10px] font-mono text-slate-400">{r.planCode}</p>}
                   </td>
-                  <td className="px-4 py-3 tabular-nums text-slate-700">
-                    {r.priceMonthly != null && r.resolvedCurrency
-                      ? formatMoneyMinor(r.priceMonthly, r.resolvedCurrency)
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {r.billingInterval
+                      ? BILLING_INTERVAL_LABELS[r.billingInterval]
+                      : r.planCode ? "Monthly (default)" : "—"}
+                  </td>
+                  <td className="px-4 py-3 tabular-nums text-slate-700 text-xs">
+                    {r.resolvedCurrency
+                      ? formatPeriodPrice(
+                          r.periodAmount,
+                          r.priceMonthly,
+                          r.billingInterval,
+                          r.resolvedCurrency,
+                          formatMoneyMinor,
+                        )
                       : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600 text-xs">
+                    {r.billingInterval === "lifetime"
+                      ? "—"
+                      : formatDate(r.renewsAt)}
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{formatDate(r.startedAt)}</td>
@@ -395,6 +445,35 @@ export const SubscriptionHub: React.FC = () => {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Billing cycle</label>
+                <select
+                  className="input text-sm mt-1 w-full"
+                  value={formInterval}
+                  onChange={(e) => setFormInterval(e.target.value as BillingInterval)}
+                >
+                  {BILLING_INTERVALS.map((i) => (
+                    <option key={i} value={i}>{BILLING_INTERVAL_LABELS[i]}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Monthly, quarterly, or yearly renew on schedule. Lifetime is a one-time buyoff.
+                </p>
+              </div>
+              {formInterval === "lifetime" && (
+                <div>
+                  <label className="text-xs font-medium text-slate-600">One-time amount (major units)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="input text-sm mt-1 w-full"
+                    placeholder="e.g. 5000"
+                    value={formOneTimeMajor}
+                    onChange={(e) => setFormOneTimeMajor(e.target.value)}
+                  />
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-slate-600">Started date</label>
                 <input type="date" className="input text-sm mt-1 w-full" value={formStarted} onChange={(e) => setFormStarted(e.target.value)} />

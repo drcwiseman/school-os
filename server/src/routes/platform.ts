@@ -24,6 +24,7 @@ import {
 import {
   listPlatformSubscriptions,
   assignTenantPlan,
+  updateTenantSubscription,
   removeTenantPlan,
 } from "../services/platform-subscriptions";
 import {
@@ -285,15 +286,21 @@ router.post("/subscriptions", requirePlatformAuth, requirePlatformPermission("pl
       tenantSlug: z.string().min(1),
       planCode: z.string().min(1),
       startedAt: z.string().datetime().optional(),
+      billingInterval: z.enum(["monthly", "quarterly", "yearly", "lifetime"]).optional(),
+      oneTimeAmount: z.number().int().min(0).optional(),
     }),
   }),
   async (req, res, next) => {
     try {
-      const startedAt = req.body.startedAt ? new Date(req.body.startedAt) : undefined;
-      const { tenant, plan } = await assignTenantPlan(req.body.tenantSlug, req.body.planCode, startedAt);
+      const { tenant, plan, billingInterval } = await assignTenantPlan(req.body.tenantSlug, {
+        planCode: req.body.planCode,
+        startedAt: req.body.startedAt ? new Date(req.body.startedAt) : undefined,
+        billingInterval: req.body.billingInterval,
+        oneTimeAmount: req.body.oneTimeAmount,
+      });
       res.status(201).json({
         success: true,
-        data: { tenantSlug: tenant.slug, planCode: plan.code, planName: plan.name },
+        data: { tenantSlug: tenant.slug, planCode: plan.code, planName: plan.name, billingInterval },
       });
     } catch (err) { next(err); }
   },
@@ -304,24 +311,18 @@ router.patch("/subscriptions/:slug", requirePlatformAuth, requirePlatformPermiss
     body: z.object({
       planCode: z.string().min(1).optional(),
       startedAt: z.string().datetime().optional(),
+      billingInterval: z.enum(["monthly", "quarterly", "yearly", "lifetime"]).optional(),
+      oneTimeAmount: z.number().int().min(0).optional(),
     }),
   }),
   async (req, res, next) => {
     try {
-      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
-      if (!tenant) throw new NotFoundError("School not found");
-
-      if (req.body.planCode) {
-        await assignTenantPlan(req.params.slug, req.body.planCode,
-          req.body.startedAt ? new Date(req.body.startedAt) : undefined);
-      } else if (req.body.startedAt) {
-        const [tp] = await db.select().from(tenantPlans).where(eq(tenantPlans.tenantId, tenant.id)).limit(1);
-        if (!tp) throw new NotFoundError("No subscription for this school");
-        await db.update(tenantPlans)
-          .set({ startedAt: new Date(req.body.startedAt) })
-          .where(eq(tenantPlans.tenantId, tenant.id));
-      }
-
+      await updateTenantSubscription(req.params.slug, {
+        planCode: req.body.planCode,
+        startedAt: req.body.startedAt ? new Date(req.body.startedAt) : undefined,
+        billingInterval: req.body.billingInterval,
+        oneTimeAmount: req.body.oneTimeAmount,
+      });
       res.json({ success: true, data: await listPlatformSubscriptions() });
     } catch (err) { next(err); }
   },
