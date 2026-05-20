@@ -145,7 +145,7 @@ export const PlatformUsersHub: React.FC = () => {
         role: formRole,
         password: formPassword,
       });
-      toast("Platform user created", "success");
+      toast("User created — welcome email sent with login details", "success");
       setModal(null);
       await load(true);
     } catch (err: any) {
@@ -177,7 +177,7 @@ export const PlatformUsersHub: React.FC = () => {
     setSaving(true);
     try {
       await api.post(`/api/platform/users/${editRow.id}/reset-password`, { newPassword: formPassword });
-      toast("Password reset — user must sign in again", "success");
+      toast("Password reset — email sent with new login details", "success");
       setModal(null);
       await load(true);
     } catch (err: any) {
@@ -216,7 +216,7 @@ export const PlatformUsersHub: React.FC = () => {
               Platform users
             </h2>
             <p className="text-xs text-slate-500 mt-1 max-w-xl">
-              SchoolOS operator accounts (not school staff). Super admins can provision schools, manage plans, and invite support or billing operators.
+              SchoolOS operator accounts (not school staff). New users and password resets receive an email with login URL and credentials (requires platform SMTP on the server).
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

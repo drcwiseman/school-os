@@ -5,6 +5,10 @@ import { NotFoundError, BadRequestError, ForbiddenError } from "../middleware/er
 import { hashPassword } from "../middleware/auth";
 import { platformAdminPublic } from "../db/platform-admin-columns";
 import { PLATFORM_ROLE_PERMISSIONS } from "../lib/platform-permissions";
+import {
+  sendPlatformAdminInviteEmail,
+  sendPlatformAdminPasswordResetEmail,
+} from "./platform-email";
 
 export const PLATFORM_ROLES = ["super_admin", "support", "billing"] as const;
 export type PlatformRole = (typeof PLATFORM_ROLES)[number];
@@ -80,10 +84,27 @@ export async function createPlatformAdmin(opts: {
     createdAt: platformAdmins.createdAt,
   });
 
+  try {
+    await sendPlatformAdminInviteEmail({
+      to: email,
+      name: row.name,
+      email: row.email,
+      password: opts.password,
+      role: opts.role,
+    });
+  } catch (err) {
+    await db.delete(platformSessions).where(eq(platformSessions.adminId, row.id));
+    await db.delete(platformAdmins).where(eq(platformAdmins.id, row.id));
+    throw new BadRequestError(
+      `User was not created because the welcome email could not be sent: ${(err as Error).message}`,
+    );
+  }
+
   return {
     ...platformAdminPublic(row),
     createdAt: row.createdAt.toISOString(),
     activeSessions: 0,
+    emailSent: true,
   };
 }
 
@@ -130,14 +151,31 @@ export async function updatePlatformAdmin(
 }
 
 export async function resetPlatformAdminPassword(adminId: string, newPassword: string) {
-  const [existing] = await db.select({ id: platformAdmins.id }).from(platformAdmins)
-    .where(eq(platformAdmins.id, adminId)).limit(1);
+  const [existing] = await db.select({
+    id: platformAdmins.id,
+    email: platformAdmins.email,
+    name: platformAdmins.name,
+  }).from(platformAdmins).where(eq(platformAdmins.id, adminId)).limit(1);
   if (!existing) throw new NotFoundError("Admin not found");
 
   const passwordHash = await hashPassword(newPassword);
   await db.update(platformAdmins).set({ passwordHash }).where(eq(platformAdmins.id, adminId));
   await db.delete(platformSessions).where(eq(platformSessions.adminId, adminId));
-  return { success: true };
+
+  try {
+    await sendPlatformAdminPasswordResetEmail({
+      to: existing.email,
+      name: existing.name,
+      email: existing.email,
+      newPassword,
+    });
+  } catch (err) {
+    throw new BadRequestError(
+      `Password was updated but notification email failed: ${(err as Error).message}`,
+    );
+  }
+
+  return { success: true, emailSent: true };
 }
 
 export async function deletePlatformAdmin(adminId: string, actorId: string) {
