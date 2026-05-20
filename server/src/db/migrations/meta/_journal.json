@@ -78,6 +78,34 @@
       "when": 1779188400000,
       "tag": "0010_saas_ecosystem",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1779188800000,
+      "tag": "0011_feature_catalog_expansion",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1779189200000,
+      "tag": "0012_subscription_billing_interval",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1779189600000,
+      "tag": "0013_platform_payouts",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1779190000000,
+      "tag": "0014_platform_support_tickets",
+      "breakpoints": true
     }
   ]
 }

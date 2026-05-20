@@ -1178,6 +1178,38 @@ export const platformAuditLogs = pgTable("platform_audit_logs", {
   createdIdx: index("platform_audit_logs_created_idx").on(t.createdAt),
 }));
 
+export const platformSupportTickets = pgTable("platform_support_tickets", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+  subject:          text("subject").notNull(),
+  description:      text("description").notNull(),
+  status:           text("status").notNull().default("open"),
+  priority:         text("priority").notNull().default("normal"),
+  category:         text("category").notNull().default("general"),
+  requesterName:    text("requester_name"),
+  requesterEmail:   text("requester_email"),
+  assignedAdminId:  uuid("assigned_admin_id").references(() => platformAdmins.id, { onDelete: "set null" }),
+  createdByAdminId: uuid("created_by_admin_id").references(() => platformAdmins.id, { onDelete: "set null" }),
+  resolvedAt:       timestamp("resolved_at"),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  statusIdx:  index("platform_support_tickets_status_idx").on(t.status),
+  tenantIdx:  index("platform_support_tickets_tenant_idx").on(t.tenantId),
+  updatedIdx: index("platform_support_tickets_updated_idx").on(t.updatedAt),
+}));
+
+export const platformSupportTicketMessages = pgTable("platform_support_ticket_messages", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  ticketId:        uuid("ticket_id").notNull().references(() => platformSupportTickets.id, { onDelete: "cascade" }),
+  platformAdminId: uuid("platform_admin_id").references(() => platformAdmins.id, { onDelete: "set null" }),
+  body:            text("body").notNull(),
+  isInternal:      boolean("is_internal").notNull().default(false),
+  createdAt:       timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  ticketIdx: index("platform_support_ticket_messages_ticket_idx").on(t.ticketId),
+}));
+
 export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {
   id:              uuid("id").primaryKey().defaultRandom(),
   token:           text("token").notNull().unique(),

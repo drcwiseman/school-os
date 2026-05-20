@@ -84,6 +84,16 @@ import {
   getPlatformDeliveryLogDetail,
 } from "../services/platform-system-logs";
 import {
+  getPlatformSupportHub,
+  createPlatformSupportTicket,
+  updatePlatformSupportTicket,
+  addPlatformSupportTicketMessage,
+  getPlatformSupportTicketDetail,
+  TICKET_STATUSES,
+  TICKET_PRIORITIES,
+  TICKET_CATEGORIES,
+} from "../services/platform-support";
+import {
   createImpersonationToken, findImpersonationTargetUser,
 } from "../services/impersonation";
 import {
@@ -938,6 +948,95 @@ router.get("/logs/delivery/:id", requirePlatformAuth, requirePlatformPermission(
     res.json({ success: true, data: detail });
   } catch (err) { next(err); }
 });
+
+router.get("/support", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const data = await getPlatformSupportHub({
+      status: typeof req.query.status === "string" ? req.query.status : undefined,
+      priority: typeof req.query.priority === "string" ? req.query.priority : undefined,
+      tenantId: typeof req.query.tenantId === "string" ? req.query.tenantId : undefined,
+      assignedAdminId: typeof req.query.assigned === "string" ? req.query.assigned : undefined,
+      search: typeof req.query.search === "string" ? req.query.search : undefined,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
+
+router.get("/support/:id", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformSupportTicketDetail(req.params.id) });
+  } catch (err) { next(err); }
+});
+
+router.post("/support", requirePlatformAuth, requirePlatformPermission("stats.read"),
+  validate({
+    body: z.object({
+      tenantId: z.string().uuid().optional().nullable(),
+      subject: z.string().min(3).max(200),
+      description: z.string().min(1).max(8000),
+      priority: z.enum(TICKET_PRIORITIES).optional(),
+      category: z.enum(TICKET_CATEGORIES).optional(),
+      requesterName: z.string().max(120).optional(),
+      requesterEmail: z.string().email().optional(),
+      assignedAdminId: z.string().uuid().optional().nullable(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
+      const data = await createPlatformSupportTicket(admin.id, req.body);
+      await logPlatformAction(admin.id, "support.ticket.create", {
+        tenantId: req.body.tenantId ?? undefined,
+        entityType: "support_ticket",
+        entityId: data.ticket.id,
+        after: { subject: req.body.subject, priority: req.body.priority ?? "normal" },
+        ip: req.ip,
+      });
+      res.status(201).json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.patch("/support/:id", requirePlatformAuth, requirePlatformPermission("stats.read"),
+  validate({
+    body: z.object({
+      status: z.enum(TICKET_STATUSES).optional(),
+      priority: z.enum(TICKET_PRIORITIES).optional(),
+      category: z.enum(TICKET_CATEGORIES).optional(),
+      assignedAdminId: z.string().uuid().nullable().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
+      const data = await updatePlatformSupportTicket(req.params.id, req.body);
+      await logPlatformAction(admin.id, "support.ticket.update", {
+        tenantId: data.ticket.tenantId,
+        entityType: "support_ticket",
+        entityId: req.params.id,
+        after: req.body,
+        ip: req.ip,
+      });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/support/:id/messages", requirePlatformAuth, requirePlatformPermission("stats.read"),
+  validate({
+    body: z.object({
+      message: z.string().min(1).max(8000),
+      isInternal: z.boolean().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
+      const data = await addPlatformSupportTicketMessage(req.params.id, admin.id, req.body);
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/addons", requirePlatformAuth, async (_req, res, next) => {
   try {
