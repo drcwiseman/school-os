@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="SchoolOS  Academy management platform">
+  <rect width="1200" height="630" fill="#0f2744"/>
+  <rect x="80" y="80" width="120" height="120" rx="24" fill="#2d6a4f"/>
+  <path fill="#fff" d="M140 118c-12 0-22 8-22 18v6c0 10 10 18 22 18s22-8 22-18v-6c0-10-10-18-22-18zm0 8c6 0 11 4 11 10v4c0 6-5 10-11 10s-11-4-11-10v-4c0-6 5-10 11-10zm-14 32h28v8h-28v-8z"/>
+  <text x="240" y="200" fill="#fff" font-family="system-ui,sans-serif" font-size="72" font-weight="700">SchoolOS</text>
+  <text x="240" y="280" fill="#95d5b2" font-family="system-ui,sans-serif" font-size="36">Academy management for modern schools</text>
+</svg>

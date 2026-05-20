@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { ChevronDown, GraduationCap, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { MEGA_MENU } from "../data/marketing";
+import { OrgBrandMark } from "./OrgBrandMark";
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `mkt-nav-link rounded-full px-3 py-1.5 ${isActive ? "mkt-nav-link-active" : ""}`;
@@ -19,14 +20,7 @@ export const PublicHeader: React.FC = () => {
     <header className="mkt-header sticky top-0 z-50">
       <div className="mx-auto max-w-6xl px-4 pb-3 pt-4 lg:px-6 relative">
         <div className="mkt-nav-pill flex items-center justify-between gap-3 px-3 py-2.5 sm:px-5">
-          <Link to="/" className="flex shrink-0 items-center gap-2.5" onClick={closeAll}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-marketing-accent to-marketing-navy text-white shadow-md">
-              <GraduationCap className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <span className="font-heading text-lg font-bold tracking-tight text-marketing-navy">
-              SchoolOS
-            </span>
-          </Link>
+          <OrgBrandMark onNavigate={closeAll} />
 
           <nav className="hidden items-center gap-1 lg:flex">
             <button

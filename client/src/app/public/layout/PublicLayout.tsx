@@ -2,12 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { PublicHeader } from "../components/PublicHeader";
 import { PublicFooter } from "../components/PublicFooter";
-import { SeoHead } from "../components/SeoHead";
+import { SeoHead, seoFromMarketing } from "../components/SeoHead";
 import { AnalyticsScripts } from "../components/AnalyticsScripts";
+import { PublicSiteProvider } from "../context/PublicSiteContext";
+import type { PublicMarketingConfig } from "../context/PublicSiteContext";
 import { api } from "../../api/client";
 
 export const PublicLayout: React.FC = () => {
-  const [marketing, setMarketing] = useState<Record<string, string> | null>(null);
+  const [marketing, setMarketing] = useState<PublicMarketingConfig | null>(null);
 
   useEffect(() => {
     document.body.classList.add("marketing-active");
@@ -18,14 +20,9 @@ export const PublicLayout: React.FC = () => {
   }, []);
 
   return (
+    <PublicSiteProvider value={marketing}>
     <div className="marketing-page flex min-h-screen flex-col">
-      <SeoHead
-        title={marketing?.defaultTitle}
-        description={marketing?.defaultDescription}
-        keywords={marketing?.defaultKeywords}
-        canonical={marketing?.siteUrl}
-        ogImage={marketing?.ogImage}
-      />
+      <SeoHead {...seoFromMarketing(marketing)} />
       <AnalyticsScripts
         config={{
           gaMeasurementId: marketing?.gaMeasurementId,
@@ -39,5 +36,6 @@ export const PublicLayout: React.FC = () => {
       </main>
       <PublicFooter />
     </div>
+    </PublicSiteProvider>
   );
 };

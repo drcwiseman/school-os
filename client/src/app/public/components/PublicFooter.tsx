@@ -1,18 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { GraduationCap } from "lucide-react";
+import { OrgBrandMark } from "./OrgBrandMark";
 
 export const PublicFooter: React.FC = () => (
   <footer className="mkt-footer">
     <div className="mx-auto max-w-6xl section-pad !pb-10 !pt-14">
       <div className="grid gap-12 md:grid-cols-12">
         <div className="md:col-span-5">
-          <Link to="/" className="inline-flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-marketing-accent/20">
-              <GraduationCap className="h-5 w-5 text-marketing-accent" />
-            </div>
-            <span className="font-heading text-xl font-bold text-white">SchoolOS</span>
-          </Link>
+          <OrgBrandMark variant="footer" />
           <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/55">
             The operating system for modern academy management — multi-tenant, audit-ready, and
             built for institutions that cannot compromise on data integrity.

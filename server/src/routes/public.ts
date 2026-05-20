@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { getPlatformMarketing } from "../services/platform-settings";
+import { getPlatformMarketing, resolveMarketingAssetUrls } from "../services/platform-settings";
 import { INTEGRATIONS_CATALOG } from "../lib/integrations-catalog";
 
 const router = Router();
 
 router.get("/site-config", async (_req, res, next) => {
   try {
-    const marketing = await getPlatformMarketing();
+    const marketing = resolveMarketingAssetUrls(await getPlatformMarketing());
     res.json({
       success: true,
       data: {
