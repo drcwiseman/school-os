@@ -32,6 +32,7 @@ import { TenantDetail } from "./platform/Tenants/TenantDetail";
 import { DomainsHub } from "./platform/Tenants/Domains";
 import { ImpersonateExchange } from "./pages/ImpersonateExchange";
 import { PlanManager } from "./platform/Subscriptions/PlanManager";
+import { SubscriptionHub } from "./platform/Subscriptions/SubscriptionHub";
 import { RevenueLedger } from "./platform/Subscriptions/Ledger";
 import { AddonMarketplace } from "./platform/Marketplace";
 import { SupportHub } from "./platform/Support/SupportHub";
@@ -66,7 +67,7 @@ export const AppRoutes = () => {
         <Route path="profile" element={<PlatformProfile />} />
         <Route path="tenants" element={<TenantHub />} />
         <Route path="tenants/:slug" element={<TenantDetail />} />
-        <Route path="subscriptions" element={<Navigate to="/platform/subscriptions/plans" replace />} />
+        <Route path="subscriptions" element={<SubscriptionHub />} />
         <Route path="subscriptions/plans" element={<PlanManager />} />
         <Route path="subscriptions/ledger" element={<RevenueLedger />} />
         <Route path="domains" element={<DomainsHub />} />

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Layers,
   Plus,
@@ -331,7 +332,8 @@ export const PlanManager: React.FC = () => {
               SaaS plans & geo pricing
             </h2>
             <p className="text-xs text-slate-500 mt-1 max-w-xl">
-              Manage subscription tiers and regional overrides. Preview resolves country → currency → global fallback.
+              Plan catalog — define tiers, prices, regional overrides, and feature bundles. To assign plans to schools, use{" "}
+              <Link to="/platform/subscriptions" className="text-blue-600 font-medium hover:underline">Subscriptions</Link>.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

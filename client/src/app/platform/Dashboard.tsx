@@ -552,9 +552,12 @@ export const PlatformDashboard: React.FC = () => {
               <p className="text-sm text-slate-500">No plan assignments yet.</p>
             )}
           </div>
-          <div className="mt-4 text-right">
-            <Link to="/platform/subscriptions/plans" className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1">
-              View all plans <ChevronRight size={14} />
+          <div className="mt-4 flex flex-wrap justify-end gap-3">
+            <Link to="/platform/subscriptions" className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1">
+              Subscriptions <ChevronRight size={14} />
+            </Link>
+            <Link to="/platform/subscriptions/plans" className="text-sm font-medium text-slate-600 hover:text-slate-800 inline-flex items-center gap-1">
+              Plans &amp; pricing <ChevronRight size={14} />
             </Link>
           </div>
         </div>

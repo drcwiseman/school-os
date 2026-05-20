@@ -21,6 +21,11 @@ import {
   getPlanFeatureCatalog,
 } from "../services/platform-plans";
 import {
+  listPlatformSubscriptions,
+  assignTenantPlan,
+  removeTenantPlan,
+} from "../services/platform-subscriptions";
+import {
   setTenantFeature,
   listFeatureCatalog,
   getTenantFeaturesDetailed,
@@ -234,6 +239,67 @@ router.patch("/tenants/:slug/features", requirePlatformAuth, requirePlatformPerm
     } catch (err) { next(err); }
   },
 );
+
+router.get("/subscriptions", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await listPlatformSubscriptions() });
+  } catch (err) { next(err); }
+});
+
+router.post("/subscriptions", requirePlatformAuth, requirePlatformPermission("plans.assign"),
+  validate({
+    body: z.object({
+      tenantSlug: z.string().min(1),
+      planCode: z.string().min(1),
+      startedAt: z.string().datetime().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const startedAt = req.body.startedAt ? new Date(req.body.startedAt) : undefined;
+      const { tenant, plan } = await assignTenantPlan(req.body.tenantSlug, req.body.planCode, startedAt);
+      res.status(201).json({
+        success: true,
+        data: { tenantSlug: tenant.slug, planCode: plan.code, planName: plan.name },
+      });
+    } catch (err) { next(err); }
+  },
+);
+
+router.patch("/subscriptions/:slug", requirePlatformAuth, requirePlatformPermission("plans.assign"),
+  validate({
+    body: z.object({
+      planCode: z.string().min(1).optional(),
+      startedAt: z.string().datetime().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("School not found");
+
+      if (req.body.planCode) {
+        await assignTenantPlan(req.params.slug, req.body.planCode,
+          req.body.startedAt ? new Date(req.body.startedAt) : undefined);
+      } else if (req.body.startedAt) {
+        const [tp] = await db.select().from(tenantPlans).where(eq(tenantPlans.tenantId, tenant.id)).limit(1);
+        if (!tp) throw new NotFoundError("No subscription for this school");
+        await db.update(tenantPlans)
+          .set({ startedAt: new Date(req.body.startedAt) })
+          .where(eq(tenantPlans.tenantId, tenant.id));
+      }
+
+      res.json({ success: true, data: await listPlatformSubscriptions() });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/subscriptions/:slug", requirePlatformAuth, requirePlatformPermission("plans.assign"), async (req, res, next) => {
+  try {
+    await removeTenantPlan(req.params.slug);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
 
 router.get("/plans", requirePlatformAuth, requirePlatformPermission("plans.read"), async (req, res, next) => {
   try {
