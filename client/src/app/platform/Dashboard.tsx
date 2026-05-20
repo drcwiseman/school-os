@@ -290,7 +290,7 @@ export const PlatformDashboard: React.FC = () => {
           label="MRR"
           title="Monthly Recurring Revenue"
           value={fmtMinor(stats?.mrr ?? 0)}
-          sub={`ARR ${fmtMinor(stats?.totalRevenue ?? 0)}`}
+          sub={`ARR ${fmtMinor(stats?.saasArr ?? (stats?.mrr ?? 0) * 12)}`}
           sparkColor="#3b82f6"
         />
         <KpiCard

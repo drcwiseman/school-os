@@ -27,6 +27,7 @@ import {
   updateTenantSubscription,
   removeTenantPlan,
 } from "../services/platform-subscriptions";
+import { getPlatformRevenueLedger } from "../services/platform-revenue-ledger";
 import {
   setTenantFeature,
   listFeatureCatalog,
@@ -191,7 +192,7 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
       totalRevenueMinor += await convertMinor(amt, cur, displayCurrency);
     }
 
-    const mrrMinor = Math.round(totalRevenueMinor / 12);
+    const ledger = await getPlatformRevenueLedger();
 
     res.json({
       success: true,
@@ -208,7 +209,11 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
         pendingJobs: Number(pendingJobs?.count ?? 0),
         runningJobs: Number(runningJobs?.count ?? 0),
         totalRevenue: totalRevenueMinor,
-        mrr: mrrMinor,
+        feeVolumeTotal: ledger.summary.feeVolumeTotal,
+        feeVolume30d: ledger.summary.feeVolume30d,
+        mrr: ledger.summary.saasMrr,
+        saasArr: ledger.summary.saasArr,
+        saasLifetimeTotal: ledger.summary.saasLifetimeTotal,
         displayCurrency,
         fxProvider: "frankfurter.app",
       },
@@ -273,6 +278,12 @@ router.patch("/tenants/:slug/features", requirePlatformAuth, requirePlatformPerm
     } catch (err) { next(err); }
   },
 );
+
+router.get("/revenue/ledger", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformRevenueLedger() });
+  } catch (err) { next(err); }
+});
 
 router.get("/subscriptions", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
   try {
