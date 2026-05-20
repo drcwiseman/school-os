@@ -67,8 +67,10 @@ export const PlatformFeatureFlags: React.FC = () => {
           <Flag size={22} className="text-violet-600" /> Feature flags
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Enable modules across all schools at once. Per-school overrides remain on{" "}
+          Enable modules across all schools at once. Checked = effective access (plan + school override).
+          Per-school tweaks on{" "}
           <Link to="/platform/tenants" className="text-blue-600 hover:underline">each school detail</Link>.
+          Schools already open in the ERP need <strong>Enter school</strong> again to refresh the sidebar.
         </p>
       </div>
 

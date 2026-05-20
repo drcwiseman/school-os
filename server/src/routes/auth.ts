@@ -95,20 +95,45 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
 // GET /s/:schoolSlug/api/auth/impersonate?token= — platform shadow login (one-time)
 router.get("/impersonate", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const tenant = (req as any).tenant;
+    const slug = tenant?.slug ?? (req.params.schoolSlug as string);
     const token = String(req.query.token ?? "");
     if (!token) throw new UnauthorizedError("Missing impersonation token");
-    const result = await exchangeImpersonationToken(token, req.ip, req.headers["user-agent"]);
+    if (!tenant?.id) throw new UnauthorizedError("School not found");
+
+    const result = await exchangeImpersonationToken(
+      token,
+      tenant.id,
+      req.ip,
+      req.headers["user-agent"],
+    );
     if (!result) throw new UnauthorizedError("Invalid or expired impersonation token");
+
+    const { passwordHash, ...safeUser } = result.user;
+    const permissions = await getUserPermissions(result.user.id, result.user.tenantId);
+    const roleRows = await db
+      .select({ id: roles.id, name: roles.name })
+      .from(userRoles)
+      .innerJoin(roles, eq(userRoles.roleId, roles.id))
+      .where(eq(userRoles.userId, result.user.id));
+    const modules = await getTenantModuleAccess(result.user.tenantId);
+
     res.cookie("session_token", result.session.token, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
     });
     res.json({
       success: true,
       readOnly: result.readOnly,
-      redirect: `/s/${(req as any).tenant?.slug ?? ""}/dashboard`,
+      redirect: `/s/${slug}/dashboard`,
+      user: safeUser,
+      permissions,
+      roles: roleRows,
+      modules,
+      impersonation: result.readOnly ? { readOnly: true } : null,
     });
   } catch (err) { next(err); }
 });

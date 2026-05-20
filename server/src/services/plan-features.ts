@@ -22,7 +22,14 @@ export async function getTenantPlanFeatures(tenantId: string): Promise<Record<st
   return out;
 }
 
-/** Pure entitlement logic — used by isFeatureAllowedForTenant and tests. */
+/**
+ * Effective feature access:
+ * 1. Addon gate (premium add-ons)
+ * 2. Tenant flag false → deny (platform turned off)
+ * 3. Tenant flag true → allow (platform override — feature flags page / per-school toggles)
+ * 4. Plan assigned → allow only if plan includes feature as true
+ * 5. No plan → allow unless tenant explicitly disabled
+ */
 export function evaluateFeatureAccess(opts: {
   tenantFlags: Record<string, boolean>;
   planFlags: Record<string, boolean> | null;
@@ -31,16 +38,11 @@ export function evaluateFeatureAccess(opts: {
 }): boolean {
   if (!opts.addonAllowed) return false;
   if (opts.tenantFlags[opts.featureCode] === false) return false;
+  if (opts.tenantFlags[opts.featureCode] === true) return true;
   if (opts.planFlags !== null) return opts.planFlags[opts.featureCode] === true;
-  return opts.tenantFlags[opts.featureCode] !== false;
+  return true;
 }
 
-/**
- * Strict entitlement check:
- * - Addon-gated features need active addon OR plan includes them as true.
- * - With a subscription plan: feature must be explicitly true on the plan.
- * - Without a plan: tenant module flags apply (core defaults from provisioning).
- */
 export async function isFeatureAllowedForTenant(tenantId: string, featureCode: string): Promise<boolean> {
   const addonAllowed = await isAddonFeatureAllowed(tenantId, featureCode);
   const tenantFlags = await getTenantFeatureFlags(tenantId);

@@ -157,4 +157,57 @@ export async function ensureRuntimeSchema() {
       console.warn("[ensureRuntimeSchema] feature:", f.code, (err as Error).message?.slice(0, 80));
     }
   }
+
+  const starterFeatures = {
+    students: true,
+    admissions: true,
+    staff_hr: true,
+    timetable: true,
+    attendance: true,
+    exams_results: true,
+    finance_fees: true,
+    messaging_enabled: true,
+    portal_enabled: false,
+    results_visible: true,
+    fees_must_be_clear: false,
+    support_standard: true,
+    training_library: true,
+  };
+  const proFeatures = {
+    ...starterFeatures,
+    library: true,
+    transport: true,
+    portal_enabled: true,
+    custom_smtp: true,
+    bulk_email: true,
+    mobile_app: true,
+    white_label: true,
+    multi_campus: true,
+    ai_homework: true,
+    advanced_reporting: true,
+    api_access: true,
+    support_extended: true,
+    onboarding_training: true,
+    implementation_assisted: true,
+    payment_gateways: true,
+    accounting_export: true,
+  };
+  try {
+    await db.execute(sql`
+      UPDATE "plans" SET "features_json" = ${JSON.stringify(starterFeatures)}::jsonb
+      WHERE "code" = 'starter' AND (
+        "features_json" IS NULL OR "features_json" = '{}'::jsonb
+        OR NOT ("features_json" ? 'students')
+      )
+    `);
+    await db.execute(sql`
+      UPDATE "plans" SET "features_json" = ${JSON.stringify(proFeatures)}::jsonb
+      WHERE "code" = 'pro' AND (
+        "features_json" IS NULL OR "features_json" = '{}'::jsonb
+        OR NOT ("features_json" ? 'students')
+      )
+    `);
+  } catch (err) {
+    console.warn("[ensureRuntimeSchema] plan features:", (err as Error).message?.slice(0, 120));
+  }
 }

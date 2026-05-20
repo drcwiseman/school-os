@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { tenants, tenantSettings, tenantPlans, plans, users, roles, userRoles } from "../db/schema";
 import { eq, asc, sql, inArray, and, isNull } from "drizzle-orm";
+import { schoolLoginPath } from "../lib/app-origin";
 
 export type PlatformTenantRow = {
   id: string;
@@ -21,6 +22,7 @@ export type PlatformTenantRow = {
   staffCount: number;
   erpUserCount: number;
   adminEmail: string | null;
+  loginUrl: string;
 };
 
 async function safeCountStudents(tenantId: string): Promise<number> {
@@ -161,10 +163,11 @@ export async function listPlatformTenants(): Promise<PlatformTenantRow[]> {
 
   const enriched = await Promise.all(
     base.map(async (row) => {
-      const [studentCount, staffCount, erpUserCount] = await Promise.all([
+      const [studentCount, staffCount, erpUserCount, loginUrl] = await Promise.all([
         safeCountStudents(row.id),
         safeCountStaff(row.id),
         safeCountUsers(row.id),
+        schoolLoginPath(row.slug),
       ]);
       return {
         ...row,
@@ -175,6 +178,7 @@ export async function listPlatformTenants(): Promise<PlatformTenantRow[]> {
         staffCount,
         erpUserCount,
         adminEmail: adminEmails.get(row.id) ?? null,
+        loginUrl,
       };
     }),
   );

@@ -1,7 +1,8 @@
 import { db } from "../db";
-import { features, tenantFeatures, tenants } from "../db/schema";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { listFeatureCatalog } from "./tenant-features";
+import { features, tenants, tenantSettings } from "../db/schema";
+import { asc, eq, inArray } from "drizzle-orm";
+import { getTenantFeatureFlags, listFeatureCatalog, setTenantFeature } from "./tenant-features";
+import { isFeatureAllowedForTenant } from "./plan-features";
 
 export type FeatureFlagOverviewRow = {
   code: string;
@@ -29,16 +30,16 @@ export async function getPlatformFeatureFlagsHub(): Promise<PlatformFeatureFlags
   const rows: FeatureFlagOverviewRow[] = [];
 
   for (const f of catalog) {
-    const [count] = await db
-      .select({ c: sql<number>`count(*)::int` })
-      .from(tenantFeatures)
-      .where(and(eq(tenantFeatures.featureId, f.id), eq(tenantFeatures.enabled, true)));
+    let enabledSchools = 0;
+    for (const school of schoolRows) {
+      if (await isFeatureAllowedForTenant(school.id, f.code)) enabledSchools++;
+    }
     rows.push({
       code: f.code,
       name: f.name,
       description: f.description,
       category: f.category,
-      enabledSchools: Number(count?.c ?? 0),
+      enabledSchools,
       totalSchools,
     });
   }
@@ -58,9 +59,13 @@ export async function bulkSetFeatureForSchools(
     ? await db.select().from(tenants).where(inArray(tenants.id, tenantIds))
     : await db.select().from(tenants);
 
-  const { setTenantFeature } = await import("./tenant-features");
   for (const s of schools) {
     await setTenantFeature(s.id, featureCode, enabled);
+    const merged = await getTenantFeatureFlags(s.id);
+    await db
+      .update(tenantSettings)
+      .set({ featureFlagsJson: merged, updatedAt: new Date() })
+      .where(eq(tenantSettings.tenantId, s.id));
   }
   return { updated: schools.length, featureCode, enabled };
 }

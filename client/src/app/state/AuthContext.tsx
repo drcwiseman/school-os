@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 
 interface User {
@@ -9,6 +10,8 @@ interface User {
 }
 
 export type TenantModules = Record<string, boolean>;
+
+type SetAuthOptions = { readOnly?: boolean };
 
 interface AuthContextType {
   user: User | null;
@@ -24,6 +27,7 @@ interface AuthContextType {
     permissions?: string[],
     roles?: { id: string; name: string }[],
     modules?: TenantModules,
+    options?: SetAuthOptions,
   ) => void;
   hasPermission: (code: string) => boolean;
   moduleEnabled: (featureCode: string) => boolean;
@@ -33,6 +37,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
@@ -42,31 +47,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Extract slug from URL if present (e.g. /s/school-a/...)
-    const match = window.location.pathname.match(/^\/s\/([^\/]+)/);
+    const match = location.pathname.match(/^\/s\/([^/]+)/);
     const slug = match ? match[1] : null;
-    
-    if (slug) {
-      setSchoolSlug(slug);
-      api.get(`/s/${slug}/api/auth/me`)
-        .then((res) => {
-          if (res.success && res.user) {
-            setUser(res.user);
-            setPermissions(res.permissions || []);
-            setRoles(res.roles || []);
-            if (res.modules) setModules(res.modules);
-            setImpersonationReadOnly(Boolean(res.impersonation?.readOnly));
-          }
-        })
-        .catch(() => {
+    const isImpersonateRoute = /\/impersonate/.test(location.pathname);
+
+    if (!slug) {
+      setLoading(false);
+      return;
+    }
+
+    setSchoolSlug(slug);
+
+    if (isImpersonateRoute) {
+      setLoading(false);
+      return;
+    }
+
+    api
+      .get(`/s/${slug}/api/auth/me`)
+      .then((res) => {
+        if (res.success && res.user) {
+          setUser(res.user);
+          setPermissions(res.permissions || []);
+          setRoles(res.roles || []);
+          if (res.modules) setModules(res.modules);
+          setImpersonationReadOnly(Boolean(res.impersonation?.readOnly));
+        } else {
           setUser(null);
           setImpersonationReadOnly(false);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, []);
+        }
+      })
+      .catch(() => {
+        setUser(null);
+        setImpersonationReadOnly(false);
+      })
+      .finally(() => setLoading(false));
+  }, [location.pathname]);
 
   const setAuth = (
     newUser: User | null,
@@ -74,12 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     perms: string[] = [],
     userRoles: { id: string; name: string }[] = [],
     mods?: TenantModules,
+    options?: SetAuthOptions,
   ) => {
     setUser(newUser);
     setSchoolSlug(slug);
     setPermissions(perms);
     setRoles(userRoles);
     if (mods) setModules(mods);
+    if (options?.readOnly !== undefined) {
+      setImpersonationReadOnly(options.readOnly);
+    }
   };
 
   const hasPermission = (code: string) => permissions.includes(code);
@@ -90,11 +110,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await api.post(`/s/${schoolSlug}/api/auth/logout`);
     }
     setUser(null);
+    setImpersonationReadOnly(false);
     window.location.href = schoolSlug ? `/s/${schoolSlug}/login` : "/";
   };
 
   return (
-    <AuthContext.Provider value={{ user, permissions, roles, modules, impersonationReadOnly, loading, schoolSlug, setAuth, hasPermission, moduleEnabled, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        permissions,
+        roles,
+        modules,
+        impersonationReadOnly,
+        loading,
+        schoolSlug,
+        setAuth,
+        hasPermission,
+        moduleEnabled,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

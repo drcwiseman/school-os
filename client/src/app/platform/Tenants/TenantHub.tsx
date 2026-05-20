@@ -17,6 +17,7 @@ import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
 import { COUNTRY_OPTIONS } from "../../../lib/currencies";
 import { SchoolFormModal, type TenantRow } from "../components/SchoolFormModal";
+import { SchoolLoginsPanel } from "../components/SchoolLoginsPanel";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -33,6 +34,7 @@ type TenantListRow = TenantRow & {
   staffCount?: number;
   erpUserCount?: number;
   adminEmail?: string | null;
+  loginUrl?: string;
 };
 
 type FeatureRow = { code: string; name: string; enabled: boolean };
@@ -140,24 +142,27 @@ export const TenantHub: React.FC = () => {
   const [loginReadOnly, setLoginReadOnly] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const loginAsSchoolAdmin = async () => {
-    if (!loginSlug) return;
+  const enterSchool = async (slug: string, readOnly = false) => {
+    setLoginSlug(slug);
     setLoginLoading(true);
     try {
-      const res = await api.post(`/api/platform/tenants/${loginSlug}/impersonate`, {
-        readOnly: loginReadOnly,
-      });
-      window.open(res.data.url, "_blank", "noopener,noreferrer");
-      toast(
-        loginReadOnly ? "Opened school (read-only shadow)" : "Opened school as administrator",
-        "success",
-      );
+      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly });
+      const url = res.data.url?.startsWith("http")
+        ? res.data.url
+        : `${window.location.origin}${res.data.url}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      toast(readOnly ? "Opened school (read-only shadow)" : "Opened school as administrator", "success");
       setLoginSlug(null);
     } catch (err: any) {
       toast(err.message, "error");
     } finally {
       setLoginLoading(false);
     }
+  };
+
+  const loginAsSchoolAdmin = async () => {
+    if (!loginSlug) return;
+    await enterSchool(loginSlug, loginReadOnly);
   };
 
   const openFeatures = async (slug: string) => {
@@ -190,7 +195,8 @@ export const TenantHub: React.FC = () => {
     }
   };
 
-  const schoolUrl = (slug: string) => `/s/${slug}/login`;
+  const schoolUrl = (t: TenantListRow) =>
+    t.loginUrl?.startsWith("http") ? t.loginUrl : `${window.location.origin}/s/${t.slug}/login`;
 
   if (loading) {
     return (
@@ -247,6 +253,20 @@ export const TenantHub: React.FC = () => {
           </div>
         ))}
       </div>
+
+      <SchoolLoginsPanel
+        schools={filtered.map((t) => ({
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          status: t.status,
+          adminEmail: t.adminEmail ?? null,
+          loginUrl: t.loginUrl ?? `/s/${t.slug}/login`,
+          erpUserCount: t.erpUserCount,
+        }))}
+        onLogin={enterSchool}
+        loginLoadingSlug={loginLoading ? loginSlug : null}
+      />
 
       {/* Toolbar */}
       <div className={`${CARD} p-3 flex flex-col sm:flex-row gap-3 sm:items-center`}>
@@ -362,7 +382,7 @@ export const TenantHub: React.FC = () => {
                         <ChevronRight size={15} />
                       </Link>
                       <a
-                        href={schoolUrl(t.slug)}
+                        href={schoolUrl(t)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100"

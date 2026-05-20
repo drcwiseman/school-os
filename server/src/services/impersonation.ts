@@ -10,17 +10,17 @@ export async function findImpersonationTargetUser(tenantId: string) {
     .from(users)
     .leftJoin(userRoles, eq(userRoles.userId, users.id))
     .leftJoin(roles, eq(roles.id, userRoles.roleId))
-    .where(eq(users.tenantId, tenantId));
+    .where(and(eq(users.tenantId, tenantId), isNull(users.deletedAt)));
 
-  const admin = allUsers.find(
+  const activeRows = allUsers.filter((r) => r.user.status === "active");
+  if (!activeRows.length) return null;
+
+  const admin = activeRows.find(
     (r) => r.roleName && /school administrator|tenant admin|administrator/i.test(r.roleName),
   );
   if (admin) return admin.user;
 
-  const active = allUsers.find((r) => r.user.status === "active");
-  if (active) return active.user;
-
-  return allUsers[0]?.user ?? null;
+  return activeRows[0]?.user ?? null;
 }
 
 export async function createImpersonationToken(opts: {
@@ -38,14 +38,19 @@ export async function createImpersonationToken(opts: {
       tenantId: opts.tenantId,
       targetUserId: opts.targetUserId,
       platformAdminId: opts.platformAdminId,
-      readOnly: opts.readOnly !== false,
+      readOnly: opts.readOnly === true,
       expiresAt,
     })
     .returning();
   return row;
 }
 
-export async function exchangeImpersonationToken(token: string, ip?: string, ua?: string) {
+export async function exchangeImpersonationToken(
+  token: string,
+  expectedTenantId: string,
+  ip?: string,
+  ua?: string,
+) {
   const [row] = await db
     .select()
     .from(platformImpersonationTokens)
@@ -58,6 +63,20 @@ export async function exchangeImpersonationToken(token: string, ip?: string, ua?
     )
     .limit(1);
   if (!row) return null;
+  if (row.tenantId !== expectedTenantId) return null;
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(
+      and(
+        eq(users.id, row.targetUserId),
+        eq(users.tenantId, row.tenantId),
+        isNull(users.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!user || user.status !== "active") return null;
 
   await db
     .update(platformImpersonationTokens)
@@ -70,5 +89,5 @@ export async function exchangeImpersonationToken(token: string, ip?: string, ua?
     platformAdminId: row.platformAdminId,
   });
 
-  return { session, readOnly: row.readOnly, tenantId: row.tenantId };
+  return { session, user, readOnly: row.readOnly, tenantId: row.tenantId };
 }

@@ -14,6 +14,9 @@ import {
   SlidersHorizontal,
   Users,
   GraduationCap,
+  KeyRound,
+  LogIn,
+  Copy,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
@@ -67,15 +70,25 @@ export const TenantDetail: React.FC = () => {
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [timezone, setTimezone] = useState("Africa/Kampala");
   const [customDomain, setCustomDomain] = useState("");
+  const [loginAccess, setLoginAccess] = useState<{
+    loginUrl: string;
+    users: { id: string; email: string; firstName: string; lastName: string; status: string; roleName: string | null; isPrimaryAdmin: boolean }[];
+  } | null>(null);
+  const [resetCreds, setResetCreds] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [resettingPwd, setResettingPwd] = useState(false);
 
   const load = async () => {
     if (!slug) return;
     setLoading(true);
     try {
-      const [res] = await Promise.all([
-        api.get(`/api/platform/tenants/${slug}`),
-        api.get("/api/platform/plans").then((r) => setPlans(r.data ?? [])).catch(() => {}),
-      ]);
+      const res = await api.get(`/api/platform/tenants/${slug}`);
+      api.get("/api/platform/plans").then((r) => setPlans(r.data ?? [])).catch(() => {});
+      try {
+        const loginsRes = await api.get(`/api/platform/tenants/${slug}/logins`);
+        setLoginAccess(loginsRes.data);
+      } catch {
+        setLoginAccess(null);
+      }
       const d = res.data;
       setDetail(d);
       setName(d.tenant?.name ?? "");
@@ -180,16 +193,38 @@ export const TenantDetail: React.FC = () => {
   };
 
   const loginAsAdmin = async (readOnly = false) => {
+    if (!slug) return;
     try {
       const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly });
-      window.open(res.data.url, "_blank", "noopener,noreferrer");
+      const url = res.data.url?.startsWith("http")
+        ? res.data.url
+        : `${window.location.origin}${res.data.url}`;
+      window.open(url, "_blank", "noopener,noreferrer");
       toast(readOnly ? "Opened read-only shadow session" : "Logged in as school administrator", "success");
     } catch (e: any) {
       toast(e.message, "error");
     }
   };
 
-  const schoolLoginUrl = useMemo(() => `/s/${slug}/login`, [slug]);
+  const schoolLoginUrl = useMemo(() => {
+    const u = loginAccess?.loginUrl ?? `/s/${slug}/login`;
+    return u.startsWith("http") ? u : `${window.location.origin}${u}`;
+  }, [slug, loginAccess?.loginUrl]);
+
+  const resetAdminPassword = async () => {
+    if (!slug) return;
+    if (!window.confirm("Generate a new temporary password for the primary school administrator?")) return;
+    setResettingPwd(true);
+    try {
+      const res = await api.post(`/api/platform/tenants/${slug}/reset-admin-password`);
+      setResetCreds({ email: res.data.email, temporaryPassword: res.data.temporaryPassword });
+      toast("Temporary password generated", "success");
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setResettingPwd(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -264,6 +299,78 @@ export const TenantDetail: React.FC = () => {
           >
             Shadow
           </button>
+        </div>
+      </div>
+
+      {/* School login access */}
+      <div className={CARD}>
+        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2 mb-3">
+          <LogIn size={16} /> School login
+        </h2>
+        <div className="flex flex-wrap items-center gap-2 text-sm mb-4">
+          <a href={schoolLoginUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-mono text-xs break-all">
+            {schoolLoginUrl}
+          </a>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
+            onClick={() => navigator.clipboard.writeText(schoolLoginUrl).then(() => toast("Login URL copied", "success"))}
+          >
+            <Copy size={12} /> Copy URL
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50"
+            disabled={resettingPwd}
+            onClick={resetAdminPassword}
+          >
+            {resettingPwd ? <Loader2 size={12} className="animate-spin" /> : <KeyRound size={12} />}
+            Reset admin password
+          </button>
+        </div>
+        {resetCreds && (
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
+            <p>
+              <span className="text-slate-600">Email:</span> <code>{resetCreds.email}</code>
+            </p>
+            <p className="mt-1">
+              <span className="text-slate-600">Temporary password:</span> <code>{resetCreds.temporaryPassword}</code>
+            </p>
+          </div>
+        )}
+        <div className="overflow-x-auto rounded-md border border-slate-100">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2 text-left">User</th>
+                <th className="px-3 py-2 text-left">Role</th>
+                <th className="px-3 py-2 text-left">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {(loginAccess?.users ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-3 py-6 text-center text-slate-400 text-xs">
+                    No ERP users — provision an administrator when creating the school.
+                  </td>
+                </tr>
+              ) : (
+                loginAccess?.users.map((u) => (
+                  <tr key={u.id}>
+                    <td className="px-3 py-2">
+                      <p className="font-medium text-slate-800">{u.firstName} {u.lastName}</p>
+                      <p className="text-xs text-slate-500">{u.email}</p>
+                      {u.isPrimaryAdmin && (
+                        <span className="text-[10px] font-semibold text-blue-600 uppercase">Impersonation target</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">{u.roleName ?? "—"}</td>
+                    <td className="px-3 py-2 capitalize text-slate-600">{u.status}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

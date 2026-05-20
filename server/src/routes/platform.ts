@@ -1428,6 +1428,42 @@ router.post("/tenants/:slug/domain/verify", requirePlatformAuth, requirePlatform
   },
 );
 
+router.get("/tenants/:slug/logins", requirePlatformAuth, requirePlatformPermission("tenants.read"), async (req, res, next) => {
+  try {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+    if (!tenant) throw new NotFoundError("Tenant not found");
+    const { listSchoolErpUsers } = await import("../services/platform-school-logins");
+    const { schoolLoginPath } = await import("../lib/app-origin");
+    const users = await listSchoolErpUsers(tenant.id);
+    res.json({
+      success: true,
+      data: {
+        slug: tenant.slug,
+        schoolName: tenant.name,
+        loginUrl: await schoolLoginPath(tenant.slug),
+        users,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+router.post("/tenants/:slug/reset-admin-password", requirePlatformAuth, requirePlatformPermission("tenants.provision"),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const { resetSchoolAdministratorPassword } = await import("../services/platform-school-logins");
+      const data = await resetSchoolAdministratorPassword(req.params.slug);
+      await logPlatformAction(admin?.id, "tenant.admin.reset_password", {
+        entityType: "user",
+        entityId: data.userId,
+        tenantId: data.tenantId,
+        ip: req.ip,
+      });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
 router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPermission("tenants.read"),
   validate({ body: z.object({ readOnly: z.boolean().optional() }) }),
   async (req, res, next) => {
@@ -1452,11 +1488,13 @@ router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPe
         entityId: target.id,
         ip: req.ip,
       });
-      const base = process.env.CLIENT_ORIGIN ?? "";
+      const { resolveClientOrigin } = await import("../lib/app-origin");
+      const base = await resolveClientOrigin();
+      const path = `/s/${tenant.slug}/impersonate?token=${row.token}`;
       res.json({
         success: true,
         data: {
-          url: `${base}/s/${tenant.slug}/impersonate?token=${row.token}`,
+          url: base ? `${base}${path}` : path,
           expiresAt: row.expiresAt,
           readOnly: row.readOnly,
         },

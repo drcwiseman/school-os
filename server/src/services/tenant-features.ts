@@ -47,7 +47,7 @@ export async function setTenantFeature(
   enabled: boolean,
 ): Promise<void> {
   const [feature] = await db.select().from(features).where(eq(features.code, code)).limit(1);
-  if (!feature) return;
+  if (!feature) throw new Error(`Unknown feature code: ${code}`);
   const [existing] = await db
     .select()
     .from(tenantFeatures)
@@ -75,17 +75,20 @@ export type TenantFeatureRow = {
   enabled: boolean;
 };
 
-/** Full catalog with per-tenant enabled state (defaults true if unset). */
+/** Full catalog with effective enabled state (plan + tenant + addons). */
 export async function getTenantFeaturesDetailed(tenantId: string): Promise<TenantFeatureRow[]> {
+  const { isFeatureAllowedForTenant } = await import("./plan-features");
   const catalog = await listFeatureCatalog();
-  const flags = await getTenantFeatureFlags(tenantId);
-  return catalog.map((f) => ({
-    code: f.code,
-    name: f.name,
-    description: f.description,
-    category: f.category ?? "modules",
-    enabled: flags[f.code] !== false,
-  }));
+  const rows = await Promise.all(
+    catalog.map(async (f) => ({
+      code: f.code,
+      name: f.name,
+      description: f.description,
+      category: f.category ?? "modules",
+      enabled: await isFeatureAllowedForTenant(tenantId, f.code),
+    })),
+  );
+  return rows;
 }
 
 export async function setTenantFeaturesBulk(
