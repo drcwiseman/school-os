@@ -8,6 +8,7 @@ import { errorHandler } from "./middleware/error";
 import routes from "./routes/index";
 import { rateLimit } from "./middleware/rate-limit";
 import { tick as processJobs } from "./services/queue";
+import { tickBackupScheduler } from "./services/backup-scheduler";
 import { ensureRuntimeSchema } from "./db/ensure-runtime-schema";
 import { warmRolePermissionsCache } from "./services/platform-role-settings";
 import { attachTenantFromHost, redirectSchoolHostToSlugPath } from "./middleware/host-tenant";
@@ -74,6 +75,7 @@ app.use(errorHandler);
 
 if (process.env.NODE_ENV !== "test") {
   setInterval(() => { processJobs().catch(() => {}); }, 5000);
+  setInterval(() => { tickBackupScheduler().catch(() => {}); }, 60_000);
 
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || "development"} mode`);

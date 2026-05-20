@@ -73,6 +73,7 @@ async function main() {
   await runSqlFile("0015_platform_media.sql");
   await runSqlFile("0016_platform_email.sql");
   await runSqlFile("0017_platform_backups.sql");
+  await runSqlFile("0018_platform_extras.sql");
 
   console.log("\n✅ Repair applied.");
   console.log("Next:");

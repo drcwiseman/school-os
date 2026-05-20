@@ -5,17 +5,22 @@ import { eq, and, gt, isNull } from "drizzle-orm";
 import { createSession } from "../middleware/auth";
 
 export async function findImpersonationTargetUser(tenantId: string) {
-  const admins = await db
-    .select({ user: users })
+  const allUsers = await db
+    .select({ user: users, roleName: roles.name })
     .from(users)
-    .innerJoin(userRoles, eq(userRoles.userId, users.id))
-    .innerJoin(roles, eq(roles.id, userRoles.roleId))
-    .where(and(eq(users.tenantId, tenantId), eq(roles.name, "School Administrator")))
-    .limit(1);
-  if (admins[0]) return admins[0].user;
+    .leftJoin(userRoles, eq(userRoles.userId, users.id))
+    .leftJoin(roles, eq(roles.id, userRoles.roleId))
+    .where(eq(users.tenantId, tenantId));
 
-  const [any] = await db.select().from(users).where(eq(users.tenantId, tenantId)).limit(1);
-  return any ?? null;
+  const admin = allUsers.find(
+    (r) => r.roleName && /school administrator|tenant admin|administrator/i.test(r.roleName),
+  );
+  if (admin) return admin.user;
+
+  const active = allUsers.find((r) => r.user.status === "active");
+  if (active) return active.user;
+
+  return allUsers[0]?.user ?? null;
 }
 
 export async function createImpersonationToken(opts: {

@@ -31,6 +31,13 @@ type BackupPolicy = {
   includeDatabase: boolean;
   includeUploads: boolean;
   notifyEmail: string;
+  offsiteEnabled: boolean;
+  s3Bucket: string;
+  s3Region: string;
+  s3Prefix: string;
+  s3Endpoint: string;
+  s3AccessKeyId: string;
+  s3SecretAccessKey: string;
 };
 
 type Snapshot = {
@@ -47,6 +54,8 @@ type Snapshot = {
   completedAt: string | null;
   createdAt: string;
   downloadUrl: string | null;
+  offsiteKey: string | null;
+  offsiteStatus: string | null;
 };
 
 type Hub = {
@@ -271,7 +280,7 @@ export const PlatformBackupSettings: React.FC = () => {
               checked={policy.scheduleEnabled}
               onChange={(e) => setPolicy({ ...policy, scheduleEnabled: e.target.checked })}
             />
-            Enable scheduled backups (cron worker — coming soon)
+            Enable scheduled backups (runs hourly check at UTC hour above)
           </label>
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
@@ -335,6 +344,47 @@ export const PlatformBackupSettings: React.FC = () => {
               />
               <FolderArchive size={14} /> Uploads volume
             </label>
+          </div>
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Off-site copy (S3)</h3>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={policy.offsiteEnabled}
+                onChange={(e) => setPolicy({ ...policy, offsiteEnabled: e.target.checked })}
+              />
+              Upload completed backups to S3-compatible storage
+            </label>
+            <p className="text-xs text-slate-500">
+              Prefer env vars <code className="text-[11px]">BACKUP_S3_ACCESS_KEY_ID</code> /{" "}
+              <code className="text-[11px]">BACKUP_S3_SECRET_ACCESS_KEY</code> on the server; or save keys below.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input
+                className="input text-sm"
+                placeholder="Bucket"
+                value={policy.s3Bucket}
+                onChange={(e) => setPolicy({ ...policy, s3Bucket: e.target.value })}
+              />
+              <input
+                className="input text-sm"
+                placeholder="Region"
+                value={policy.s3Region}
+                onChange={(e) => setPolicy({ ...policy, s3Region: e.target.value })}
+              />
+              <input
+                className="input text-sm sm:col-span-2"
+                placeholder="Prefix (folder)"
+                value={policy.s3Prefix}
+                onChange={(e) => setPolicy({ ...policy, s3Prefix: e.target.value })}
+              />
+              <input
+                className="input text-sm sm:col-span-2"
+                placeholder="Custom endpoint (MinIO / DigitalOcean — optional)"
+                value={policy.s3Endpoint}
+                onChange={(e) => setPolicy({ ...policy, s3Endpoint: e.target.value })}
+              />
+            </div>
           </div>
           <button
             type="button"

@@ -8,6 +8,7 @@ import { About } from "./public/About";
 import { Contact } from "./public/Contact";
 import { IntegrationsPage } from "./public/Integrations";
 import { PlatformMarketing } from "./platform/PlatformMarketing";
+import { PlatformGeneralSettings } from "./platform/PlatformGeneralSettings";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { StudentsList } from "./pages/StudentsList";
@@ -50,6 +51,8 @@ import { PlatformMediaLibrary } from "./platform/Media/PlatformMediaLibrary";
 import { PlatformEmailSettings } from "./platform/PlatformEmailSettings";
 import { PlatformIntegrationsSettings } from "./platform/PlatformIntegrationsSettings";
 import { PlatformBackupSettings } from "./platform/PlatformBackupSettings";
+import { PlatformFeatureFlags } from "./platform/PlatformFeatureFlags";
+import { PlatformApiSettings } from "./platform/PlatformApiSettings";
 import { Settings } from "./pages/Settings";
 import { FeatureRoute } from "./components/FeatureRoute";
 import { MODULE_FEATURE_CODES } from "../lib/module-features";
@@ -93,9 +96,10 @@ export const AppRoutes = () => {
         <Route path="system/queue" element={<QueueMonitor />} />
         <Route path="system/audit" element={<AuditLogs />} />
         <Route path="media" element={<PlatformMediaLibrary />} />
-        <Route path="settings/general" element={<PlatformMarketing />} />
+        <Route path="settings/general" element={<PlatformGeneralSettings />} />
         <Route path="settings/marketing" element={<PlatformMarketing />} />
-        <Route path="settings/flags" element={<Navigate to="/platform/tenants" replace />} />
+        <Route path="settings/flags" element={<PlatformFeatureFlags />} />
+        <Route path="settings/api" element={<PlatformApiSettings />} />
         <Route path="settings/email" element={<PlatformEmailSettings />} />
         <Route path="settings/integrations" element={<PlatformIntegrationsSettings />} />
         <Route path="settings/backup" element={<PlatformBackupSettings />} />

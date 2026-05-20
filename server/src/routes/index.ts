@@ -27,11 +27,15 @@ import settingsRoutes from "./settings";
 import dashboardRoutes from "./dashboard";
 import publicRoutes from "./public";
 import saasRoutes from "./saas-features";
+import webhooksRoutes from "./webhooks";
 
 const router = Router();
 
 // Public marketing (no auth)
 router.use("/api/public", publicRoutes);
+
+// Inbound provider webhooks (no session auth — verify per provider)
+router.use("/api/webhooks", webhooksRoutes);
 
 // Platform-level routes (no school slug required)
 router.use("/api/platform", platformRoutes);

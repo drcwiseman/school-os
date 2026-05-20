@@ -179,26 +179,19 @@ export async function updatePlatformIntegrationConfig(
   return result;
 }
 
-export async function testPlatformIntegrationConnection(code: string): Promise<{ ok: boolean; message: string }> {
-  const entry = INTEGRATIONS_CATALOG.find((i) => i.code === code);
-  if (!entry) throw new Error("Unknown integration");
+export async function loadRawIntegrationCredentials(code: string): Promise<Record<string, string>> {
+  const raw = await loadRawConfigs();
+  return raw[code]?.credentials ?? {};
+}
 
+export async function testPlatformIntegrationConnection(code: string): Promise<{ ok: boolean; message: string }> {
+  const { testIntegrationConnector } = await import("./integration-connectors");
   const raw = await loadRawConfigs();
   const stored = raw[code];
-  const schema = getIntegrationSchema(entry);
-  if (!stored || !isConfigured(schema, stored.credentials)) {
-    return { ok: false, message: "Integration is not configured yet" };
-  }
-
-  if (!stored.enabled) {
+  if (!stored?.enabled) {
     return { ok: false, message: "Enable the integration before testing" };
   }
-
-  // Placeholder until live provider clients are wired — validates config presence only.
-  return {
-    ok: true,
-    message: `${entry.name} credentials saved. Live API handshake will run when the connector worker is enabled.`,
-  };
+  return testIntegrationConnector(code);
 }
 
 export function listIntegrationFieldDefs(code: string): IntegrationFieldDef[] {

@@ -1,16 +1,17 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Building2, CreditCard, Globe,
   Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft,
   Landmark, Users, Shield, ScrollText, HardDrive,
   LifeBuoy, ListTodo, Settings, Flag, Mail, Images,
-  Blocks, DatabaseBackup, Loader2, HelpCircle, Menu,
+  Blocks, DatabaseBackup, Loader2, HelpCircle, Menu, Key,
 } from "lucide-react";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
 import { PlatformUserMenu } from "./components/PlatformUserMenu";
 import { PlatformNotifications } from "./components/PlatformNotifications";
 import { PlatformGlobalSearch } from "./components/PlatformGlobalSearch";
+import { PlatformMobileNav } from "./components/PlatformMobileNav";
 
 const PAGE_TITLES: Record<string, string> = {
   "/platform/dashboard": "Dashboard",
@@ -26,7 +27,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/roles": "Roles & Permissions",
   "/platform/domains": "Domains",
   "/platform/marketplace": "Marketplace",
-  "/platform/settings/general": "Marketing & SEO",
+  "/platform/settings/general": "General Settings",
   "/platform/settings/marketing": "Marketing & SEO",
   "/platform/system/audit": "Audit Logs",
   "/platform/logs": "System Logs",
@@ -36,6 +37,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/settings/email": "Email & Delivery",
   "/platform/settings/integrations": "Integrations",
   "/platform/settings/backup": "Backup & Restore",
+  "/platform/settings/flags": "Feature Flags",
+  "/platform/settings/api": "API & Webhooks",
 };
 
 const navGroups = [
@@ -74,8 +77,10 @@ const navGroups = [
     label: "SETTINGS",
     items: [
       { to: "/platform/media", label: "Media Library", icon: Images },
-      { to: "/platform/settings/marketing", label: "Marketing & SEO", icon: Settings },
+      { to: "/platform/settings/general", label: "General", icon: Settings },
+      { to: "/platform/settings/marketing", label: "Marketing & SEO", icon: Globe },
       { to: "/platform/settings/flags", label: "Feature Flags", icon: Flag },
+      { to: "/platform/settings/api", label: "API & Webhooks", icon: Key },
       { to: "/platform/settings/email", label: "Email & Delivery", icon: Mail },
       { to: "/platform/settings/integrations", label: "Integrations", icon: Blocks },
       { to: "/platform/settings/backup", label: "Backup & Restore", icon: DatabaseBackup },
@@ -86,6 +91,7 @@ const navGroups = [
 export const PlatformLayout: React.FC = () => {
   const { ready, admin, logout } = usePlatformAuth();
   const location = useLocation();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const pageTitle = useMemo(() => {
     if (location.pathname.startsWith("/platform/tenants/") && location.pathname !== "/platform/tenants") {
       return "School details";
@@ -112,6 +118,7 @@ export const PlatformLayout: React.FC = () => {
 
   return (
     <div className="h-[100dvh] flex overflow-hidden bg-[#f4f6f8] text-[#1e293b] font-sans antialiased">
+      <PlatformMobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} groups={navGroups} />
       {/* Sidebar: logo fixed, nav scrolls on its own */}
       <aside className="hidden lg:flex w-[260px] shrink-0 flex-col h-full bg-[#0f172a] text-slate-300 shadow-xl border-r border-slate-800/80">
         <div className="shrink-0 px-5 py-5 border-b border-slate-800 bg-[#0f172a]">
@@ -167,7 +174,12 @@ export const PlatformLayout: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden bg-[#f4f6f8]">
         <header className="shrink-0 z-40 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-4 min-w-0">
-            <button type="button" className="lg:hidden text-slate-500 hover:text-slate-700 shrink-0">
+            <button
+              type="button"
+              className="lg:hidden text-slate-500 hover:text-slate-700 shrink-0"
+              aria-label="Open menu"
+              onClick={() => setMobileNavOpen(true)}
+            >
               <Menu size={20} />
             </button>
             <h1 className="text-xl font-bold text-slate-800 hidden sm:block truncate">{pageTitle}</h1>

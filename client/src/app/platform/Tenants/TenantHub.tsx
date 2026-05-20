@@ -136,13 +136,27 @@ export const TenantHub: React.FC = () => {
     }
   };
 
-  const impersonate = async (slug: string) => {
+  const [loginSlug, setLoginSlug] = useState<string | null>(null);
+  const [loginReadOnly, setLoginReadOnly] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const loginAsSchoolAdmin = async () => {
+    if (!loginSlug) return;
+    setLoginLoading(true);
     try {
-      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`);
+      const res = await api.post(`/api/platform/tenants/${loginSlug}/impersonate`, {
+        readOnly: loginReadOnly,
+      });
       window.open(res.data.url, "_blank", "noopener,noreferrer");
-      toast("Opened school session (read-only)", "success");
+      toast(
+        loginReadOnly ? "Opened school (read-only shadow)" : "Opened school as administrator",
+        "success",
+      );
+      setLoginSlug(null);
     } catch (err: any) {
       toast(err.message, "error");
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -332,8 +346,11 @@ export const TenantHub: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        title="Impersonate admin"
-                        onClick={() => impersonate(t.slug)}
+                        title="Login as school admin"
+                        onClick={() => {
+                          setLoginSlug(t.slug);
+                          setLoginReadOnly(false);
+                        }}
                         className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
                       >
                         <UserCog size={15} />
@@ -479,6 +496,40 @@ export const TenantHub: React.FC = () => {
                 className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {savingFeatures ? "Saving…" : "Save module flags"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loginSlug && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button type="button" className="absolute inset-0 bg-slate-900/40" aria-label="Close" onClick={() => setLoginSlug(null)} />
+          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-slate-900">Login as school admin</h3>
+            <p className="text-sm text-slate-600">
+              Opens the school ERP in a new tab signed in as that school&apos;s administrator (or first active user).
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={loginReadOnly}
+                onChange={(e) => setLoginReadOnly(e.target.checked)}
+              />
+              Read-only shadow mode (cannot edit data)
+            </label>
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn-secondary text-sm" onClick={() => setLoginSlug(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary text-sm inline-flex items-center gap-1"
+                disabled={loginLoading}
+                onClick={loginAsSchoolAdmin}
+              >
+                {loginLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                Open school ERP
               </button>
             </div>
           </div>

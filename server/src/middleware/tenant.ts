@@ -26,6 +26,17 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
     if (!tenant) return next(new NotFoundError(`School '${slug}' not found`));
     if (tenant.status === "suspended") return next(new ForbiddenError("This school account is suspended"));
 
+    const path = req.path || "";
+    if (!path.includes("/impersonate") && !path.includes("/login")) {
+      const { getPlatformGeneralSettings } = await import("../services/platform-general-settings");
+      const general = await getPlatformGeneralSettings();
+      if (general.maintenanceMode) {
+        return next(
+          new ForbiddenError(general.maintenanceMessage || "Platform is under maintenance. Please try again later."),
+        );
+      }
+    }
+
     (req as any).tenant = tenant;
     req.params.schoolSlug = tenant.slug;
     next();

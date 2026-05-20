@@ -18,6 +18,14 @@ export type BackupPolicy = {
   includeDatabase: boolean;
   includeUploads: boolean;
   notifyEmail: string;
+  offsiteEnabled: boolean;
+  s3Bucket: string;
+  s3Region: string;
+  s3Prefix: string;
+  s3Endpoint: string;
+  /** Stored in policy when env vars are not used */
+  s3AccessKeyId: string;
+  s3SecretAccessKey: string;
 };
 
 const DEFAULT_POLICY: BackupPolicy = {
@@ -28,6 +36,13 @@ const DEFAULT_POLICY: BackupPolicy = {
   includeDatabase: true,
   includeUploads: true,
   notifyEmail: "",
+  offsiteEnabled: false,
+  s3Bucket: "",
+  s3Region: "us-east-1",
+  s3Prefix: "schoolos-backups",
+  s3Endpoint: "",
+  s3AccessKeyId: "",
+  s3SecretAccessKey: "",
 };
 
 export type BackupSnapshotRow = {
@@ -45,6 +60,8 @@ export type BackupSnapshotRow = {
   completedAt: string | null;
   createdAt: string;
   downloadUrl: string | null;
+  offsiteKey: string | null;
+  offsiteStatus: string | null;
 };
 
 export type PlatformBackupHub = {
@@ -113,6 +130,8 @@ function rowToSnapshot(r: typeof platformBackups.$inferSelect): BackupSnapshotRo
     completedAt: r.completedAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
     downloadUrl: r.status === "completed" && r.fileName ? `/api/platform/settings/backup/snapshots/${r.id}/download` : null,
+    offsiteKey: r.offsiteKey ?? null,
+    offsiteStatus: r.offsiteStatus ?? null,
   };
 }
 
@@ -196,6 +215,20 @@ export async function runPlatformBackupJob(backupId: string) {
     const stat = await fs.stat(archivePath);
     await fs.rm(dir, { recursive: true, force: true });
 
+    const policy = await getBackupPolicy();
+    let offsiteKey: string | null = null;
+    let offsiteStatus: string | null = null;
+
+    if (policy.offsiteEnabled) {
+      const { uploadBackupToOffsite } = await import("./backup-offsite");
+      const offsite = await uploadBackupToOffsite(archivePath, backupId, policy);
+      offsiteKey = offsite.key || null;
+      offsiteStatus = offsite.status;
+      if (offsite.error && offsite.status === "failed") {
+        offsiteStatus = `failed: ${offsite.error}`;
+      }
+    }
+
     await db
       .update(platformBackups)
       .set({
@@ -203,12 +236,41 @@ export async function runPlatformBackupJob(backupId: string) {
         fileName: archiveName,
         storedPath: archivePath,
         sizeBytes: stat.size,
+        offsiteKey,
+        offsiteStatus,
         completedAt: new Date(),
         error: null,
       })
       .where(eq(platformBackups.id, backupId));
 
-    await pruneOldBackups(await getBackupPolicy());
+    const { dispatchPlatformEvent } = await import("./platform-outbound-webhooks");
+    await dispatchPlatformEvent("backup.completed", {
+      backupId,
+      fileName: archiveName,
+      sizeBytes: stat.size,
+      offsiteKey,
+      offsiteStatus,
+    }).catch(() => undefined);
+
+    if (policy.notifyEmail?.trim()) {
+      try {
+        const { sendPlatformEmailWithTemplate } = await import("./platform-email-settings");
+        const marketing = await import("./platform-settings").then((m) => m.getPlatformMarketing());
+        const site = await marketing;
+        await sendPlatformEmailWithTemplate({
+          to: policy.notifyEmail.trim(),
+          templateCode: "smtp_test",
+          vars: {
+            siteName: site.siteName,
+            sentAt: `Backup completed (${archiveName})${offsiteKey ? ` — copied to S3: ${offsiteKey}` : ""}`,
+          },
+        });
+      } catch {
+        /* optional */
+      }
+    }
+
+    await pruneOldBackups(policy);
   } catch (err) {
     await db
       .update(platformBackups)
@@ -218,6 +280,13 @@ export async function runPlatformBackupJob(backupId: string) {
         completedAt: new Date(),
       })
       .where(eq(platformBackups.id, backupId));
+
+    const { dispatchPlatformEvent } = await import("./platform-outbound-webhooks");
+    await dispatchPlatformEvent("backup.failed", {
+      backupId,
+      error: (err as Error).message,
+    }).catch(() => undefined);
+
     throw err;
   }
 }

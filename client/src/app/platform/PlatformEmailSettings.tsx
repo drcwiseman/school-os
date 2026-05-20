@@ -15,8 +15,10 @@ import {
   Zap,
   Shield,
   ExternalLink,
+  Megaphone,
 } from "lucide-react";
 import { api } from "../api/client";
+import { PlatformEmailCampaignsPanel } from "./components/PlatformEmailCampaignsPanel";
 import { useToast } from "../components/Toast";
 import {
   EmailRichTextEditor,
@@ -77,7 +79,7 @@ type EmailHub = {
   recentLogs: LogRow[];
 };
 
-type Tab = "overview" | "smtp" | "templates" | "activity";
+type Tab = "overview" | "smtp" | "templates" | "campaigns" | "activity";
 
 const EMPTY_SMTP: SmtpForm = {
   host: "",
@@ -357,6 +359,7 @@ export const PlatformEmailSettings: React.FC = () => {
     { id: "overview", label: "Overview", icon: <Mail size={16} /> },
     { id: "smtp", label: "SMTP & sending", icon: <Server size={16} /> },
     { id: "templates", label: "Templates", icon: <FileText size={16} /> },
+    { id: "campaigns", label: "Campaigns", icon: <Megaphone size={16} /> },
     { id: "activity", label: "Delivery log", icon: <Activity size={16} /> },
   ];
 
@@ -831,6 +834,8 @@ export const PlatformEmailSettings: React.FC = () => {
           </div>
         </div>
       )}
+
+      {tab === "campaigns" && <PlatformEmailCampaignsPanel />}
 
       {tab === "activity" && (
         <div className={`${CARD} overflow-hidden`}>

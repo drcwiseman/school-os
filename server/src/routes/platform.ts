@@ -123,7 +123,25 @@ import {
   resolveBackupFilePath,
   restoreBackupSnapshot,
 } from "../services/platform-backup";
+import {
+  getPlatformGeneralSettings,
+  setPlatformGeneralSettings,
+} from "../services/platform-general-settings";
+import {
+  listPlatformEmailCampaigns,
+  createPlatformEmailCampaign,
+  updatePlatformEmailCampaign,
+  sendPlatformEmailCampaignNow,
+} from "../services/platform-email-campaigns";
 import { searchPlatform } from "../services/platform-search";
+import { getPlatformNotificationsHub } from "../services/platform-notifications";
+import { getPlatformFeatureFlagsHub, bulkSetFeatureForSchools } from "../services/platform-feature-flags-hub";
+import {
+  getPlatformApiSettings,
+  createPlatformApiKey,
+  deletePlatformApiKey,
+  upsertOutboundWebhook,
+} from "../services/platform-api-settings";
 import {
   getPlatformSupportHub,
   createPlatformSupportTicket,
@@ -309,6 +327,80 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
     });
   } catch (err) { next(err); }
 });
+
+router.get("/notifications", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformNotificationsHub() });
+  } catch (err) { next(err); }
+});
+
+router.get("/settings/feature-flags", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformFeatureFlagsHub() });
+  } catch (err) { next(err); }
+});
+
+router.post("/settings/feature-flags/bulk", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      featureCode: z.string().min(1),
+      enabled: z.boolean(),
+      tenantIds: z.array(z.string().uuid()).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await bulkSetFeatureForSchools(req.body.featureCode, req.body.enabled, req.body.tenantIds);
+      await logPlatformAction(admin?.id, "feature.bulk_update", {
+        entityType: "feature",
+        entityId: req.body.featureCode,
+        after: data,
+      });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/settings/api", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformApiSettings() });
+  } catch (err) { next(err); }
+});
+
+router.post("/settings/api/keys", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({ body: z.object({ name: z.string().min(1).max(100) }) }),
+  async (req, res, next) => {
+    try {
+      const data = await createPlatformApiKey(req.body.name);
+      res.status(201).json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/settings/api/keys/:id", requirePlatformAuth, requirePlatformPermission("plans.write"), async (req, res, next) => {
+  try {
+    await deletePlatformApiKey(req.params.id);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+router.post("/settings/api/webhooks", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      id: z.string().uuid().optional(),
+      url: z.string().url(),
+      events: z.array(z.string()).min(1),
+      enabled: z.boolean(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const data = await upsertOutboundWebhook(req.body);
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/search", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
   try {
@@ -557,6 +649,13 @@ router.patch("/settings/backup/policy", requirePlatformAuth, requirePlatformPerm
       includeDatabase: z.boolean().optional(),
       includeUploads: z.boolean().optional(),
       notifyEmail: z.string().email().optional().or(z.literal("")),
+      offsiteEnabled: z.boolean().optional(),
+      s3Bucket: z.string().max(200).optional(),
+      s3Region: z.string().max(80).optional(),
+      s3Prefix: z.string().max(200).optional(),
+      s3Endpoint: z.string().max(300).optional(),
+      s3AccessKeyId: z.string().max(200).optional(),
+      s3SecretAccessKey: z.string().max(200).optional(),
     }),
   }),
   async (req, res, next) => {
@@ -620,6 +719,92 @@ router.post("/settings/backup/snapshots/:id/restore", requirePlatformAuth, requi
     } catch (err) { next(err); }
   },
 );
+
+router.get("/settings/general", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformGeneralSettings() });
+  } catch (err) { next(err); }
+});
+
+router.patch("/settings/general", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      platformName: z.string().max(120).optional(),
+      supportEmail: z.string().email().optional().or(z.literal("")),
+      supportPhone: z.string().max(40).optional(),
+      timezone: z.string().max(80).optional(),
+      defaultLocale: z.string().max(20).optional(),
+      maintenanceMode: z.boolean().optional(),
+      maintenanceMessage: z.string().max(500).optional(),
+      privacyPolicyUrl: z.string().max(500).optional(),
+      termsUrl: z.string().max(500).optional(),
+      incidentBanner: z.string().max(300).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await setPlatformGeneralSettings(req.body);
+      await logPlatformAction(admin?.id, "general.settings.update", { entityType: "platform_settings", entityId: "general" });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/settings/email/campaigns", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await listPlatformEmailCampaigns() });
+  } catch (err) { next(err); }
+});
+
+router.post("/settings/email/campaigns", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      name: z.string().min(1).max(200),
+      subject: z.string().min(1).max(300),
+      bodyHtml: z.string().min(1),
+      bodyText: z.string().optional(),
+      audience: z.enum(["operators", "custom"]),
+      recipientEmails: z.array(z.string().email()).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await createPlatformEmailCampaign({
+        ...req.body,
+        createdBy: admin?.id,
+      });
+      res.status(201).json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.patch("/settings/email/campaigns/:id", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      name: z.string().min(1).max(200).optional(),
+      subject: z.string().min(1).max(300).optional(),
+      bodyHtml: z.string().min(1).optional(),
+      bodyText: z.string().optional(),
+      audience: z.enum(["operators", "custom"]).optional(),
+      recipientEmails: z.array(z.string().email()).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const data = await updatePlatformEmailCampaign(req.params.id, req.body);
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/settings/email/campaigns/:id/send", requirePlatformAuth, requirePlatformPermission("plans.write"), async (req, res, next) => {
+  try {
+    const data = await sendPlatformEmailCampaignNow(req.params.id);
+    res.status(202).json({ success: true, data, message: "Campaign queued for delivery" });
+  } catch (err) { next(err); }
+});
 
 router.get("/media", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
   try {
@@ -1244,18 +1429,20 @@ router.post("/tenants/:slug/domain/verify", requirePlatformAuth, requirePlatform
 );
 
 router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPermission("tenants.read"),
+  validate({ body: z.object({ readOnly: z.boolean().optional() }) }),
   async (req, res, next) => {
     try {
       const admin = (req as any).platformAdmin;
       const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
       if (!tenant) throw new NotFoundError("Tenant not found");
       const target = await findImpersonationTargetUser(tenant.id);
-      if (!target) throw new NotFoundError("No school administrator user to impersonate");
+      if (!target) throw new NotFoundError("No school user found — add an admin when creating the school");
+      const readOnly = req.body?.readOnly === true;
       const row = await createImpersonationToken({
         tenantId: tenant.id,
         targetUserId: target.id,
         platformAdminId: admin.id,
-        readOnly: true,
+        readOnly,
       });
       await createPlatformAuditLog({
         platformAdminId: admin.id,

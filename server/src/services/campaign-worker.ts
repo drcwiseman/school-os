@@ -44,12 +44,18 @@ export async function processCampaignJob(tenantId: string, payload: { campaignId
     }
   }
 
-  const body = `Campaign: ${campaign.name}`;
+  const body = campaign.name;
   let sent = 0;
   for (const r of recipients) {
+    const isEmail = r.to.includes("@");
     const gate = await checkUsageAllowed(tenantId, "sms_volume", 1);
     if (!gate.allowed) break;
-    const result = await provider.send({ to: r.to, body, channel: "sms" });
+    const result = await provider.send({
+      to: r.to,
+      body,
+      channel: isEmail ? "email" : "sms",
+      subject: isEmail ? campaign.name : undefined,
+    });
     await db.insert(deliveryLogs).values({
       tenantId,
       campaignId: campaign.id,

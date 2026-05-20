@@ -48,10 +48,8 @@ export class StubExternalProvider implements MessagingProvider {
   }
 }
 
+import { IntegrationMessagingProvider } from "./integration-runtime";
+
 export function getMessagingProvider(): MessagingProvider {
-  const provider = process.env.MESSAGING_PROVIDER ?? "console";
-  if (provider === "twilio" || provider === "whatsapp") {
-    return new StubExternalProvider(provider);
-  }
-  return new ConsoleMessagingProvider();
+  return new IntegrationMessagingProvider();
 }

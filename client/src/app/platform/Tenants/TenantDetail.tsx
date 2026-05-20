@@ -179,11 +179,11 @@ export const TenantDetail: React.FC = () => {
     }
   };
 
-  const shadow = async () => {
+  const loginAsAdmin = async (readOnly = false) => {
     try {
-      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`);
+      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly });
       window.open(res.data.url, "_blank", "noopener,noreferrer");
-      toast("Opened school session (read-only)", "success");
+      toast(readOnly ? "Opened read-only shadow session" : "Logged in as school administrator", "success");
     } catch (e: any) {
       toast(e.message, "error");
     }
@@ -250,11 +250,19 @@ export const TenantDetail: React.FC = () => {
           </a>
           <button
             type="button"
-            onClick={shadow}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            onClick={() => loginAsAdmin(false)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
           >
             <UserCog size={15} />
-            Impersonate
+            Login as admin
+          </button>
+          <button
+            type="button"
+            onClick={() => loginAsAdmin(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            title="Read-only shadow"
+          >
+            Shadow
           </button>
         </div>
       </div>

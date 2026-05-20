@@ -1260,6 +1260,8 @@ export const platformBackups = pgTable("platform_backups", {
   includesUploads:  boolean("includes_uploads").notNull().default(true),
   fileName:         text("file_name"),
   storedPath:       text("stored_path"),
+  offsiteKey:       text("offsite_key"),
+  offsiteStatus:    text("offsite_status"),
   sizeBytes:        integer("size_bytes").notNull().default(0),
   error:            text("error"),
   createdBy:        uuid("created_by").references(() => platformAdmins.id, { onDelete: "set null" }),
@@ -1268,6 +1270,39 @@ export const platformBackups = pgTable("platform_backups", {
 }, (t) => ({
   statusIdx:  index("platform_backups_status_idx").on(t.status),
   createdIdx: index("platform_backups_created_idx").on(t.createdAt),
+}));
+
+export const platformEmailCampaigns = pgTable("platform_email_campaigns", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  name:             text("name").notNull(),
+  subject:          text("subject").notNull(),
+  bodyHtml:         text("body_html").notNull().default(""),
+  bodyText:         text("body_text"),
+  audience:         text("audience").notNull().default("operators"),
+  recipientEmails:  jsonb("recipient_emails").notNull().default([]),
+  status:           text("status").notNull().default("draft"),
+  scheduledAt:      timestamp("scheduled_at"),
+  sentAt:           timestamp("sent_at"),
+  stats:            jsonb("stats").notNull().default({}),
+  createdBy:        uuid("created_by").references(() => platformAdmins.id, { onDelete: "set null" }),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  statusIdx: index("platform_email_campaigns_status_idx").on(t.status),
+}));
+
+export const platformWebhookEvents = pgTable("platform_webhook_events", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  provider:   text("provider").notNull(),
+  externalId: text("external_id").notNull(),
+  tenantId:   uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+  paymentId:  uuid("payment_id").references(() => payments.id, { onDelete: "set null" }),
+  invoiceId:  uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  status:     text("status").notNull().default("processed"),
+  payload:    jsonb("payload"),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  providerExtIdx: uniqueIndex("platform_webhook_events_provider_ext_idx").on(t.provider, t.externalId),
 }));
 
 export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {

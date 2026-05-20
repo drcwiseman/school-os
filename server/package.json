@@ -20,6 +20,7 @@
     "dev:setup": "ts-node scripts/wait-for-pg.ts && npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1050.0",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -37,8 +38,8 @@
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/nodemailer": "^6.4.15",
     "@types/node": "^20.12.12",
+    "@types/nodemailer": "^6.4.15",
     "@types/pg": "^8.11.6",
     "@types/supertest": "^6.0.2",
     "drizzle-kit": "^0.21.4",

@@ -117,7 +117,7 @@ export const PlatformGlobalSearch: React.FC = () => {
   const showPanel = open && (query.trim().length >= 2 || loading);
 
   return (
-    <div ref={wrapRef} className="relative hidden md:block">
+    <div ref={wrapRef} className="relative flex-1 min-w-0 max-w-md md:max-w-none md:flex-none">
       <Search
         size={16}
         className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10"

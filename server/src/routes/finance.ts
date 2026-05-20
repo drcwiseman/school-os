@@ -263,4 +263,62 @@ router.delete("/invoices/:id", ...guard, requirePermission("finance.invoice.crea
   } catch (err) { next(err); }
 });
 
+router.post("/payments/gateway/initiate", ...guard, requirePermission("finance.payment.create"),
+  validate({
+    body: z.object({
+      invoiceId: z.string().uuid(),
+      provider: z.enum(["flutterwave", "mtn_momo"]),
+      payerPhone: z.string().optional(),
+      customerEmail: z.string().email().optional(),
+      customerName: z.string().optional(),
+      redirectUrl: z.string().url().optional(),
+    }),
+  }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [invoice] = await db.select().from(invoices).where(and(
+        eq(invoices.id, req.body.invoiceId),
+        eq(invoices.tenantId, tenant.id),
+        isNull(invoices.deletedAt),
+      )).limit(1);
+      if (!invoice) throw new NotFoundError("Invoice not found");
+      const balance = invoice.totalAmount - invoice.paidAmount;
+      if (balance <= 0) throw new ConflictError("Invoice is already paid");
+
+      const base = (process.env.CLIENT_ORIGIN || "").replace(/\/$/, "");
+      const redirectUrl = req.body.redirectUrl || `${base}/s/${tenant.slug}/finance`;
+
+      const { initiateFlutterwavePayment, initiateMtnMomoCollection } = await import("../services/integration-runtime");
+
+      const amountMajor = balance / 100;
+
+      if (req.body.provider === "flutterwave") {
+        const result = await initiateFlutterwavePayment({
+          tenantId: tenant.id,
+          invoiceId: invoice.id,
+          amount: amountMajor,
+          customerEmail: req.body.customerEmail || "payer@school.local",
+          customerName: req.body.customerName || "Parent",
+          redirectUrl,
+        });
+        if (!result.ok) return res.status(400).json({ success: false, message: result.message });
+        return res.json({ success: true, data: result });
+      }
+
+      if (!req.body.payerPhone) {
+        return res.status(400).json({ success: false, message: "payerPhone required for MTN MoMo" });
+      }
+      const result = await initiateMtnMomoCollection({
+        tenantId: tenant.id,
+        invoiceId: invoice.id,
+        amount: amountMajor,
+        payerPhone: req.body.payerPhone,
+      });
+      if (!result.ok) return res.status(400).json({ success: false, message: result.message });
+      res.json({ success: true, data: result });
+    } catch (err) { next(err); }
+  },
+);
+
 export default router;
