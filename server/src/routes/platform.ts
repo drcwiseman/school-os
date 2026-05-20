@@ -11,6 +11,16 @@ import { getExchangeRates, convertMinor } from "../services/currency-exchange";
 import { getPlatformDefaults, setPlatformDefaults } from "../services/platform-settings";
 import { getPlansWithRegionalPricing } from "../services/plan-pricing";
 import {
+  createPlan,
+  updatePlan,
+  deletePlan,
+  getPlanByCode,
+  upsertRegionalPrice,
+  deleteRegionalPrice,
+  normalizePlanCode,
+  PLAN_FEATURE_KEYS,
+} from "../services/platform-plans";
+import {
   setTenantFeature,
   listFeatureCatalog,
   getTenantFeaturesDetailed,
@@ -230,6 +240,84 @@ router.get("/plans", requirePlatformAuth, requirePlatformPermission("plans.read"
     const country = typeof req.query.country === "string" ? req.query.country : undefined;
     const currency = typeof req.query.currency === "string" ? req.query.currency : undefined;
     res.json({ success: true, data: await getPlansWithRegionalPricing(country, currency) });
+  } catch (err) { next(err); }
+});
+
+router.get("/plans/meta/features", requirePlatformAuth, requirePlatformPermission("plans.read"), (_req, res) => {
+  res.json({ success: true, data: PLAN_FEATURE_KEYS });
+});
+
+router.get("/plans/:code", requirePlatformAuth, requirePlatformPermission("plans.read"), async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlanByCode(req.params.code) });
+  } catch (err) { next(err); }
+});
+
+router.post("/plans", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      code: z.string().min(2).max(50),
+      name: z.string().min(1).max(120),
+      priceMonthly: z.number().int().min(0),
+      featuresJson: z.record(z.boolean()).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const plan = await createPlan({
+        code: normalizePlanCode(req.body.code),
+        name: req.body.name,
+        priceMonthly: req.body.priceMonthly,
+        featuresJson: req.body.featuresJson,
+      });
+      res.status(201).json({ success: true, data: plan });
+    } catch (err) { next(err); }
+  },
+);
+
+router.patch("/plans/:code", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      name: z.string().min(1).max(120).optional(),
+      priceMonthly: z.number().int().min(0).optional(),
+      featuresJson: z.record(z.boolean()).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const plan = await updatePlan(req.params.code, req.body);
+      res.json({ success: true, data: plan });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/plans/:code", requirePlatformAuth, requirePlatformPermission("plans.write"), async (req, res, next) => {
+  try {
+    await deletePlan(req.params.code);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+router.post("/plans/:code/regional-prices", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      countryCode: z.string().min(1).max(8),
+      currency: z.string().length(3),
+      priceMonthly: z.number().int().min(0),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const row = await upsertRegionalPrice(req.params.code, req.body);
+      res.json({ success: true, data: row });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/plans/:code/regional-prices/:id", requirePlatformAuth, requirePlatformPermission("plans.write"), async (req, res, next) => {
+  try {
+    await deleteRegionalPrice(req.params.code, req.params.id);
+    res.json({ success: true });
   } catch (err) { next(err); }
 });
 
