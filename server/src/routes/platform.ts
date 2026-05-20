@@ -116,6 +116,14 @@ import {
   testPlatformIntegrationConnection,
 } from "../services/platform-integrations-settings";
 import {
+  getPlatformBackupHub,
+  setBackupPolicy,
+  createBackupSnapshot,
+  deleteBackupSnapshot,
+  resolveBackupFilePath,
+  restoreBackupSnapshot,
+} from "../services/platform-backup";
+import {
   getPlatformSupportHub,
   createPlatformSupportTicket,
   updatePlatformSupportTicket,
@@ -523,6 +531,86 @@ router.post("/settings/integrations/:code/test", requirePlatformAuth, requirePla
     res.json({ success: true, data });
   } catch (err) { next(err); }
 });
+
+router.get("/settings/backup", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await getPlatformBackupHub() });
+  } catch (err) { next(err); }
+});
+
+router.patch("/settings/backup/policy", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      scheduleEnabled: z.boolean().optional(),
+      scheduleFrequency: z.enum(["daily", "weekly"]).optional(),
+      scheduleHourUtc: z.number().int().min(0).max(23).optional(),
+      retentionDays: z.number().int().min(1).max(365).optional(),
+      includeDatabase: z.boolean().optional(),
+      includeUploads: z.boolean().optional(),
+      notifyEmail: z.string().email().optional().or(z.literal("")),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await setBackupPolicy(req.body);
+      await logPlatformAction(admin?.id, "backup.policy.update", { entityType: "platform_settings", entityId: "backup" });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/settings/backup/run", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({
+    body: z.object({
+      label: z.string().max(200).optional(),
+      includeDatabase: z.boolean().optional(),
+      includeUploads: z.boolean().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await createBackupSnapshot({
+        createdBy: admin?.id,
+        label: req.body.label,
+        includeDatabase: req.body.includeDatabase,
+        includeUploads: req.body.includeUploads,
+        trigger: "manual",
+      });
+      await logPlatformAction(admin?.id, "backup.create", { entityType: "platform_backup", entityId: data.id });
+      res.status(202).json({ success: true, data, message: "Backup queued — refresh when status is completed" });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/settings/backup/snapshots/:id", requirePlatformAuth, requirePlatformPermission("plans.write"), async (req, res, next) => {
+  try {
+    const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+    await deleteBackupSnapshot(req.params.id);
+    await logPlatformAction(admin?.id, "backup.delete", { entityType: "platform_backup", entityId: req.params.id });
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+router.get("/settings/backup/snapshots/:id/download", requirePlatformAuth, requirePlatformPermission("plans.read"), async (req, res, next) => {
+  try {
+    const { path: filePath, fileName } = await resolveBackupFilePath(req.params.id);
+    res.download(filePath, fileName);
+  } catch (err) { next(err); }
+});
+
+router.post("/settings/backup/snapshots/:id/restore", requirePlatformAuth, requirePlatformPermission("plans.write"),
+  validate({ body: z.object({ confirmPhrase: z.string() }) }),
+  async (req, res, next) => {
+    try {
+      const admin = (req as Request & { platformAdmin?: { id: string } }).platformAdmin;
+      const data = await restoreBackupSnapshot(req.params.id, req.body.confirmPhrase);
+      await logPlatformAction(admin?.id, "backup.restore", { entityType: "platform_backup", entityId: req.params.id });
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/media", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
   try {

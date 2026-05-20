@@ -34,6 +34,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/media": "Media Library",
   "/platform/settings/email": "Email & Delivery",
   "/platform/settings/integrations": "Integrations",
+  "/platform/settings/backup": "Backup & Restore",
 };
 
 const navGroups = [

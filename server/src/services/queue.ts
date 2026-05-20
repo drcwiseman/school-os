@@ -2,6 +2,7 @@ import { db } from "../db";
 import { jobs } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { processCampaignJob } from "./campaign-worker";
+import { runPlatformBackupJob } from "./platform-backup";
 import { NotFoundError, BadRequestError } from "../middleware/error";
 
 let processing = false;
@@ -23,6 +24,11 @@ export async function tick() {
         let result: unknown = null;
         if (job.type === "campaign.send") {
           result = await processCampaignJob(job.tenantId!, job.payload as { campaignId: string });
+        } else if (job.type === "platform.backup") {
+          const payload = job.payload as { backupId?: string };
+          if (!payload?.backupId) throw new Error("Missing backupId in job payload");
+          await runPlatformBackupJob(payload.backupId);
+          result = { backupId: payload.backupId, ok: true };
         }
         await db.update(jobs).set({ status: "done", result: result as object, updatedAt: new Date() }).where(eq(jobs.id, job.id));
       } catch (err: any) {

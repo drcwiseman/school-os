@@ -120,6 +120,13 @@
       "when": 1779190800000,
       "tag": "0016_platform_email",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1779191200000,
+      "tag": "0017_platform_backups",
+      "breakpoints": true
     }
   ]
 }

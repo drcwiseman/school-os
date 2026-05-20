@@ -1251,6 +1251,25 @@ export const platformEmailLogs = pgTable("platform_email_logs", {
   statusIdx:  index("platform_email_logs_status_idx").on(t.status),
 }));
 
+export const platformBackups = pgTable("platform_backups", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  label:            text("label").notNull(),
+  trigger:          text("trigger").notNull().default("manual"),
+  status:           text("status").notNull().default("pending"),
+  includesDatabase: boolean("includes_database").notNull().default(true),
+  includesUploads:  boolean("includes_uploads").notNull().default(true),
+  fileName:         text("file_name"),
+  storedPath:       text("stored_path"),
+  sizeBytes:        integer("size_bytes").notNull().default(0),
+  error:            text("error"),
+  createdBy:        uuid("created_by").references(() => platformAdmins.id, { onDelete: "set null" }),
+  completedAt:      timestamp("completed_at"),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  statusIdx:  index("platform_backups_status_idx").on(t.status),
+  createdIdx: index("platform_backups_created_idx").on(t.createdAt),
+}));
+
 export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {
   id:              uuid("id").primaryKey().defaultRandom(),
   token:           text("token").notNull().unique(),

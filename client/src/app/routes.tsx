@@ -49,14 +49,10 @@ import { SystemLogsHub } from "./platform/System/SystemLogsHub";
 import { PlatformMediaLibrary } from "./platform/Media/PlatformMediaLibrary";
 import { PlatformEmailSettings } from "./platform/PlatformEmailSettings";
 import { PlatformIntegrationsSettings } from "./platform/PlatformIntegrationsSettings";
-import { PlatformPlaceholder } from "./platform/PlatformPlaceholder";
+import { PlatformBackupSettings } from "./platform/PlatformBackupSettings";
 import { Settings } from "./pages/Settings";
 import { FeatureRoute } from "./components/FeatureRoute";
 import { MODULE_FEATURE_CODES } from "../lib/module-features";
-
-const stub = (title: string, hint?: string) => (
-  <PlatformPlaceholder title={title} hint={hint} />
-);
 
 export const AppRoutes = () => {
   return (
@@ -102,7 +98,7 @@ export const AppRoutes = () => {
         <Route path="settings/flags" element={<Navigate to="/platform/tenants" replace />} />
         <Route path="settings/email" element={<PlatformEmailSettings />} />
         <Route path="settings/integrations" element={<PlatformIntegrationsSettings />} />
-        <Route path="settings/backup" element={stub("Backup & restore")} />
+        <Route path="settings/backup" element={<PlatformBackupSettings />} />
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
