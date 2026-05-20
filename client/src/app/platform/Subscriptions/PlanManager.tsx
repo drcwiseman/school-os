@@ -23,6 +23,7 @@ import {
   currencyForCountry,
 } from "../../../lib/currencies";
 import { FEATURE_CATEGORY_LABELS, FEATURE_CATEGORY_ORDER } from "../../../lib/feature-catalog";
+import { SearchableFeaturePicker } from "../components/SearchableFeaturePicker";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -141,7 +142,6 @@ export const PlanManager: React.FC = () => {
   const [formName, setFormName] = useState("");
   const [formPriceMajor, setFormPriceMajor] = useState(0);
   const [formFeatures, setFormFeatures] = useState<Record<string, boolean>>({});
-  const [addFeatureCode, setAddFeatureCode] = useState("");
   const [regionalRows, setRegionalRows] = useState<RegionalRow[]>([]);
   const [newRegional, setNewRegional] = useState({ countryCode: "UG", currency: "UGX", priceMajor: 0 });
 
@@ -175,7 +175,6 @@ export const PlanManager: React.FC = () => {
   const addFeatureToPlan = (code: string) => {
     if (!code || code in formFeatures) return;
     setFormFeatures((prev) => ({ ...prev, [code]: true }));
-    setAddFeatureCode("");
   };
 
   const removeFeatureFromPlan = (code: string) => {
@@ -220,7 +219,6 @@ export const PlanManager: React.FC = () => {
     setFormName("");
     setFormPriceMajor(0);
     setFormFeatures({});
-    setAddFeatureCode("");
     setRegionalRows([]);
     setModalOpen(true);
   };
@@ -232,7 +230,6 @@ export const PlanManager: React.FC = () => {
     setFormName(plan.name);
     setFormPriceMajor(minorToMajor(plan.priceMonthly));
     setFormFeatures({ ...(plan.featuresJson ?? {}) });
-    setAddFeatureCode("");
     setModalOpen(true);
     try {
       const res = await api.get(`/api/platform/plans/${plan.code}`);
@@ -599,30 +596,14 @@ export const PlanManager: React.FC = () => {
                 </div>
 
                 {unassignedCatalog.length > 0 ? (
-                  <div className="flex gap-2">
-                    <select
-                      className="input text-sm flex-1"
-                      value={addFeatureCode}
-                      onChange={(e) => setAddFeatureCode(e.target.value)}
-                    >
-                      <option value="">Add feature to plan…</option>
-                      {groupCatalogByCategory(unassignedCatalog).map(([cat, items]) => (
-                        <optgroup key={cat} label={categoryLabel(cat)}>
-                          {items.map((f) => (
-                            <option key={f.id} value={f.code}>{f.name}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={!addFeatureCode}
-                      onClick={() => addFeatureToPlan(addFeatureCode)}
-                      className="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-medium text-white hover:bg-slate-900 disabled:opacity-50"
-                    >
-                      Add
-                    </button>
-                  </div>
+                  <SearchableFeaturePicker
+                    key={`${modalMode}-${editCode ?? "new"}-${assignedCodes.length}`}
+                    options={unassignedCatalog}
+                    categoryLabel={categoryLabel}
+                    groupByCategory={(items) => groupCatalogByCategory(items as CatalogFeature[])}
+                    onSelect={addFeatureToPlan}
+                    placeholder="Search 41+ features by name or code…"
+                  />
                 ) : catalog.length > 0 ? (
                   <p className="text-[11px] text-emerald-600">All catalog features are assigned to this plan.</p>
                 ) : (
