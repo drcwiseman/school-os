@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS "tenant_billing_usage" (
 CREATE TABLE IF NOT EXISTS "usage_billing_thresholds" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "metric" text NOT NULL,
-  "included_quantity" integer NOT NULL DEFAULT 0,
+  "included_quantity" bigint NOT NULL DEFAULT 0,
   "overage_unit_price" integer NOT NULL DEFAULT 0,
   "currency" text NOT NULL DEFAULT 'USD',
   CONSTRAINT "usage_billing_thresholds_metric_unique" UNIQUE("metric")
@@ -107,6 +107,8 @@ INSERT INTO "addon_features" ("code", "name", "description", "price_monthly") VA
   ('white_label', 'White-Label Branding', 'Custom domain and branding', 4900),
   ('multi_campus', 'Multi-Campus', 'Branch campuses under one school', 9900)
 ON CONFLICT ("code") DO NOTHING;
+--> statement-breakpoint
+ALTER TABLE "usage_billing_thresholds" ALTER COLUMN "included_quantity" TYPE bigint USING "included_quantity"::bigint;
 --> statement-breakpoint
 INSERT INTO "usage_billing_thresholds" ("metric", "included_quantity", "overage_unit_price", "currency") VALUES
   ('sms_volume', 500, 5, 'USD'),

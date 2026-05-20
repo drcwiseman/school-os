@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, timestamp, boolean, jsonb, pgEnum, integer, uniqueIndex, index
+  pgTable, uuid, text, timestamp, boolean, jsonb, pgEnum, integer, bigint, uniqueIndex, index
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -1106,7 +1106,7 @@ export const tenantBillingUsage = pgTable("tenant_billing_usage", {
 export const usageBillingThresholds = pgTable("usage_billing_thresholds", {
   id:               uuid("id").primaryKey().defaultRandom(),
   metric:           text("metric").notNull().unique(),
-  includedQuantity: integer("included_quantity").notNull().default(0),
+  includedQuantity: bigint("included_quantity", { mode: "number" }).notNull().default(0),
   overageUnitPrice: integer("overage_unit_price").notNull().default(0),
   currency:         text("currency").notNull().default("USD"),
 });

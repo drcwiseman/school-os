@@ -31,8 +31,54 @@ type TenantRow = {
 };
 
 
+const DONUT_R = 15.91549430918954;
+
+function StatusDonut({
+  active,
+  trial,
+  suspended,
+  total,
+}: {
+  active: number;
+  trial: number;
+  suspended: number;
+  total: number;
+}) {
+  const segments = [
+    { n: active, color: "#10b981" },
+    { n: trial, color: "#f59e0b" },
+    { n: suspended, color: "#ef4444" },
+  ].filter((s) => s.n > 0);
+  const denom = total > 0 ? total : 1;
+  let offset = 0;
+
+  return (
+    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90" aria-hidden>
+      <circle cx="18" cy="18" r={DONUT_R} fill="transparent" stroke="#f1f5f9" strokeWidth="4" />
+      {segments.map((seg, i) => {
+        const pct = (seg.n / denom) * 100;
+        const el = (
+          <circle
+            key={i}
+            cx="18"
+            cy="18"
+            r={DONUT_R}
+            fill="transparent"
+            stroke={seg.color}
+            strokeWidth="4"
+            strokeDasharray={`${pct} ${100 - pct}`}
+            strokeDashoffset={-offset}
+          />
+        );
+        offset += pct;
+        return el;
+      })}
+    </svg>
+  );
+}
+
 const Sparkline = ({ color }: { color: string }) => (
-  <svg className="w-full h-8 mt-4" preserveAspectRatio="none" viewBox="0 0 100 30">
+  <svg className="w-full h-8 mt-4 max-w-full" preserveAspectRatio="none" viewBox="0 0 100 30">
     <path
       d="M0,25 C10,20 20,28 30,15 C40,5 50,18 60,10 C70,2 80,22 90,12 C95,7 100,15 100,15"
       fill="none"
@@ -134,7 +180,7 @@ export const PlatformDashboard: React.FC = () => {
       {/* KPI Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
         {/* Total Schools */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-sm shrink-0">
               <Building2 size={24} />
@@ -149,7 +195,7 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* Active Schools */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm shrink-0">
               <Users size={24} />
@@ -164,7 +210,7 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* Total Subscriptions */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm shrink-0">
               <Briefcase size={24} />
@@ -179,7 +225,7 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* MRR */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500 text-white shadow-sm shrink-0">
               <Wallet size={24} />
@@ -194,7 +240,7 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* Total Users */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500 text-white shadow-sm shrink-0">
               <GraduationCap size={24} />
@@ -210,9 +256,9 @@ export const PlatformDashboard: React.FC = () => {
       </div>
 
       {/* Middle Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
         {/* Revenue Chart */}
-        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col min-h-0">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h3 className="text-base font-bold text-slate-900">Revenue Overview</h3>
@@ -228,67 +274,83 @@ export const PlatformDashboard: React.FC = () => {
             </select>
           </div>
           
-          <div className="h-64 relative w-full flex flex-col justify-end">
+          <div className="relative mt-2 h-56 sm:h-64 w-full overflow-hidden shrink-0">
             {/* Dummy Line Chart Grid */}
-            <div className="absolute inset-0 flex flex-col justify-between pt-2 pb-6">
+            <div className="absolute inset-0 flex flex-col justify-between pt-1 pb-10 pl-10 pr-3">
               {[60, 45, 30, 15, 0].map((val) => (
-                <div key={val} className="flex items-center w-full">
-                  <span className="text-xs text-slate-400 w-10">{val ? `$${val}K` : "$0"}</span>
-                  <div className="flex-1 border-t border-slate-100 border-dashed"></div>
+                <div key={val} className="flex items-center w-full min-w-0">
+                  <span className="text-xs text-slate-400 w-9 shrink-0">{val ? `$${val}K` : "$0"}</span>
+                  <div className="flex-1 border-t border-slate-100 border-dashed min-w-0" />
                 </div>
               ))}
             </div>
-            <div className="absolute bottom-0 left-10 right-0 flex justify-between text-xs text-slate-400 pb-1">
-              <span>May 13</span><span>May 14</span><span>May 15</span><span>May 16</span><span>May 17</span><span>May 18</span><span>May 19</span><span>May 20</span>
+            <div className="absolute bottom-1 left-10 right-3 flex justify-between gap-1 text-[10px] sm:text-xs text-slate-400">
+              <span>May 13</span>
+              <span>May 14</span>
+              <span>May 15</span>
+              <span>May 16</span>
+              <span className="hidden sm:inline">May 17</span>
+              <span className="hidden sm:inline">May 18</span>
+              <span className="hidden md:inline">May 19</span>
+              <span>May 20</span>
             </div>
-            {/* Dummy Chart SVG */}
-            <svg className="absolute inset-0 pl-10 pb-6 w-full h-full z-10" preserveAspectRatio="none" viewBox="0 0 100 100">
-              <path 
-                d="M 0 70 L 14.2 55 L 28.5 50 L 42.8 45 L 57.1 40 L 71.4 38 L 85.7 30 L 100 20" 
-                fill="none" stroke="#3b82f6" strokeWidth="2.5" 
-              />
-              <path 
-                d="M 0 100 L 0 70 L 14.2 55 L 28.5 50 L 42.8 45 L 57.1 40 L 71.4 38 L 85.7 30 L 100 20 L 100 100 Z" 
-                fill="url(#blue-grad)" opacity="0.1" 
-              />
+            <svg
+              className="absolute top-1 left-10 right-3 bottom-10 z-10"
+              preserveAspectRatio="none"
+              viewBox="0 0 100 80"
+            >
               <defs>
-                <linearGradient id="blue-grad" x1="0" x2="0" y1="0" y2="1">
+                <linearGradient id="platform-revenue-grad" x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stopColor="#3b82f6" />
                   <stop offset="100%" stopColor="transparent" />
                 </linearGradient>
               </defs>
-              <circle cx="0" cy="70" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="14.2" cy="55" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="28.5" cy="50" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="42.8" cy="45" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="57.1" cy="40" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="71.4" cy="38" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="85.7" cy="30" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
-              <circle cx="100" cy="20" r="3" fill="white" stroke="#3b82f6" strokeWidth="2" />
+              <path
+                d="M 4 56 L 17 44 L 30 40 L 43 36 L 56 32 L 69 30 L 82 24 L 96 18"
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="2.5"
+                vectorEffect="non-scaling-stroke"
+              />
+              <path
+                d="M 4 80 L 4 56 L 17 44 L 30 40 L 43 36 L 56 32 L 69 30 L 82 24 L 96 18 L 96 80 Z"
+                fill="url(#platform-revenue-grad)"
+                opacity="0.12"
+              />
+              {[
+                [4, 56],
+                [17, 44],
+                [30, 40],
+                [43, 36],
+                [56, 32],
+                [69, 30],
+                [82, 24],
+                [96, 18],
+              ].map(([cx, cy], i) => (
+                <circle key={i} cx={cx} cy={cy} r="2.5" fill="white" stroke="#3b82f6" strokeWidth="2" />
+              ))}
             </svg>
           </div>
         </div>
 
         {/* Subscription Status */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-bold text-slate-900 mb-6">Subscription Status</h3>
-          <div className="flex flex-col sm:flex-row items-center gap-6 justify-center">
-            <div className="relative w-40 h-40 shrink-0">
-              {/* Dummy Donut Chart */}
-              <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
-                <circle cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="#f1f5f9" strokeWidth="4" />
-                <circle cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="#10b981" strokeWidth="4" strokeDasharray="80.8 19.2" strokeDashoffset="0" />
-                <circle cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="#f59e0b" strokeWidth="4" strokeDasharray="11.4 88.6" strokeDashoffset="-80.8" />
-                <circle cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="#ef4444" strokeWidth="4" strokeDasharray="4.5 95.5" strokeDashoffset="-92.2" />
-                <circle cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="#94a3b8" strokeWidth="4" strokeDasharray="3.3 96.7" strokeDashoffset="-96.7" />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col min-h-0">
+          <h3 className="text-base font-bold text-slate-900 mb-4 shrink-0">Subscription Status</h3>
+          <div className="flex flex-col items-center gap-5 flex-1 min-h-0 justify-center py-1">
+            <div className="relative w-32 h-32 shrink-0 p-1">
+              <StatusDonut
+                active={statusBreakdown.active}
+                trial={statusBreakdown.trial}
+                suspended={statusBreakdown.suspended}
+                total={statusBreakdown.total}
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-2xl font-bold text-slate-900">{statusBreakdown.total}</span>
                 <span className="text-xs text-slate-500">Total</span>
               </div>
             </div>
-            
-            <div className="space-y-3">
+
+            <div className="space-y-3 w-full max-w-[200px]">
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
                 <div>
@@ -315,7 +377,7 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* Recent Activity */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col overflow-hidden min-h-0">
           <h3 className="text-base font-bold text-slate-900 mb-6">Recent Activity</h3>
           <div className="space-y-4 flex-1">
             {audit.length === 0 ? (
@@ -348,9 +410,9 @@ export const PlatformDashboard: React.FC = () => {
       </div>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
         {/* Top Schools Table */}
-        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col">
+        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col overflow-hidden min-h-0">
           <div className="p-6 pb-4">
             <h3 className="text-base font-bold text-slate-900">Schools overview</h3>
           </div>
@@ -389,7 +451,7 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* Plan Distribution */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col overflow-hidden min-h-0">
           <h3 className="text-base font-bold text-slate-900 mb-6">Plan Distribution</h3>
           <div className="space-y-6 flex-1">
             {planDistribution.map((p, i) => (
@@ -420,7 +482,7 @@ export const PlatformDashboard: React.FC = () => {
         </div>
 
         {/* System Health */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col overflow-hidden min-h-0">
           <h3 className="text-base font-bold text-slate-900 mb-6">System Health</h3>
           <div className="space-y-5 flex-1">
             <div className="flex items-center justify-between">

@@ -1,11 +1,11 @@
 import React, { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  LayoutDashboard, Building2, CreditCard, Globe, Link as LinkIcon, 
-  Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft, 
-  Landmark, Users, Shield, ScrollText, HardDrive, 
-  LifeBuoy, ListTodo, Settings, Flag, Mail, 
-  Blocks, DatabaseBackup, Loader2, Search, Bell, HelpCircle, Menu
+  LayoutDashboard, Building2, CreditCard, Globe, Link as LinkIcon,
+  Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft,
+  Landmark, Users, Shield, ScrollText, HardDrive,
+  LifeBuoy, ListTodo, Settings, Flag, Mail,
+  Blocks, DatabaseBackup, Loader2, Search, Bell, HelpCircle, Menu,
 } from "lucide-react";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
 
@@ -20,7 +20,7 @@ const navGroups = [
       { to: "/platform/custom-domains", label: "Custom Domains", icon: LinkIcon },
       { to: "/platform/subscriptions/plans", label: "Plans & Pricing", icon: Tags },
       { to: "/platform/marketplace", label: "Add-ons Marketplace", icon: LayoutTemplate },
-    ]
+    ],
   },
   {
     label: "FINANCE",
@@ -29,7 +29,7 @@ const navGroups = [
       { to: "/platform/invoices", label: "Invoices", icon: FileText },
       { to: "/platform/transactions", label: "Transactions", icon: ArrowRightLeft },
       { to: "/platform/payouts", label: "Payouts", icon: Receipt },
-    ]
+    ],
   },
   {
     label: "OPERATIONS",
@@ -40,7 +40,7 @@ const navGroups = [
       { to: "/platform/logs", label: "System Logs", icon: HardDrive },
       { to: "/platform/support", label: "Support Tickets", icon: LifeBuoy },
       { to: "/platform/system/queue", label: "Job Queue", icon: ListTodo },
-    ]
+    ],
   },
   {
     label: "SETTINGS",
@@ -50,8 +50,8 @@ const navGroups = [
       { to: "/platform/settings/email", label: "Email Templates", icon: Mail },
       { to: "/platform/settings/integrations", label: "Integrations", icon: Blocks },
       { to: "/platform/settings/backup", label: "Backup & Restore", icon: DatabaseBackup },
-    ]
-  }
+    ],
+  },
 ];
 
 export const PlatformLayout: React.FC = () => {
@@ -59,34 +59,38 @@ export const PlatformLayout: React.FC = () => {
 
   useEffect(() => {
     document.body.classList.add("platform-active");
-    return () => document.body.classList.remove("platform-active");
+    document.documentElement.classList.add("platform-active");
+    return () => {
+      document.body.classList.remove("platform-active");
+      document.documentElement.classList.remove("platform-active");
+    };
   }, []);
 
   if (!ready) {
     return (
-      <div className="min-h-screen bg-[#f4f6f8] flex items-center justify-center">
+      <div className="h-[100dvh] bg-[#f4f6f8] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f6f8] text-[#1e293b] font-sans antialiased flex">
-      {/* Left Sidebar */}
-      <aside className="hidden lg:flex w-[260px] flex-col bg-[#0f172a] text-slate-300 shadow-xl overflow-y-auto">
-        <div className="px-5 py-5 sticky top-0 bg-[#0f172a] z-10 border-b border-slate-800">
+    <div className="h-[100dvh] flex overflow-hidden bg-[#f4f6f8] text-[#1e293b] font-sans antialiased">
+      {/* Sidebar: logo fixed, nav scrolls on its own */}
+      <aside className="hidden lg:flex w-[260px] shrink-0 flex-col h-full bg-[#0f172a] text-slate-300 shadow-xl border-r border-slate-800/80">
+        <div className="shrink-0 px-5 py-5 border-b border-slate-800 bg-[#0f172a]">
           <div className="flex items-center gap-3 text-white">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-sm">
               <Shield size={18} />
             </div>
-            <div>
-              <p className="font-bold tracking-tight leading-tight text-lg">SchoolOS</p>
+            <div className="min-w-0">
+              <p className="font-bold tracking-tight leading-tight text-lg truncate">SchoolOS</p>
               <p className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 mt-0.5">Platform Admin</p>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 py-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 platform-sidebar-scroll">
           {navGroups.map((group, i) => (
             <div key={i} className="mb-6 px-3">
               <p className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
@@ -110,8 +114,8 @@ export const PlatformLayout: React.FC = () => {
                     >
                       {({ isActive }) => (
                         <>
-                          <Icon size={16} className={isActive ? "text-white" : "text-slate-400"} />
-                          {item.label}
+                          <Icon size={16} className={`shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
+                          <span className="truncate">{item.label}</span>
                         </>
                       )}
                     </NavLink>
@@ -123,54 +127,56 @@ export const PlatformLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#f4f6f8]">
-        {/* Top Header */}
-        <header className="sticky top-0 z-40 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-4">
-            <button className="lg:hidden text-slate-500 hover:text-slate-700">
+      {/* Main: header fixed, page content scrolls */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden bg-[#f4f6f8]">
+        <header className="shrink-0 z-40 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-4 min-w-0">
+            <button type="button" className="lg:hidden text-slate-500 hover:text-slate-700 shrink-0">
               <Menu size={20} />
             </button>
-            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">Dashboard</h1>
+            <h1 className="text-xl font-bold text-slate-800 hidden sm:block truncate">Dashboard</h1>
           </div>
-          
-          <div className="flex items-center gap-5">
-            {/* Search Bar */}
+
+          <div className="flex items-center gap-3 sm:gap-5 shrink-0">
             <div className="hidden md:flex relative group">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500" />
-              <input 
-                type="text" 
-                placeholder="Search schools, users, invoices..." 
-                className="w-80 bg-slate-50 border border-slate-200 rounded-full pl-9 pr-12 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              <input
+                type="text"
+                placeholder="Search schools, users, invoices..."
+                className="w-48 lg:w-80 max-w-[40vw] bg-slate-50 border border-slate-200 rounded-full pl-9 pr-12 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex gap-1">
                 <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-slate-200 text-slate-500">⌘</kbd>
                 <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-slate-200 text-slate-500">K</kbd>
               </div>
             </div>
 
-            <button className="relative text-slate-500 hover:text-slate-700 transition-colors">
+            <button type="button" className="relative text-slate-500 hover:text-slate-700">
               <Bell size={20} />
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">8</span>
             </button>
 
-            <button className="text-slate-500 hover:text-slate-700 transition-colors hidden sm:block">
+            <button type="button" className="text-slate-500 hover:text-slate-700 hidden sm:block">
               <HelpCircle size={20} />
             </button>
 
             <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-sm shadow-sm cursor-pointer" onClick={logout}>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-sm shadow-sm"
+                onClick={logout}
+              >
                 PA
-              </div>
-              <div className="hidden sm:block cursor-pointer" onClick={logout}>
+              </button>
+              <button type="button" className="hidden sm:block text-left" onClick={logout}>
                 <p className="text-sm font-semibold text-slate-700 leading-tight">Platform Admin</p>
                 <p className="text-[11px] text-slate-500">Super Admin</p>
-              </div>
+              </button>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

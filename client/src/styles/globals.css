@@ -28,9 +28,31 @@
   body:not(.marketing-active) ::-webkit-scrollbar-thumb { @apply bg-slate-600 rounded-full; }
 
   /* Platform admin console — light enterprise theme */
+  html.platform-active,
+  body.platform-active {
+    overflow: hidden;
+    height: 100%;
+    min-height: 100dvh;
+  }
+  html.platform-active #root,
+  body.platform-active #root {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    border: none;
+    min-height: 100dvh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
   body.platform-active {
     background-color: #f4f6f8;
     color: #1e293b;
+  }
+  .platform-sidebar-scroll {
+    scrollbar-gutter: stable;
   }
   body.platform-active .input {
     @apply bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-indigo-500/25;
