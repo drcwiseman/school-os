@@ -5,7 +5,7 @@ import {
   tenants, tenantSettings, users, roles, rolePermissions, permissions,
   plans, tenantPlans, platformAdmins, students, jobs, payments, staff, userRoles,
 } from "../db/schema";
-import { eq, sql, isNull } from "drizzle-orm";
+import { eq, sql, isNull, asc } from "drizzle-orm";
 import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry } from "../lib/currencies";
 import { getExchangeRates, convertMinor } from "../services/currency-exchange";
 import { getPlatformDefaults, setPlatformDefaults } from "../services/platform-settings";
@@ -294,19 +294,35 @@ router.get("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.r
         slug: tenants.slug,
         name: tenants.name,
         status: tenants.status,
+        subdomain: tenants.subdomain,
+        customDomain: tenants.customDomain,
+        domainVerified: tenants.domainVerified,
         createdAt: tenants.createdAt,
+        updatedAt: tenants.updatedAt,
         country: tenantSettings.country,
         currency: tenantSettings.currency,
+        timezone: tenantSettings.timezone,
         planCode: plans.code,
         planName: plans.name,
         studentCount: sql<number>`(SELECT count(*)::int FROM students s WHERE s.tenant_id = ${tenants.id})`,
         staffCount: sql<number>`(SELECT count(*)::int FROM staff st WHERE st.tenant_id = ${tenants.id} AND st.deleted_at IS NULL)`,
         erpUserCount: sql<number>`(SELECT count(*)::int FROM users u WHERE u.tenant_id = ${tenants.id} AND u.deleted_at IS NULL)`,
+        adminEmail: sql<string | null>`(
+          (SELECT u.email FROM users u
+           INNER JOIN user_roles ur ON ur.user_id = u.id
+           INNER JOIN roles r ON r.id = ur.role_id
+           WHERE u.tenant_id = ${tenants.id}
+             AND r.name = 'School Administrator'
+             AND u.deleted_at IS NULL
+           ORDER BY u.created_at ASC
+           LIMIT 1)
+        `,
       })
       .from(tenants)
       .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
       .leftJoin(tenantPlans, eq(tenantPlans.tenantId, tenants.id))
-      .leftJoin(plans, eq(plans.id, tenantPlans.planId));
+      .leftJoin(plans, eq(plans.id, tenantPlans.planId))
+      .orderBy(asc(tenants.name));
     res.json({ success: true, data: rows });
   } catch (err) { next(err); }
 });
