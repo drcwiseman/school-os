@@ -123,6 +123,7 @@ import {
   resolveBackupFilePath,
   restoreBackupSnapshot,
 } from "../services/platform-backup";
+import { searchPlatform } from "../services/platform-search";
 import {
   getPlatformSupportHub,
   createPlatformSupportTicket,
@@ -306,6 +307,14 @@ router.get("/stats", requirePlatformAuth, requirePlatformPermission("stats.read"
         fxProvider: "frankfurter.app",
       },
     });
+  } catch (err) { next(err); }
+});
+
+router.get("/search", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const limit = req.query.limit != null ? Number(req.query.limit) : 20;
+    res.json({ success: true, data: await searchPlatform(q, limit) });
   } catch (err) { next(err); }
 });
 

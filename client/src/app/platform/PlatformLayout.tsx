@@ -5,11 +5,12 @@ import {
   Tags, LayoutTemplate, Receipt, FileText, ArrowRightLeft,
   Landmark, Users, Shield, ScrollText, HardDrive,
   LifeBuoy, ListTodo, Settings, Flag, Mail, Images,
-  Blocks, DatabaseBackup, Loader2, Search, HelpCircle, Menu,
+  Blocks, DatabaseBackup, Loader2, HelpCircle, Menu,
 } from "lucide-react";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
 import { PlatformUserMenu } from "./components/PlatformUserMenu";
 import { PlatformNotifications } from "./components/PlatformNotifications";
+import { PlatformGlobalSearch } from "./components/PlatformGlobalSearch";
 
 const PAGE_TITLES: Record<string, string> = {
   "/platform/dashboard": "Dashboard",
@@ -173,18 +174,7 @@ export const PlatformLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-5 shrink-0">
-            <div className="hidden md:flex relative group">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500" />
-              <input
-                type="text"
-                placeholder="Search schools, users, invoices..."
-                className="w-48 lg:w-80 max-w-[40vw] bg-slate-50 border border-slate-200 rounded-full pl-9 pr-12 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex gap-1">
-                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-slate-200 text-slate-500">⌘</kbd>
-                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-slate-200 text-slate-500">K</kbd>
-              </div>
-            </div>
+            <PlatformGlobalSearch />
 
             <PlatformNotifications />
 
