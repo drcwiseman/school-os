@@ -39,6 +39,7 @@ import { RevenueLedger } from "./platform/Subscriptions/Ledger";
 import { InvoicesHub } from "./platform/Finance/InvoicesHub";
 import { TransactionsHub } from "./platform/Finance/TransactionsHub";
 import { PayoutsHub } from "./platform/Finance/PayoutsHub";
+import { PlatformUsersHub } from "./platform/Users/PlatformUsersHub";
 import { AddonMarketplace } from "./platform/Marketplace";
 import { SupportHub } from "./platform/Support/SupportHub";
 import { QueueMonitor } from "./platform/System/QueueMonitor";
@@ -84,7 +85,7 @@ export const AppRoutes = () => {
         <Route path="invoices" element={<InvoicesHub />} />
         <Route path="transactions" element={<TransactionsHub />} />
         <Route path="payouts" element={<PayoutsHub />} />
-        <Route path="users" element={stub("Platform users")} />
+        <Route path="users" element={<PlatformUsersHub />} />
         <Route path="roles" element={stub("Roles & permissions")} />
         <Route path="logs" element={stub("System logs")} />
         <Route path="support" element={<SupportHub />} />

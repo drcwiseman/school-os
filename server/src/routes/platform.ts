@@ -37,6 +37,15 @@ import {
   type PayoutStatus,
 } from "../services/platform-payouts";
 import {
+  listPlatformAdmins,
+  createPlatformAdmin,
+  updatePlatformAdmin,
+  deletePlatformAdmin,
+  resetPlatformAdminPassword,
+  isPlatformRole,
+  getRoleMeta,
+} from "../services/platform-admins";
+import {
   setTenantFeature,
   listFeatureCatalog,
   getTenantFeaturesDetailed,
@@ -346,6 +355,67 @@ router.patch("/payouts/:id", requirePlatformAuth, requirePlatformPermission("sta
     } catch (err) { next(err); }
   },
 );
+
+router.get("/users", requirePlatformAuth, requirePlatformPermission("stats.read"), async (_req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      data: { admins: await listPlatformAdmins(), roles: getRoleMeta() },
+    });
+  } catch (err) { next(err); }
+});
+
+router.post("/users", requirePlatformAuth, requirePlatformPermission("tenants.provision"),
+  validate({
+    body: z.object({
+      email: z.string().email(),
+      name: z.string().min(1).max(120),
+      password: z.string().min(8),
+      role: z.enum(["super_admin", "support", "billing"]),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const admin = await createPlatformAdmin(req.body);
+      res.status(201).json({ success: true, data: admin });
+    } catch (err) { next(err); }
+  },
+);
+
+router.patch("/users/:id", requirePlatformAuth, requirePlatformPermission("tenants.provision"),
+  validate({
+    body: z.object({
+      name: z.string().min(1).max(120).optional(),
+      role: z.enum(["super_admin", "support", "billing"]).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
+      const role = req.body.role && isPlatformRole(req.body.role) ? req.body.role : undefined;
+      const admin = await updatePlatformAdmin(req.params.id, { name: req.body.name, role }, actor.id);
+      res.json({ success: true, data: admin });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/users/:id/reset-password", requirePlatformAuth, requirePlatformPermission("tenants.provision"),
+  validate({ body: z.object({ newPassword: z.string().min(8) }) }),
+  async (req, res, next) => {
+    try {
+      await resetPlatformAdminPassword(req.params.id, req.body.newPassword);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/users/:id", requirePlatformAuth, requirePlatformPermission("tenants.provision"), async (req, res, next) => {
+  try {
+    const actor = (req as Request & { platformAdmin?: { id: string } }).platformAdmin!;
+    await deletePlatformAdmin(req.params.id, actor.id);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
 
 router.get("/subscriptions", requirePlatformAuth, requirePlatformPermission("plans.read"), async (_req, res, next) => {
   try {
