@@ -79,6 +79,11 @@ import {
   getPlatformAuditEventDetail,
 } from "../services/platform-audit";
 import {
+  getPlatformSystemLogsHub,
+  getPlatformJobLogDetail,
+  getPlatformDeliveryLogDetail,
+} from "../services/platform-system-logs";
+import {
   createImpersonationToken, findImpersonationTargetUser,
 } from "../services/impersonation";
 import {
@@ -898,6 +903,39 @@ router.get("/audit-logs", requirePlatformAuth, requirePlatformPermission("stats.
   try {
     const limit = Number(req.query.limit ?? 100);
     res.json({ success: true, data: await listGlobalAuditFeed(limit) });
+  } catch (err) { next(err); }
+});
+
+router.get("/logs", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const source = req.query.source === "job" || req.query.source === "delivery"
+      ? req.query.source
+      : "all";
+    const days = req.query.days != null ? Number(req.query.days) : undefined;
+    const data = await getPlatformSystemLogsHub({
+      source,
+      tenantId: typeof req.query.tenantId === "string" ? req.query.tenantId : undefined,
+      status: typeof req.query.status === "string" ? req.query.status : undefined,
+      days: Number.isFinite(days) && days! > 0 ? days : undefined,
+      limit: req.query.limit != null ? Number(req.query.limit) : undefined,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
+
+router.get("/logs/job/:id", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const detail = await getPlatformJobLogDetail(req.params.id);
+    if (!detail) throw new NotFoundError("Job log not found");
+    res.json({ success: true, data: detail });
+  } catch (err) { next(err); }
+});
+
+router.get("/logs/delivery/:id", requirePlatformAuth, requirePlatformPermission("stats.read"), async (req, res, next) => {
+  try {
+    const detail = await getPlatformDeliveryLogDetail(req.params.id);
+    if (!detail) throw new NotFoundError("Delivery log not found");
+    res.json({ success: true, data: detail });
   } catch (err) { next(err); }
 });
 

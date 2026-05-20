@@ -45,6 +45,7 @@ import { AddonMarketplace } from "./platform/Marketplace";
 import { SupportHub } from "./platform/Support/SupportHub";
 import { QueueMonitor } from "./platform/System/QueueMonitor";
 import { AuditLogs } from "./platform/System/AuditLogs";
+import { SystemLogsHub } from "./platform/System/SystemLogsHub";
 import { PlatformPlaceholder } from "./platform/PlatformPlaceholder";
 import { Settings } from "./pages/Settings";
 import { FeatureRoute } from "./components/FeatureRoute";
@@ -88,7 +89,7 @@ export const AppRoutes = () => {
         <Route path="payouts" element={<PayoutsHub />} />
         <Route path="users" element={<PlatformUsersHub />} />
         <Route path="roles" element={<RolesHub />} />
-        <Route path="logs" element={stub("System logs")} />
+        <Route path="logs" element={<SystemLogsHub />} />
         <Route path="support" element={<SupportHub />} />
         <Route path="system/queue" element={<QueueMonitor />} />
         <Route path="system/audit" element={<AuditLogs />} />

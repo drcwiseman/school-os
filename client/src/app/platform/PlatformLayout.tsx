@@ -28,6 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/platform/settings/general": "Marketing & SEO",
   "/platform/settings/marketing": "Marketing & SEO",
   "/platform/system/audit": "Audit Logs",
+  "/platform/logs": "System Logs",
   "/platform/system/queue": "Job Queue",
   "/platform/support": "Support Tickets",
 };
