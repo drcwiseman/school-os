@@ -4,6 +4,7 @@ import {
 } from "../db/schema";
 import { eq, and, isNull, sql, gte, desc, isNotNull, lt } from "drizzle-orm";
 import { campusCondition } from "../lib/campus-scope";
+import { safeDb } from "../lib/safe-db";
 
 export type DashboardWidgets = {
   genderBreakdown: { male: number; female: number; other: number };
@@ -114,7 +115,15 @@ export async function buildDashboardWidgets(tenantId: string, campusId?: string)
   };
 }
 
+const emptyNotifications: HeaderNotificationCounts = {
+  unreadMessages: 0, auditToday: 0, scheduledAnnouncements: 0,
+};
+
 export async function getHeaderNotificationCounts(tenantId: string): Promise<HeaderNotificationCounts> {
+  return safeDb("notifications", emptyNotifications, () => getHeaderNotificationCountsInner(tenantId));
+}
+
+async function getHeaderNotificationCountsInner(tenantId: string): Promise<HeaderNotificationCounts> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 

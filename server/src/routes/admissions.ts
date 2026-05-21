@@ -19,7 +19,22 @@ admissionsRouter.use(requireAuth, requireTenantMatch);
 admissionsRouter.get("/", requirePermission("admissions.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenantId = (req as any).tenant!.id;
-    const list = await db.select()
+    const list = await db
+      .select({
+        id: applicants.id,
+        tenantId: applicants.tenantId,
+        firstName: applicants.firstName,
+        lastName: applicants.lastName,
+        dob: applicants.dob,
+        gender: applicants.gender,
+        email: applicants.email,
+        phone: applicants.phone,
+        stage: applicants.stage,
+        notes: applicants.notes,
+        convertedTo: applicants.convertedTo,
+        createdAt: applicants.createdAt,
+        updatedAt: applicants.updatedAt,
+      })
       .from(applicants)
       .where(eq(applicants.tenantId, tenantId))
       .orderBy(desc(applicants.createdAt));

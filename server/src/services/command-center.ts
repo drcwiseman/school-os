@@ -10,6 +10,7 @@ import {
 import { eq, and, sql, isNull, gte, lt, lte, desc, SQL } from "drizzle-orm";
 import { analyzeDropoutRisk } from "./ai-agents";
 import { campusCondition } from "../lib/campus-scope";
+import { safeDb } from "../lib/safe-db";
 
 export type CommandCenterKpis = {
   academic: {
@@ -70,7 +71,35 @@ function dayBounds() {
   return { startOfDay, endOfDay };
 }
 
+function emptyCommandCenterKpis(): CommandCenterKpis {
+  return {
+    academic: {
+      totalStudents: 0, activeStudents: 0, attendanceSessionsToday: 0, attendancePresentToday: 0,
+      attendanceRateToday: null, activeClasses: 0, activeStreams: 0, ongoingExams: 0, upcomingAssignments: 0,
+      atRiskStudents: 0, teacherAssignments: 0, staffPresentToday: 0, staffTotalToday: 0,
+    },
+    finance: {
+      feesCollectedTodayMinor: 0, outstandingBalanceMinor: 0, pendingInvoices: 0, payrollDue: 0,
+      expensesTodayMinor: 0, expensesMonthMinor: 0,
+    },
+    operations: {
+      transportRoutes: 0, transportAssignments: 0, hostelRooms: 0, hostelOccupied: 0, hostelOccupancyPct: null,
+      libraryActiveLoans: 0, libraryOverdue: 0, clinicOpenVisits: 0, healthAlerts: 0, inventoryLowStock: 0,
+    },
+    communication: {
+      recentAnnouncements: 0, smsSentToday: 0, smsFailedToday: 0, upcomingEvents: 0, unreadParentMessages: 0,
+    },
+    aiInsights: {
+      atRiskPreview: [], feeDefaultRiskCount: 0, attendanceAnomalySessions: 0, overloadedTeachers: 0,
+    },
+  };
+}
+
 export async function buildCommandCenterKpis(tenantId: string, campusId?: string): Promise<CommandCenterKpis> {
+  return safeDb("command-center", emptyCommandCenterKpis(), () => buildCommandCenterKpisInner(tenantId, campusId));
+}
+
+async function buildCommandCenterKpisInner(tenantId: string, campusId?: string): Promise<CommandCenterKpis> {
   const { startOfDay, endOfDay } = dayBounds();
   const inSevenDays = new Date();
   inSevenDays.setDate(inSevenDays.getDate() + 7);

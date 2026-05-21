@@ -144,6 +144,8 @@ export const Dashboard: React.FC = () => {
     );
   }
 
+  const apiFailed = !stats;
+
   const a = stats?.academic;
   const f = stats?.finance;
   const o = stats?.operations;
@@ -170,6 +172,14 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {apiFailed && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          Command Center data could not load (database schema may be behind). On the server run:{" "}
+          <code className="text-amber-200">npm run db:repair --prefix server && pm2 restart school-os</code>
+          {" "}— then hard-refresh this page (Ctrl+Shift+R). Unregister old site data in DevTools → Application → Service workers if you still see the old 4-card dashboard.
+        </div>
+      )}
 
       {widgets && hasPermission("students.view") && (
         <DashboardCharts widgets={widgets} messagingPath={`${base}/messaging`} />

@@ -21,6 +21,7 @@ import {
 } from "../services/ai-admin";
 import { generateLessonPlan, generateReportComment } from "../services/ai-teacher";
 import { buildCommandCenterKpis } from "../services/command-center";
+import { safeDb } from "../lib/safe-db";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch, requireTenantFeature("ai_homework")];
@@ -29,9 +30,9 @@ router.get("/overview", ...guard, requirePermission("settings.view"), async (req
   try {
     const tenant = (req as any).tenant;
     const campusId = getCampusId(req);
-    const usage = await getAiUsageSummary(tenant.id);
-    const atRisk = await buildAtRiskList(tenant.id, campusId, 8);
-    const feeDefault = await buildFeeDefaultRisk(tenant.id, campusId);
+    const usage = await safeDb("ai-usage", { monthCredits: 0, byFeature: [] }, () => getAiUsageSummary(tenant.id));
+    const atRisk = await safeDb("ai-at-risk", [] as Awaited<ReturnType<typeof buildAtRiskList>>, () => buildAtRiskList(tenant.id, campusId, 8));
+    const feeDefault = await safeDb("ai-fee-default", 0, () => buildFeeDefaultRisk(tenant.id, campusId));
     const kpis = await buildCommandCenterKpis(tenant.id, campusId);
     const recommendations = operationalRecommendations({
       atRisk: atRisk.length,

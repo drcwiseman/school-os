@@ -41,6 +41,28 @@ export const VPS_SCHEMA_PATCH_SQL: string[] = [
   `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "email" text`,
   `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "address" text`,
   `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "short_bio" text`,
+  `ALTER TABLE "applicants" ADD COLUMN IF NOT EXISTS "waiting_list" boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE "applicants" ADD COLUMN IF NOT EXISTS "application_fee_paid" boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE "applicants" ADD COLUMN IF NOT EXISTS "interview_at" timestamp`,
+  `CREATE TABLE IF NOT EXISTS "ai_usage_log" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "feature" text NOT NULL,
+    "credits" integer DEFAULT 1 NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS "portal_messages" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "student_id" uuid NOT NULL REFERENCES "students"("id") ON DELETE cascade,
+    "sender_type" text NOT NULL,
+    "staff_user_id" uuid REFERENCES "users"("id") ON DELETE set null,
+    "parent_account_id" uuid,
+    "body" text NOT NULL,
+    "read_at" timestamp,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "portal_messages_tenant_student_idx" ON "portal_messages" ("tenant_id", "student_id")`,
   `CREATE TABLE IF NOT EXISTS "platform_impersonation_tokens" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
     "token" text NOT NULL,

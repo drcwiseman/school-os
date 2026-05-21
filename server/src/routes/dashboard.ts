@@ -6,7 +6,8 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { getUserPermissions } from "../middleware/rbac";
 import { buildCommandCenterKpis, type CommandCenterKpis } from "../services/command-center";
-import { buildDashboardWidgets, getHeaderNotificationCounts } from "../services/dashboard-widgets";
+import { buildDashboardWidgets, getHeaderNotificationCounts, type DashboardWidgets } from "../services/dashboard-widgets";
+import { safeDb } from "../lib/safe-db";
 import { getCampusId } from "../lib/campus-scope";
 
 const router = Router();
@@ -67,7 +68,14 @@ router.get("/", ...guard, async (req, res, next) => {
 router.get("/widgets", ...guard, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const data = await buildDashboardWidgets(tenant.id, getCampusId(req));
+    const empty: DashboardWidgets = {
+      genderBreakdown: { male: 0, female: 0, other: 0 },
+      feesChart: { collectedMinor: 0, outstandingMinor: 0, collectedByMonth: [] },
+      expensesByMonth: [],
+      upcomingEvents: [],
+      recentAnnouncements: [],
+    };
+    const data = await safeDb("widgets", empty, () => buildDashboardWidgets(tenant.id, getCampusId(req)));
     res.json({ success: true, data });
   } catch (e) { next(e); }
 });
