@@ -4,19 +4,30 @@ import { db } from "../db";
 import {
   curriculumFrameworks, curriculumUnits, curriculumCompetencies, curriculumOutcomes,
   studentCompetencyTracking, curriculumCrossLinks, gradingScales, curriculumPacks,
-  tenantSettings, subjects, classes, students,
+  tenantSettings,
 } from "../db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { NotFoundError } from "../middleware/error";
+import {
+  curriculumAnalytics,
+  curriculumTablesReady,
+  getCurriculumFrameworkById,
+  insertCurriculumFramework,
+  listCurriculumCompetencies,
+  listCurriculumFrameworks,
+  listCurriculumOutcomes,
+  listCurriculumUnits,
+} from "../lib/curriculum-query";
+import { getTableColumns, tableExists } from "../lib/table-columns";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
 
-const FRAMEWORK_PRESETS = [
+export const FRAMEWORK_PRESETS = [
   { code: "cbc", name: "Competency-Based Curriculum (CBC)", examBoard: "KNEC" },
   { code: "cbe", name: "Competency-Based Education (CBE)", examBoard: null },
   { code: "british", name: "British National Curriculum", examBoard: "Cambridge" },
@@ -25,18 +36,17 @@ const FRAMEWORK_PRESETS = [
   { code: "custom", name: "Custom Framework", examBoard: null },
 ];
 
+router.get("/status", ...guard, requirePermission("academics.view"), async (_req, res) => {
+  const ready = await curriculumTablesReady();
+  res.json({ success: true, data: { ready, repairHint: ready ? null : "npm run db:repair --prefix server" } });
+});
+
 router.get("/frameworks", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(curriculumFrameworks).where(eq(curriculumFrameworks.tenantId, tenant.id)).orderBy(desc(curriculumFrameworks.createdAt));
+    const rows = await listCurriculumFrameworks(tenant.id);
     res.json({ success: true, data: rows, presets: FRAMEWORK_PRESETS });
-  } catch (e) {
-    const err = e as { code?: string; message?: string };
-    if (err.code === "42703" || err.code === "42P01" || err.message?.includes("does not exist")) {
-      return res.json({ success: true, data: [], presets: FRAMEWORK_PRESETS });
-    }
-    next(e);
-  }
+  } catch (e) { next(e); }
 });
 
 router.post("/frameworks", ...guard, requirePermission("academics.manage"),
@@ -44,16 +54,18 @@ router.post("/frameworks", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const [row] = await db.insert(curriculumFrameworks).values({
-        tenantId: tenant.id,
+      const row = await insertCurriculumFramework(tenant.id, {
         code: req.body.code,
         name: req.body.name,
         examBoard: req.body.examBoard,
         version: req.body.version ?? "1.0",
         active: req.body.active ?? true,
-      }).returning();
-      if (req.body.active) {
-        await db.update(tenantSettings).set({ curriculumFramework: req.body.code }).where(eq(tenantSettings.tenantId, tenant.id));
+      });
+      if (req.body.active && row) {
+        const tsCols = await getTableColumns("tenant_settings");
+        if (tsCols.has("curriculum_framework")) {
+          await db.update(tenantSettings).set({ curriculumFramework: req.body.code }).where(eq(tenantSettings.tenantId, tenant.id));
+        }
       }
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
@@ -63,11 +75,18 @@ router.post("/frameworks", ...guard, requirePermission("academics.manage"),
 router.patch("/frameworks/:id/activate", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [fw] = await db.select().from(curriculumFrameworks).where(and(eq(curriculumFrameworks.id, req.params.id), eq(curriculumFrameworks.tenantId, tenant.id))).limit(1);
+    const fw = await getCurriculumFrameworkById(tenant.id, req.params.id);
     if (!fw) throw new NotFoundError("Framework not found");
-    await db.update(curriculumFrameworks).set({ active: false }).where(eq(curriculumFrameworks.tenantId, tenant.id));
-    const [updated] = await db.update(curriculumFrameworks).set({ active: true }).where(eq(curriculumFrameworks.id, fw.id)).returning();
-    await db.update(tenantSettings).set({ curriculumFramework: fw.code }).where(eq(tenantSettings.tenantId, tenant.id));
+    const fwCols = await getTableColumns("curriculum_frameworks");
+    if (fwCols.has("active")) {
+      await db.update(curriculumFrameworks).set({ active: false }).where(eq(curriculumFrameworks.tenantId, tenant.id));
+      await db.update(curriculumFrameworks).set({ active: true }).where(eq(curriculumFrameworks.id, fw.id));
+    }
+    const tsCols = await getTableColumns("tenant_settings");
+    if (tsCols.has("curriculum_framework")) {
+      await db.update(tenantSettings).set({ curriculumFramework: fw.code }).where(eq(tenantSettings.tenantId, tenant.id));
+    }
+    const updated = await getCurriculumFrameworkById(tenant.id, fw.id);
     res.json({ success: true, data: updated });
   } catch (e) { next(e); }
 });
@@ -76,23 +95,7 @@ router.get("/units", ...guard, requirePermission("academics.view"), async (req, 
   try {
     const tenant = (req as any).tenant;
     const frameworkId = req.query.frameworkId as string | undefined;
-    const where = frameworkId
-      ? and(eq(curriculumUnits.tenantId, tenant.id), eq(curriculumUnits.frameworkId, frameworkId))
-      : eq(curriculumUnits.tenantId, tenant.id);
-    const rows = await db.select({
-      id: curriculumUnits.id,
-      title: curriculumUnits.title,
-      orderNo: curriculumUnits.orderNo,
-      frameworkId: curriculumUnits.frameworkId,
-      subjectId: curriculumUnits.subjectId,
-      classId: curriculumUnits.classId,
-      subjectName: subjects.name,
-      className: classes.name,
-    }).from(curriculumUnits)
-      .leftJoin(subjects, eq(curriculumUnits.subjectId, subjects.id))
-      .leftJoin(classes, eq(curriculumUnits.classId, classes.id))
-      .where(where)
-      .orderBy(curriculumUnits.orderNo);
+    const rows = await listCurriculumUnits(tenant.id, frameworkId);
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
@@ -102,6 +105,7 @@ router.post("/units", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      if (!(await tableExists("curriculum_units"))) throw new NotFoundError("Curriculum tables missing — run db:repair");
       const [row] = await db.insert(curriculumUnits).values({ tenantId: tenant.id, ...req.body }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
@@ -111,11 +115,9 @@ router.post("/units", ...guard, requirePermission("academics.manage"),
 router.get("/competencies", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const frameworkId = req.query.frameworkId as string;
-    const where = frameworkId
-      ? and(eq(curriculumCompetencies.tenantId, tenant.id), eq(curriculumCompetencies.frameworkId, frameworkId))
-      : eq(curriculumCompetencies.tenantId, tenant.id);
-    res.json({ success: true, data: await db.select().from(curriculumCompetencies).where(where) });
+    const frameworkId = req.query.frameworkId as string | undefined;
+    const rows = await listCurriculumCompetencies(tenant.id, frameworkId);
+    res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
 
@@ -124,6 +126,7 @@ router.post("/competencies", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      if (!(await tableExists("curriculum_competencies"))) throw new NotFoundError("Curriculum tables missing — run db:repair");
       const [row] = await db.insert(curriculumCompetencies).values({ tenantId: tenant.id, ...req.body }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
@@ -133,9 +136,9 @@ router.post("/competencies", ...guard, requirePermission("academics.manage"),
 router.get("/outcomes", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const unitId = req.query.unitId as string;
-    const where = unitId ? and(eq(curriculumOutcomes.tenantId, tenant.id), eq(curriculumOutcomes.unitId, unitId)) : eq(curriculumOutcomes.tenantId, tenant.id);
-    res.json({ success: true, data: await db.select().from(curriculumOutcomes).where(where).orderBy(curriculumOutcomes.orderNo) });
+    const unitId = req.query.unitId as string | undefined;
+    const rows = await listCurriculumOutcomes(tenant.id, unitId);
+    res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
 
@@ -144,6 +147,7 @@ router.post("/outcomes", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      if (!(await tableExists("curriculum_outcomes"))) throw new NotFoundError("Curriculum tables missing — run db:repair");
       const [row] = await db.insert(curriculumOutcomes).values({ tenantId: tenant.id, ...req.body }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
@@ -153,6 +157,7 @@ router.post("/outcomes", ...guard, requirePermission("academics.manage"),
 router.get("/tracking", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    if (!(await tableExists("student_competency_tracking"))) return res.json({ success: true, data: [] });
     const studentId = req.query.studentId as string | undefined;
     const where = studentId
       ? and(eq(studentCompetencyTracking.tenantId, tenant.id), eq(studentCompetencyTracking.studentId, studentId))
@@ -166,6 +171,7 @@ router.put("/tracking", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      if (!(await tableExists("student_competency_tracking"))) throw new NotFoundError("Curriculum tables missing — run db:repair");
       const [existing] = await db.select().from(studentCompetencyTracking).where(and(
         eq(studentCompetencyTracking.tenantId, tenant.id),
         eq(studentCompetencyTracking.studentId, req.body.studentId),
@@ -183,6 +189,7 @@ router.put("/tracking", ...guard, requirePermission("academics.manage"),
 router.get("/cross-links", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    if (!(await tableExists("curriculum_cross_links"))) return res.json({ success: true, data: [] });
     res.json({ success: true, data: await db.select().from(curriculumCrossLinks).where(eq(curriculumCrossLinks.tenantId, tenant.id)) });
   } catch (e) { next(e); }
 });
@@ -201,6 +208,7 @@ router.post("/cross-links", ...guard, requirePermission("academics.manage"),
 router.get("/grading-scales", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    if (!(await tableExists("grading_scales"))) return res.json({ success: true, data: [] });
     res.json({ success: true, data: await db.select().from(gradingScales).where(eq(gradingScales.tenantId, tenant.id)) });
   } catch (e) { next(e); }
 });
@@ -219,14 +227,8 @@ router.post("/grading-scales", ...guard, requirePermission("academics.manage"),
 router.get("/analytics", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [unitCount] = await db.select({ count: sql<number>`count(*)` }).from(curriculumUnits).where(eq(curriculumUnits.tenantId, tenant.id));
-    const [compCount] = await db.select({ count: sql<number>`count(*)` }).from(curriculumCompetencies).where(eq(curriculumCompetencies.tenantId, tenant.id));
-    const [tracked] = await db.select({ count: sql<number>`count(distinct ${studentCompetencyTracking.studentId})` }).from(studentCompetencyTracking).where(eq(studentCompetencyTracking.tenantId, tenant.id));
-    const byLevel = await db.select({ level: studentCompetencyTracking.level, count: sql<number>`count(*)` })
-      .from(studentCompetencyTracking)
-      .where(eq(studentCompetencyTracking.tenantId, tenant.id))
-      .groupBy(studentCompetencyTracking.level);
-    res.json({ success: true, data: { units: Number(unitCount?.count ?? 0), competencies: Number(compCount?.count ?? 0), studentsTracked: Number(tracked?.count ?? 0), byLevel } });
+    const data = await curriculumAnalytics(tenant.id);
+    res.json({ success: true, data });
   } catch (e) { next(e); }
 });
 
@@ -235,15 +237,16 @@ router.post("/import-pack", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      if (!(await curriculumTablesReady())) throw new NotFoundError("Curriculum tables missing — run db:repair");
       const pack = req.body.packJson as { units?: { title: string; outcomes?: string[] }[]; competencies?: { code: string; name: string }[] };
       const preset = FRAMEWORK_PRESETS.find((p) => p.code === req.body.frameworkCode);
-      const [fw] = await db.insert(curriculumFrameworks).values({
-        tenantId: tenant.id,
+      const fw = await insertCurriculumFramework(tenant.id, {
         code: req.body.frameworkCode,
         name: preset?.name ?? req.body.name,
         examBoard: preset?.examBoard ?? undefined,
         active: true,
-      }).returning();
+      });
+      if (!fw) throw new Error("Failed to create framework");
       for (const c of pack.competencies ?? []) {
         await db.insert(curriculumCompetencies).values({ tenantId: tenant.id, frameworkId: fw.id, code: c.code, name: c.name });
       }
@@ -253,7 +256,15 @@ router.post("/import-pack", ...guard, requirePermission("academics.manage"),
           await db.insert(curriculumOutcomes).values({ tenantId: tenant.id, unitId: unit.id, description: desc, orderNo: i });
         }
       }
-      const [imp] = await db.insert(curriculumPacks).values({ tenantId: tenant.id, name: req.body.name, frameworkCode: req.body.frameworkCode, packJson: req.body.packJson }).returning();
+      let imp = null;
+      if (await tableExists("curriculum_packs")) {
+        [imp] = await db.insert(curriculumPacks).values({
+          tenantId: tenant.id,
+          name: req.body.name,
+          frameworkCode: req.body.frameworkCode,
+          packJson: req.body.packJson,
+        }).returning();
+      }
       res.status(201).json({ success: true, data: { framework: fw, import: imp } });
     } catch (e) { next(e); }
   },
@@ -264,40 +275,43 @@ router.post("/rollover", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const [src] = await db.select().from(curriculumFrameworks).where(and(eq(curriculumFrameworks.id, req.body.frameworkId), eq(curriculumFrameworks.tenantId, tenant.id))).limit(1);
+      const src = await getCurriculumFrameworkById(tenant.id, req.body.frameworkId);
       if (!src) throw new NotFoundError("Framework not found");
-      const [clone] = await db.insert(curriculumFrameworks).values({
+      const fwCols = await getTableColumns("curriculum_frameworks");
+      const values: Record<string, unknown> = {
         tenantId: tenant.id,
         code: `${src.code}_v${req.body.newVersion}`,
         name: `${src.name} (${req.body.newVersion})`,
-        examBoard: src.examBoard,
+        examBoard: src.examBoard ?? null,
         version: req.body.newVersion,
         active: false,
-        settingsJson: src.settingsJson,
-      }).returning();
+      };
+      if (fwCols.has("settings_json") && (src as { settingsJson?: unknown }).settingsJson) {
+        values.settingsJson = (src as { settingsJson?: unknown }).settingsJson;
+      }
+      const [clone] = await db.insert(curriculumFrameworks).values(values as any).returning();
       res.json({ success: true, data: clone, message: "New version created; copy units manually or re-import pack" });
     } catch (e) { next(e); }
   },
 );
 
-/** Teacher map: units + outcomes for assigned subjects */
 router.get("/teacher-map", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
     const user = (req as any).user;
-    const units = await db.select().from(curriculumUnits).where(eq(curriculumUnits.tenantId, tenant.id)).orderBy(curriculumUnits.orderNo);
+    const units = await listCurriculumUnits(tenant.id);
     res.json({ success: true, data: { userId: user.id, units } });
   } catch (e) { next(e); }
 });
 
-/** Parent transparency: published framework summary */
 router.get("/parent-summary", ...guard, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [fw] = await db.select().from(curriculumFrameworks).where(and(eq(curriculumFrameworks.tenantId, tenant.id), eq(curriculumFrameworks.active, true))).limit(1);
+    const all = await listCurriculumFrameworks(tenant.id);
+    const fw = all.find((f: { active?: boolean }) => f.active) ?? all[0];
     if (!fw) return res.json({ success: true, data: null });
-    const units = await db.select({ id: curriculumUnits.id, title: curriculumUnits.title }).from(curriculumUnits).where(eq(curriculumUnits.frameworkId, fw.id)).limit(20);
-    res.json({ success: true, data: { framework: fw, units } });
+    const units = await listCurriculumUnits(tenant.id, fw.id);
+    res.json({ success: true, data: { framework: fw, units: units.slice(0, 20) } });
   } catch (e) { next(e); }
 });
 
