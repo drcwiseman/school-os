@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../db";
 import { users } from "../db/schema";
+import { userAuthColumns } from "../lib/user-columns";
 import { eq, and } from "drizzle-orm";
 import { userRoles, roles } from "../db/schema";
 import { hashPassword, verifyPassword, createSession, deleteSession } from "../middleware/auth";
@@ -22,7 +23,7 @@ router.post("/register", validate({ body: registerSchema }), async (req: Request
     const tenant = (req as any).tenant;
     const { email, password, firstName, lastName } = req.body;
 
-    const [existing] = await db.select().from(users)
+    const [existing] = await db.select(userAuthColumns).from(users)
       .where(and(eq(users.tenantId, tenant.id), eq(users.email, email))).limit(1);
     if (existing) throw new ConflictError("Email already registered in this school");
 
@@ -45,7 +46,7 @@ router.post("/login", validate({ body: loginSchema }), async (req: Request, res:
     const tenant = (req as any).tenant;
     const { email, password } = req.body;
 
-    const [user] = await db.select().from(users)
+    const [user] = await db.select(userAuthColumns).from(users)
       .where(and(eq(users.tenantId, tenant.id), eq(users.email, email))).limit(1);
     if (!user || user.status !== "active") throw new UnauthorizedError("Invalid credentials");
 

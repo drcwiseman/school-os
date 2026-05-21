@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { db } from "../db";
 import { users, sessions } from "../db/schema";
+import { userAuthColumns } from "../lib/user-columns";
 import { eq, and, gt } from "drizzle-orm";
 import { UnauthorizedError } from "../middleware/error";
 import { Request, Response, NextFunction } from "express";
@@ -50,7 +51,7 @@ export async function validateSession(token: string) {
   if (!session) return null;
 
   const [user] = await db
-    .select()
+    .select(userAuthColumns)
     .from(users)
     .where(and(
       eq(users.id, session.userId),

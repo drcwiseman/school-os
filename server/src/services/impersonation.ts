@@ -1,26 +1,29 @@
 import crypto from "crypto";
 import { db } from "../db";
 import { platformImpersonationTokens, users, userRoles, roles } from "../db/schema";
+import { userAuthColumns } from "../lib/user-columns";
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { createSession } from "../middleware/auth";
 
 export async function findImpersonationTargetUser(tenantId: string) {
   const allUsers = await db
-    .select({ user: users, roleName: roles.name })
+    .select({ ...userAuthColumns, roleName: roles.name })
     .from(users)
     .leftJoin(userRoles, eq(userRoles.userId, users.id))
     .leftJoin(roles, eq(roles.id, userRoles.roleId))
     .where(and(eq(users.tenantId, tenantId), isNull(users.deletedAt)));
 
-  const activeRows = allUsers.filter((r) => r.user.status === "active");
+  const activeRows = allUsers.filter((r) => r.status === "active");
   if (!activeRows.length) return null;
 
   const admin = activeRows.find(
     (r) => r.roleName && /school administrator|tenant admin|administrator/i.test(r.roleName),
   );
-  if (admin) return admin.user;
+  const pick = admin ?? activeRows[0];
+  if (!pick) return null;
 
-  return activeRows[0]?.user ?? null;
+  const { roleName: _r, ...user } = pick;
+  return user;
 }
 
 export async function createImpersonationToken(opts: {
@@ -66,7 +69,7 @@ export async function exchangeImpersonationToken(
   if (row.tenantId !== expectedTenantId) return null;
 
   const [user] = await db
-    .select()
+    .select(userAuthColumns)
     .from(users)
     .where(
       and(

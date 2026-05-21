@@ -129,6 +129,13 @@ export async function ensureRuntimeSchema() {
       "status" text DEFAULT 'active' NOT NULL,
       "created_at" timestamp DEFAULT now() NOT NULL
     )`,
+    `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "campus_id" uuid REFERENCES "tenant_campuses"("id") ON DELETE SET NULL`,
+    `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_enabled" boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_secret" text`,
+    `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "campus_id" uuid REFERENCES "tenant_campuses"("id") ON DELETE SET NULL`,
+    `ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "campus_id" uuid REFERENCES "tenant_campuses"("id") ON DELETE SET NULL`,
+    `ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "campus_id" uuid REFERENCES "tenant_campuses"("id") ON DELETE SET NULL`,
+    `ALTER TABLE "sessions" ADD COLUMN IF NOT EXISTS "revoked_at" timestamp`,
     `CREATE TABLE IF NOT EXISTS "addon_features" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "code" text NOT NULL,
