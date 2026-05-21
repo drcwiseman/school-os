@@ -15,6 +15,7 @@ import { createAuditLog } from "../services/audit";
 import { NotFoundError, ForbiddenError } from "../middleware/error";
 import { getTenantFeatureFlags, setTenantFeaturesBulk, isTenantFeatureEnabled } from "../services/tenant-features";
 import { CURRENCY_CODES, defaultCurrencyForCountry } from "../lib/currencies";
+import { resolveTenantLocale } from "../services/tenant-locale";
 import {
   maskSmtpForApi,
   sendTenantEmail,
@@ -72,12 +73,15 @@ router.get("/", ...guard, requirePermission("settings.view"), async (req, res, n
       } as typeof tenantSettings.$inferSelect : null;
     }
     if (!settings) throw new NotFoundError("Settings not found");
+    const locale = resolveTenantLocale(settings);
     const flags = await getTenantFeatureFlags(tenant.id);
     const smtpAllowed = await isTenantFeatureEnabled(tenant.id, "custom_smtp");
     res.json({
       success: true,
       data: {
         ...settings,
+        country: locale.country,
+        currency: locale.currency,
         featureFlagsJson: { ...(settings.featureFlagsJson as object ?? {}), ...flags },
         smtpSettingsJson: smtpAllowed
           ? maskSmtpForApi(settings.smtpSettingsJson as TenantSmtpSettings)
@@ -121,7 +125,10 @@ router.patch("/", ...guard, requirePermission("settings.manage"),
       const [before] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
       if (!before) throw new NotFoundError("Settings not found");
       const patch: Record<string, unknown> = { ...req.body };
-      if (patch.country !== undefined) patch.country = String(patch.country).toUpperCase();
+      if (patch.country !== undefined) {
+        const cc = String(patch.country).toUpperCase().trim();
+        patch.country = cc || resolveTenantLocale(before).country;
+      }
       if (patch.currency !== undefined) {
         const c = String(patch.currency).toUpperCase();
         if (!CURRENCY_CODES.has(c)) return res.status(400).json({ success: false, message: "Unsupported currency" });

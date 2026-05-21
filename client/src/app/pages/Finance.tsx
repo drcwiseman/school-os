@@ -6,11 +6,6 @@ import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
 import { DollarSign, Loader2, Receipt } from "lucide-react";
 
-function formatMoney(cents: number | undefined) {
-  if (cents == null) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-}
-
 function StatCard({ label, value, icon: Icon }: { label: string; value: string; icon: React.ElementType }) {
   return (
     <div className="card p-5">
@@ -26,7 +21,7 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string; 
 export const Finance: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, formatMoney, currency, country } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [tab, setTab] = useState<"overview" | "billing" | "collect" | "payments" | "debtors" | "receipts" | "fees" | "aging" | "accounting" | "statements">("overview");
@@ -258,6 +253,7 @@ export const Finance: React.FC = () => {
       <div className="page-header">
         <div>
           <h1 className="page-title">Finance</h1>
+          <p className="text-slate-400 mt-1 text-sm">All amounts in {currency} · {country === "UG" ? "Uganda" : country} region</p>
           <p className="text-slate-400 mt-1">Invoices, payments, and collections</p>
         </div>
       </div>
@@ -333,7 +329,7 @@ export const Finance: React.FC = () => {
                 <input className="input" required value={invoiceForm.invoiceNo} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceNo: e.target.value })} placeholder="INV-2026-001" />
               </div>
               <div>
-                <label className="label">Amount (USD)</label>
+                <label className="label">Amount ({currency})</label>
                 <input className="input" type="number" step="0.01" min="0.01" required value={invoiceForm.totalAmount} onChange={(e) => setInvoiceForm({ ...invoiceForm, totalAmount: e.target.value })} />
               </div>
               <div>
@@ -460,7 +456,7 @@ export const Finance: React.FC = () => {
                       <option value="">Fee head…</option>
                       {feeHeads.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                     </select>
-                    <input className="input w-28" type="number" step="0.01" min="0" required placeholder="USD" value={item.amount} onChange={(e) => {
+                    <input className="input w-28" type="number" step="0.01" min="0" required placeholder={currency} value={item.amount} onChange={(e) => {
                       const items = [...structureForm.items];
                       items[idx] = { ...item, amount: e.target.value };
                       setStructureForm({ ...structureForm, items });

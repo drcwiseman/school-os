@@ -3,10 +3,7 @@ import { useParams } from "react-router-dom";
 import { api, downloadPdf } from "../api/client";
 import { useToast } from "../components/Toast";
 import { BarChart3, Download, Loader2, Plus, Play, Trash2 } from "lucide-react";
-
-function formatMoney(cents: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-}
+import { useAuth } from "../state/AuthContext";
 
 type SavedReport = {
   id: string;
@@ -25,6 +22,7 @@ const REPORT_TYPES = [
 
 export const Reports: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
+  const { formatMoney } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<any>(null);

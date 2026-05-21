@@ -6,7 +6,7 @@ import {
   plans, tenantPlans, platformAdmins, students, jobs, payments, staff, userRoles,
 } from "../db/schema";
 import { eq, sql, isNull } from "drizzle-orm";
-import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry, DEFAULT_CURRENCY } from "../lib/currencies";
+import { SUPPORTED_CURRENCIES, CURRENCY_CODES, defaultCurrencyForCountry, DEFAULT_COUNTRY, DEFAULT_CURRENCY } from "../lib/currencies";
 import { getExchangeRates, convertMinor } from "../services/currency-exchange";
 import { getPlatformDefaults, setPlatformDefaults, getPlatformMarketing, setPlatformMarketing } from "../services/platform-settings";
 import { INTEGRATIONS_CATALOG } from "../lib/integrations-catalog";
@@ -1267,8 +1267,8 @@ router.post("/tenants", requirePlatformAuth, requirePlatformPermission("tenants.
       [tenant] = await db.insert(tenants).values({ slug, name, status: "active" }).returning();
     }
 
-    const cc = (country ?? "").toUpperCase();
-    const cur = (currency?.toUpperCase() ?? (cc ? defaultCurrencyForCountry(cc) : DEFAULT_CURRENCY));
+    const cc = ((country ?? "").trim() || DEFAULT_COUNTRY).toUpperCase();
+    const cur = (currency?.toUpperCase() ?? defaultCurrencyForCountry(cc));
     await db.insert(tenantSettings).values({ tenantId: tenant.id, country: cc, currency: cur });
     await enableDefaultFeaturesForTenant(tenant.id);
 

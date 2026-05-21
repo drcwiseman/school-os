@@ -184,6 +184,47 @@ export const SOCIAL_PROOF = [
   "Heritage Collegiate",
 ] as const;
 
+export const ACADEMIC_LEARNING = {
+  eyebrow: "Academic & Learning",
+  title: "Explore a new era of learning",
+  subtitle:
+    "Smarter tools, real-time insights, and a connected community for every educator.",
+  modules: [
+    {
+      title: "Online Live Classes",
+      description: "Conduct interactive virtual sessions with attendance and performance tracking.",
+    },
+    {
+      title: "Study Material",
+      description: "Upload, organize, and share digital notes, PDFs, and media resources.",
+    },
+    {
+      title: "Class Timetable",
+      description: "Create, edit, and manage class schedules across subjects and sections.",
+    },
+    {
+      title: "Subjects (Class-wise)",
+      description: "Assign subjects to specific classes with linked teachers and resources.",
+    },
+    {
+      title: "Homework Management",
+      description: "Assign, collect, and evaluate homework submissions efficiently.",
+    },
+    {
+      title: "Lesson Management",
+      description: "Structure lessons and maintain progress tracking for each subject.",
+    },
+    {
+      title: "Attendance",
+      description: "Mark daily attendance and generate reports for students and staff.",
+    },
+    {
+      title: "Events",
+      description: "Plan and share details of academic and cultural events with stakeholders.",
+    },
+  ],
+} as const;
+
 export const PILLARS = [
   {
     icon: Shield,

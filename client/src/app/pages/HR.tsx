@@ -398,7 +398,7 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
           {hasPermission("hr.manage") && (
             <form onSubmit={addContract} className="grid md:grid-cols-4 gap-3 items-end border-t border-slate-800 pt-4">
               <div>
-                <label className="label">Annual salary (USD)</label>
+                <label className="label">Annual salary</label>
                 <input className="input" type="number" step="0.01" required value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} />
               </div>
               <div>

@@ -5,6 +5,7 @@ import {
   academicYears, terms, classes, streams, subjects, rooms, teacherAssignments,
   timetables, timetablePeriods, assignments, assignmentSubmissions,
   students, studentClassHistory, seatingLayouts, lessonLogs, smartDevices, users,
+  studentMaterials, onlineClassLinks,
 } from "../db/schema";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { pushCampusFilter } from "../lib/campus-scope";
@@ -369,6 +370,76 @@ router.get("/timetables/:id/conflicts", ...guard, requirePermission("academics.v
       }
     }
     res.json({ success: true, data: { conflicts, periodCount: periods.length } });
+  } catch (e) { next(e); }
+});
+
+router.get("/materials", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select().from(studentMaterials)
+      .where(eq(studentMaterials.tenantId, tenant.id))
+      .orderBy(desc(studentMaterials.createdAt));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/materials", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ title: z.string().min(1), subject: z.string().optional(), url: z.string().optional(), classId: z.string().uuid().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(studentMaterials).values({
+        tenantId: tenant.id,
+        title: req.body.title,
+        subject: req.body.subject ?? null,
+        url: req.body.url || null,
+        classId: req.body.classId ?? null,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/materials/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    await db.delete(studentMaterials).where(and(eq(studentMaterials.id, req.params.id), eq(studentMaterials.tenantId, tenant.id)));
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
+router.get("/online-classes", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select().from(onlineClassLinks)
+      .where(eq(onlineClassLinks.tenantId, tenant.id))
+      .orderBy(desc(onlineClassLinks.scheduledAt));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/online-classes", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ title: z.string().min(1), url: z.string().url(), classId: z.string().uuid().optional(), scheduledAt: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(onlineClassLinks).values({
+        tenantId: tenant.id,
+        title: req.body.title,
+        url: req.body.url,
+        classId: req.body.classId ?? null,
+        scheduledAt: req.body.scheduledAt ? new Date(req.body.scheduledAt) : null,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/online-classes/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    await db.delete(onlineClassLinks).where(and(eq(onlineClassLinks.id, req.params.id), eq(onlineClassLinks.tenantId, tenant.id)));
+    res.json({ success: true });
   } catch (e) { next(e); }
 });
 

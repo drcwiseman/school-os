@@ -3,7 +3,8 @@ import { db } from "../db";
 import { users } from "../db/schema";
 import { userAuthColumns } from "../lib/user-columns";
 import { eq, and } from "drizzle-orm";
-import { userRoles, roles } from "../db/schema";
+import { userRoles, roles, tenantSettings } from "../db/schema";
+import { resolveTenantLocale } from "../services/tenant-locale";
 import { hashPassword, verifyPassword, createSession, deleteSession } from "../middleware/auth";
 import { requireAuth } from "../middleware/auth";
 import { validate } from "../utils/validate";
@@ -16,6 +17,12 @@ import { exchangeImpersonationToken } from "../services/impersonation";
 import { isReadOnlyImpersonation } from "../middleware/auth";
 
 const router = Router();
+
+async function localeForTenant(tenantId: string) {
+  const [row] = await db.select({ country: tenantSettings.country, currency: tenantSettings.currency })
+    .from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+  return resolveTenantLocale(row);
+}
 
 // POST /s/:schoolSlug/api/auth/register
 router.post("/register", validate({ body: registerSchema }), async (req: Request, res: Response, next: NextFunction) => {
@@ -81,6 +88,7 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(eq(userRoles.userId, user.id));
     const modules = await getTenantModuleAccess(user.tenantId);
+    const locale = await localeForTenant(user.tenantId);
     const session = (req as any).session;
     res.json({
       success: true,
@@ -88,6 +96,8 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       permissions,
       roles: roleRows,
       modules,
+      country: locale.country,
+      currency: locale.currency,
       impersonation: isReadOnlyImpersonation(session) ? { readOnly: true } : null,
     });
   } catch (err) { next(err); }
@@ -118,6 +128,7 @@ router.get("/impersonate", async (req: Request, res: Response, next: NextFunctio
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(eq(userRoles.userId, result.user.id));
     const modules = await getTenantModuleAccess(result.user.tenantId);
+    const locale = await localeForTenant(result.user.tenantId);
 
     res.cookie("session_token", result.session.token, {
       httpOnly: true,
@@ -134,6 +145,8 @@ router.get("/impersonate", async (req: Request, res: Response, next: NextFunctio
       permissions,
       roles: roleRows,
       modules,
+      country: locale.country,
+      currency: locale.currency,
       impersonation: result.readOnly ? { readOnly: true } : null,
     });
   } catch (err) { next(err); }

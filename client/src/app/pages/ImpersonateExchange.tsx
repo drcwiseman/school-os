@@ -32,7 +32,11 @@ export const ImpersonateExchange: React.FC = () => {
             res.permissions || [],
             res.roles || [],
             res.modules,
-            { readOnly: Boolean(res.impersonation?.readOnly) },
+            {
+              readOnly: Boolean(res.impersonation?.readOnly),
+              country: res.country,
+              currency: res.currency,
+            },
           );
         }
 

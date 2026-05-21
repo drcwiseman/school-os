@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { Loader2, Save, Mail, Send, Download, Upload } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
-import { COUNTRY_OPTIONS, CURRENCY_OPTIONS, DEFAULT_COUNTRY, DEFAULT_CURRENCY } from "../../lib/currencies";
+import { COUNTRY_OPTIONS, CURRENCY_OPTIONS, DEFAULT_COUNTRY, DEFAULT_CURRENCY, currencyForCountry } from "../../lib/currencies";
 
 type SmtpForm = {
   enabled: boolean;
@@ -32,7 +32,7 @@ const emptySmtp: SmtpForm = {
 export const Settings: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
-  const { moduleEnabled } = useAuth();
+  const { moduleEnabled, setAuth, user, schoolSlug: authSlug, permissions, roles, modules } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
@@ -126,7 +126,7 @@ export const Settings: React.FC = () => {
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
-        country: country || undefined,
+        country: country || DEFAULT_COUNTRY,
         currency,
         timezone,
         brandingJson: { logoText: schoolName, footer, logoUrl, primaryColor },
@@ -161,7 +161,14 @@ export const Settings: React.FC = () => {
         if (smtp.password) smtpPayload.password = smtp.password;
         body.smtpSettingsJson = smtpPayload;
       }
-      await api.patch(`/s/${schoolSlug}/api/settings`, body);
+      const res = await api.patch(`/s/${schoolSlug}/api/settings`, body);
+      const saved = res.data;
+      if (user && authSlug) {
+        setAuth(user, authSlug, permissions, roles, modules, {
+          country: saved?.country ?? (country || DEFAULT_COUNTRY),
+          currency: saved?.currency ?? currency,
+        });
+      }
       toast("Settings saved", "success");
     } catch (err: any) {
       toast(err.message, "error");
@@ -269,10 +276,18 @@ export const Settings: React.FC = () => {
         <h3 className="text-white font-semibold">General</h3>
         <div>
           <label className="label">Country</label>
-          <select className="input" value={country} onChange={(e) => setCountry(e.target.value)}>
-            <option value="">—</option>
+          <select
+            className="input"
+            value={country || DEFAULT_COUNTRY}
+            onChange={(e) => {
+              const cc = e.target.value;
+              setCountry(cc);
+              setCurrency(currencyForCountry(cc));
+            }}
+          >
             {COUNTRY_OPTIONS.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
           </select>
+          <p className="text-xs text-slate-500 mt-1">Defaults to Uganda when not set.</p>
         </div>
         <div>
           <label className="label">Default currency</label>

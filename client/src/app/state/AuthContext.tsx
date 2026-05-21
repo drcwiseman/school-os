@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
+import { DEFAULT_COUNTRY, DEFAULT_CURRENCY, formatMoneyMinor } from "../../lib/currencies";
 
 interface User {
   id: string;
@@ -18,6 +19,9 @@ interface AuthContextType {
   permissions: string[];
   roles: { id: string; name: string }[];
   modules: TenantModules;
+  country: string;
+  currency: string;
+  formatMoney: (amountMinor: number | undefined | null) => string;
   impersonationReadOnly: boolean;
   loading: boolean;
   schoolSlug: string | null;
@@ -27,7 +31,7 @@ interface AuthContextType {
     permissions?: string[],
     roles?: { id: string; name: string }[],
     modules?: TenantModules,
-    options?: SetAuthOptions,
+    options?: SetAuthOptions & { country?: string; currency?: string },
   ) => void;
   hasPermission: (code: string) => boolean;
   moduleEnabled: (featureCode: string) => boolean;
@@ -43,8 +47,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [schoolSlug, setSchoolSlug] = useState<string | null>(null);
   const [modules, setModules] = useState<TenantModules>({});
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [impersonationReadOnly, setImpersonationReadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const formatMoney = useCallback(
+    (amountMinor: number | undefined | null) => {
+      if (amountMinor == null) return "—";
+      return formatMoneyMinor(amountMinor, currency);
+    },
+    [currency],
+  );
 
   useEffect(() => {
     const match = location.pathname.match(/^\/s\/([^/]+)/);
@@ -71,6 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setPermissions(res.permissions || []);
           setRoles(res.roles || []);
           if (res.modules) setModules(res.modules);
+          setCountry(res.country ?? DEFAULT_COUNTRY);
+          setCurrency(res.currency ?? DEFAULT_CURRENCY);
           setImpersonationReadOnly(Boolean(res.impersonation?.readOnly));
         } else {
           setUser(null);
@@ -90,13 +106,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     perms: string[] = [],
     userRoles: { id: string; name: string }[] = [],
     mods?: TenantModules,
-    options?: SetAuthOptions,
+    options?: SetAuthOptions & { country?: string; currency?: string },
   ) => {
     setUser(newUser);
     setSchoolSlug(slug);
     setPermissions(perms);
     setRoles(userRoles);
     if (mods) setModules(mods);
+    if (options?.country) setCountry(options.country);
+    if (options?.currency) setCurrency(options.currency);
     if (options?.readOnly !== undefined) {
       setImpersonationReadOnly(options.readOnly);
     }
@@ -121,6 +139,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         permissions,
         roles,
         modules,
+        country,
+        currency,
+        formatMoney,
         impersonationReadOnly,
         loading,
         schoolSlug,

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, Play } from "lucide-react";
 import { HeroVisual } from "./components/HeroVisual";
 import { Reveal } from "./components/Reveal";
-import { PILLARS, SOCIAL_PROOF } from "./data/marketing";
+import { ACADEMIC_LEARNING, PILLARS, SOCIAL_PROOF } from "./data/marketing";
 
 const HERO_CHECKS = [
   "Multi-tenant data isolation",
@@ -71,6 +71,26 @@ export const MarketingHome: React.FC = () => (
           ))}
         </div>
       </Reveal>
+    </section>
+
+    <section className="section-pad bg-gradient-to-b from-white to-marketing-cream/50">
+      <div className="mx-auto max-w-6xl">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <p className="mkt-eyebrow mkt-eyebrow-blue">{ACADEMIC_LEARNING.eyebrow}</p>
+          <h2 className="mkt-heading-lg mt-5">{ACADEMIC_LEARNING.title}</h2>
+          <p className="mkt-body mt-4">{ACADEMIC_LEARNING.subtitle}</p>
+        </Reveal>
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {ACADEMIC_LEARNING.modules.map((m, i) => (
+            <Reveal key={m.title} delayMs={i * 50}>
+              <article className="glass-card h-full p-5">
+                <h3 className="font-heading text-base font-bold text-marketing-navy">{m.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-marketing-navy/60">{m.description}</p>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+      </div>
     </section>
 
     <section className="section-pad">

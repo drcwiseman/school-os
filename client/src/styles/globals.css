@@ -247,3 +247,95 @@ html[data-theme="light"] aside.bg-surface {
 html[data-theme="light"] .btn-ghost {
   @apply border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900;
 }
+
+/* Admin dashboard — Akkhor-style cards (works in light theme; readable in dark) */
+.dashboard-akkhor {
+  @apply -mx-4 -mt-2 rounded-none sm:-mx-6 sm:-mt-4 px-4 py-6 sm:px-6;
+  background-color: #eef1f6;
+}
+html:not([data-theme="light"]) .dashboard-akkhor {
+  background-color: #0f172a;
+}
+.dashboard-akkhor .dash-breadcrumb {
+  @apply text-xs text-slate-500;
+}
+.dashboard-akkhor .dash-breadcrumb a {
+  @apply hover:text-blue-600;
+}
+.dashboard-akkhor .dash-page-title {
+  font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+  @apply mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-page-title {
+  @apply text-white;
+}
+.dashboard-akkhor .dash-stat-card {
+  @apply flex items-center gap-4 rounded-xl bg-white p-5 shadow-sm border border-slate-100 transition hover:shadow-md;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-stat-card {
+  @apply bg-slate-900/80 border-slate-700/60;
+}
+.dashboard-akkhor .dash-stat-icon {
+  @apply flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white;
+}
+.dashboard-akkhor .dash-stat-label {
+  @apply text-sm text-slate-500;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-stat-label {
+  @apply text-slate-400;
+}
+.dashboard-akkhor .dash-stat-value {
+  @apply text-2xl font-bold tabular-nums text-slate-900;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-stat-value {
+  @apply text-white;
+}
+.dashboard-akkhor .dash-panel {
+  @apply rounded-xl bg-white p-5 shadow-sm border border-slate-100 h-full;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-panel {
+  @apply bg-slate-900/80 border-slate-700/60;
+}
+.dashboard-akkhor .dash-panel-head {
+  @apply flex items-center justify-between mb-4 pb-3 border-b border-slate-100;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-panel-head {
+  @apply border-slate-700/60;
+}
+.dashboard-akkhor .dash-panel-title {
+  @apply text-base font-semibold text-slate-800;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-panel-title {
+  @apply text-white;
+}
+.dashboard-akkhor .dash-menu-btn {
+  @apply p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600;
+}
+.dashboard-akkhor .dash-dot {
+  @apply inline-block h-2.5 w-2.5 rounded-full shrink-0;
+}
+.dashboard-akkhor .dash-dot-blue { @apply bg-blue-500; }
+.dashboard-akkhor .dash-dot-rose { @apply bg-rose-500; }
+.dashboard-akkhor .dash-dot-amber { @apply bg-amber-500; }
+.dashboard-akkhor .dash-cal-day {
+  @apply flex h-7 w-full items-center justify-center rounded-md text-[11px] text-slate-700;
+}
+.dashboard-akkhor .dash-cal-muted { @apply invisible; }
+.dashboard-akkhor .dash-cal-today {
+  @apply bg-amber-100 font-semibold text-amber-900;
+}
+.dashboard-akkhor .dash-cal-event {
+  @apply font-semibold text-pink-600 underline decoration-pink-300 decoration-2 underline-offset-2;
+}
+.dashboard-akkhor .dash-quick-link {
+  @apply flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50/50 transition;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-quick-link {
+  @apply border-slate-700 bg-slate-900/50 text-slate-300 hover:border-slate-600;
+}
+.dashboard-akkhor .dash-alert {
+  @apply rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-alert {
+  @apply border-amber-500/40 bg-amber-500/10 text-amber-100;
+}

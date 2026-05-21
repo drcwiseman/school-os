@@ -2,22 +2,32 @@ import React, { useState } from "react";
 import { ModuleCrud } from "../components/ModuleCrud";
 import { StreamsPanel } from "../components/StreamsPanel";
 import { TeacherAssignPanel, RosterPanel, TimetableBuilderPanel, LessonLogPanel, SmartDevicesPanel, SeatingPanel } from "../components/academics/ClassroomPanels";
+import { AcademicsHub } from "../components/academics/AcademicsHub";
+import { OnlineClassesPanel, StudyMaterialsPanel } from "../components/academics/LearningResourcesPanels";
+import { useParams } from "react-router-dom";
 
-const TABS = ["years", "terms", "classes", "streams", "teachers", "roster", "seating", "timetable", "lessons", "devices", "subjects", "rooms", "assignments"] as const;
+const TABS = ["overview", "live", "materials", "years", "terms", "classes", "streams", "teachers", "roster", "seating", "timetable", "lessons", "devices", "subjects", "rooms", "assignments"] as const;
 
 export const Academics: React.FC = () => {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("years");
+  const { schoolSlug } = useParams<{ schoolSlug: string }>();
+  const [tab, setTab] = useState<(typeof TABS)[number]>("overview");
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">Academics</h1>
-          <p className="text-slate-400 mt-1">Academic years, classes, streams, subjects, timetables, and assignments</p>
+          <p className="text-slate-400 mt-1">Academic years, classes, timetables, study materials, live classes, and homework</p>
         </div>
       </div>
 
       <TabBar tab={tab} setTab={setTab} />
+
+      {tab === "overview" && schoolSlug && (
+        <AcademicsHub schoolSlug={schoolSlug} onOpenTab={(t) => setTab(t as (typeof TABS)[number])} />
+      )}
+      {tab === "live" && <OnlineClassesPanel />}
+      {tab === "materials" && <StudyMaterialsPanel />}
 
       {tab === "years" && (
         <ModuleCrud title="Academic years" apiPath="academics/years"
@@ -89,6 +99,9 @@ export const Academics: React.FC = () => {
 
 function TabBar({ tab, setTab }: { tab: string; setTab: (t: (typeof TABS)[number]) => void }) {
   const labels: Record<(typeof TABS)[number], string> = {
+    overview: "Overview",
+    live: "Live classes",
+    materials: "Study material",
     years: "Years",
     terms: "Terms",
     classes: "Classes",
@@ -101,7 +114,7 @@ function TabBar({ tab, setTab }: { tab: string; setTab: (t: (typeof TABS)[number
     devices: "Devices",
     subjects: "Subjects",
     rooms: "Rooms",
-    assignments: "Assignments",
+    assignments: "Homework",
   };
   return (
     <div className="flex gap-2 flex-wrap">
@@ -112,4 +125,4 @@ function TabBar({ tab, setTab }: { tab: string; setTab: (t: (typeof TABS)[number
       ))}
     </div>
   );
-}
+};
