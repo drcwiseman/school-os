@@ -2,6 +2,9 @@ import React from "react";
 import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { Sidebar } from "./Sidebar";
+import { GlobalSearch } from "../components/GlobalSearch";
+import { CampusSelector } from "../components/CampusSelector";
+import { PwaInstallBanner } from "../components/PwaInstallBanner";
 import { Loader2 } from "lucide-react";
 
 export const DashboardLayout: React.FC = () => {
@@ -32,6 +35,9 @@ export const DashboardLayout: React.FC = () => {
               Platform shadow session — read-only. Changes are blocked.
             </div>
           )}
+          <PwaInstallBanner />
+          <CampusSelector />
+          <GlobalSearch />
           <Outlet />
         </div>
       </main>

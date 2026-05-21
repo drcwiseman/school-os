@@ -22,6 +22,11 @@ import { Exams } from "./pages/Exams";
 import { HR } from "./pages/HR";
 import { Payroll } from "./pages/Payroll";
 import { OperationModulePage } from "./pages/OperationModulePage";
+import { LibraryOps } from "./pages/LibraryOps";
+import { TransportOps } from "./pages/TransportOps";
+import { BoardingOps } from "./pages/BoardingOps";
+import { Campuses } from "./pages/Campuses";
+import { Security } from "./pages/Security";
 import { Messaging } from "./pages/Messaging";
 import { Reports } from "./pages/Reports";
 import { PortalLogin } from "./pages/PortalLogin";
@@ -54,6 +59,10 @@ import { PlatformBackupSettings } from "./platform/PlatformBackupSettings";
 import { PlatformFeatureFlags } from "./platform/PlatformFeatureFlags";
 import { PlatformApiSettings } from "./platform/PlatformApiSettings";
 import { Settings } from "./pages/Settings";
+import { AiAdmin } from "./pages/AiAdmin";
+import { TeacherWorkspace } from "./pages/TeacherWorkspace";
+import { Curriculum } from "./pages/Curriculum";
+import { StudentCbtExam } from "./pages/StudentCbtExam";
 import { FeatureRoute } from "./components/FeatureRoute";
 import { MODULE_FEATURE_CODES } from "../lib/module-features";
 
@@ -73,6 +82,7 @@ export const AppRoutes = () => {
       <Route path="/s/:schoolSlug/impersonate" element={<ImpersonateExchange />} />
       <Route path="/s/:schoolSlug/portal/login" element={<PortalLogin />} />
       <Route path="/s/:schoolSlug/portal/dashboard" element={<PortalDashboard />} />
+      <Route path="/s/:schoolSlug/exam" element={<StudentCbtExam />} />
 
       <Route path="/platform/login" element={<PlatformLogin />} />
       <Route path="/platform" element={<PlatformLayout />}>
@@ -113,19 +123,25 @@ export const AppRoutes = () => {
         <Route path="admissions" element={<FeatureRoute feature={MODULE_FEATURE_CODES.admissions}><Admissions /></FeatureRoute>} />
         <Route path="attendance" element={<FeatureRoute feature={MODULE_FEATURE_CODES.attendance}><Attendance /></FeatureRoute>} />
         <Route path="academics" element={<FeatureRoute feature={MODULE_FEATURE_CODES.academics}><Academics /></FeatureRoute>} />
+        <Route path="curriculum" element={<FeatureRoute feature={MODULE_FEATURE_CODES.academics}><Curriculum /></FeatureRoute>} />
+        <Route path="teacher" element={<TeacherWorkspace />} />
         <Route path="exams" element={<FeatureRoute feature={MODULE_FEATURE_CODES.exams}><Exams /></FeatureRoute>} />
+        <Route path="exam" element={<FeatureRoute feature={MODULE_FEATURE_CODES.exams}><StudentCbtExam /></FeatureRoute>} />
         <Route path="finance" element={<FeatureRoute feature={MODULE_FEATURE_CODES.finance}><Finance /></FeatureRoute>} />
         <Route path="hr" element={<FeatureRoute feature={MODULE_FEATURE_CODES.hr}><HR /></FeatureRoute>} />
         <Route path="payroll" element={<FeatureRoute feature={MODULE_FEATURE_CODES.payroll}><Payroll /></FeatureRoute>} />
         <Route path="ops/discipline" element={<FeatureRoute feature={MODULE_FEATURE_CODES.discipline}><OperationModulePage moduleId="discipline" /></FeatureRoute>} />
         <Route path="ops/health" element={<FeatureRoute feature={MODULE_FEATURE_CODES.health}><OperationModulePage moduleId="health" /></FeatureRoute>} />
-        <Route path="ops/library" element={<FeatureRoute feature={MODULE_FEATURE_CODES.library}><OperationModulePage moduleId="library" /></FeatureRoute>} />
+        <Route path="ops/library" element={<FeatureRoute feature={MODULE_FEATURE_CODES.library}><LibraryOps /></FeatureRoute>} />
         <Route path="ops/inventory" element={<FeatureRoute feature={MODULE_FEATURE_CODES.inventory}><OperationModulePage moduleId="inventory" /></FeatureRoute>} />
-        <Route path="ops/transport" element={<FeatureRoute feature={MODULE_FEATURE_CODES.transport}><OperationModulePage moduleId="transport" /></FeatureRoute>} />
-        <Route path="ops/boarding" element={<FeatureRoute feature={MODULE_FEATURE_CODES.boarding}><OperationModulePage moduleId="boarding" /></FeatureRoute>} />
+        <Route path="ops/transport" element={<FeatureRoute feature={MODULE_FEATURE_CODES.transport}><TransportOps /></FeatureRoute>} />
+        <Route path="ops/boarding" element={<FeatureRoute feature={MODULE_FEATURE_CODES.boarding}><BoardingOps /></FeatureRoute>} />
+        <Route path="campuses" element={<Campuses />} />
+        <Route path="security" element={<Security />} />
         <Route path="operations" element={<Navigate to="ops/discipline" replace />} />
         <Route path="messaging" element={<FeatureRoute feature={MODULE_FEATURE_CODES.messaging}><Messaging /></FeatureRoute>} />
         <Route path="reports" element={<FeatureRoute feature={MODULE_FEATURE_CODES.reports}><Reports /></FeatureRoute>} />
+        <Route path="ai-admin" element={<AiAdmin />} />
         <Route path="admin" element={<Admin />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="dashboard" replace />} />

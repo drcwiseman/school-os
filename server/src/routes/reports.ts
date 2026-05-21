@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { db } from "../db";
-import { invoices, attendanceSessions, reportCards } from "../db/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { invoices, attendanceSessions, reportCards, savedReports } from "../db/schema";
+import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { z } from "zod";
+import { getCampusId, pushCampusFilter } from "../lib/campus-scope";
+import { validate } from "../utils/validate";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -20,10 +23,12 @@ function sendPdf(res: any, bytes: Uint8Array, filename: string) {
 router.get("/finance/collections", ...guard, requirePermission("reports.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    const conditions = [eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt)];
+    pushCampusFilter(conditions, invoices, req);
     const [summary] = await db.select({
       totalInvoiced: sql<number>`coalesce(sum(${invoices.totalAmount}),0)`,
       totalPaid: sql<number>`coalesce(sum(${invoices.paidAmount}),0)`,
-    }).from(invoices).where(eq(invoices.tenantId, tenant.id));
+    }).from(invoices).where(and(...conditions));
     res.json({ success: true, data: summary });
   } catch (e) { next(e); }
 });
@@ -31,7 +36,9 @@ router.get("/finance/collections", ...guard, requirePermission("reports.view"), 
 router.get("/finance/debtors", ...guard, requirePermission("reports.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenant.id), sql`${invoices.paidAmount} < ${invoices.totalAmount}`));
+    const conditions = [eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt), sql`${invoices.paidAmount} < ${invoices.totalAmount}`];
+    pushCampusFilter(conditions, invoices, req);
+    const rows = await db.select().from(invoices).where(and(...conditions));
     res.json({ success: true, data: rows.map((r) => ({ ...r, balance: r.totalAmount - r.paidAmount })) });
   } catch (e) { next(e); }
 });
@@ -81,6 +88,69 @@ router.get("/pdf/payslip/:id", ...guard, requirePermission("reports.export"), as
     const tenant = (req as any).tenant;
     const bytes = await generatePayslipPdf(tenant.id, req.params.id);
     sendPdf(res, bytes, `payslip-${req.params.id}.pdf`);
+  } catch (e) { next(e); }
+});
+
+router.get("/builder", ...guard, requirePermission("reports.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select().from(savedReports).where(eq(savedReports.tenantId, tenant.id)).orderBy(desc(savedReports.createdAt));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/builder", ...guard, requirePermission("reports.export"),
+  validate({ body: z.object({ name: z.string().min(1), reportType: z.string().min(1), configJson: z.record(z.unknown()).optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [row] = await db.insert(savedReports).values({
+        tenantId: tenant.id,
+        name: req.body.name,
+        reportType: req.body.reportType,
+        configJson: req.body.configJson ?? {},
+        createdBy: user.id,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.post("/builder/:id/run", ...guard, requirePermission("reports.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [report] = await db.select().from(savedReports).where(and(eq(savedReports.id, req.params.id), eq(savedReports.tenantId, tenant.id))).limit(1);
+    if (!report) return res.status(404).json({ success: false, message: "Report not found" });
+    const campusId = getCampusId(req);
+    let rows: unknown[] = [];
+    if (report.reportType === "finance_debtors") {
+      const conditions = [eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt), sql`${invoices.paidAmount} < ${invoices.totalAmount}`];
+      if (campusId) conditions.push(eq(invoices.campusId, campusId));
+      rows = await db.select().from(invoices).where(and(...conditions)).limit(500);
+    } else if (report.reportType === "attendance_summary") {
+      const [r] = await db.select({ total: sql<number>`count(*)` }).from(attendanceSessions).where(eq(attendanceSessions.tenantId, tenant.id));
+      rows = [{ sessions: Number(r?.total ?? 0) }];
+    } else if (report.reportType === "academics_performance") {
+      rows = await db.select().from(reportCards).where(eq(reportCards.tenantId, tenant.id)).orderBy(desc(reportCards.createdAt)).limit(100);
+    } else {
+      const conditions = [eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt)];
+      if (campusId) conditions.push(eq(invoices.campusId, campusId));
+      const [summary] = await db.select({
+        totalInvoiced: sql<number>`coalesce(sum(${invoices.totalAmount}),0)`,
+        totalPaid: sql<number>`coalesce(sum(${invoices.paidAmount}),0)`,
+      }).from(invoices).where(and(...conditions));
+      rows = [summary];
+    }
+    res.json({ success: true, data: { report, rows } });
+  } catch (e) { next(e); }
+});
+
+router.delete("/builder/:id", ...guard, requirePermission("reports.export"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    await db.delete(savedReports).where(and(eq(savedReports.id, req.params.id), eq(savedReports.tenantId, tenant.id)));
+    res.json({ success: true });
   } catch (e) { next(e); }
 });
 

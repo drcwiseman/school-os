@@ -11,7 +11,13 @@ export const Exams: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const { hasPermission } = useAuth();
-  const [tab, setTab] = useState<"assessments" | "marks" | "moderation" | "reports">("assessments");
+  const [tab, setTab] = useState<"assessments" | "marks" | "moderation" | "reports" | "cbt" | "banks" | "rankings" | "analytics">("assessments");
+  const [cbtPapers, setCbtPapers] = useState<any[]>([]);
+  const [banks, setBanks] = useState<any[]>([]);
+  const [rankings, setRankings] = useState<any[]>([]);
+  const [examAnalytics, setExamAnalytics] = useState<any>(null);
+  const [cbtForm, setCbtForm] = useState({ title: "", durationMinutes: "60", mode: "graded" });
+  const [rankClassId, setRankClassId] = useState("");
   const [assessments, setAssessments] = useState<any[]>([]);
   const [moderation, setModeration] = useState<any[]>([]);
   const [reportCards, setReportCards] = useState<any[]>([]);
@@ -35,6 +41,14 @@ export const Exams: React.FC = () => {
       } else if (tab === "moderation") {
         const res = await api.get(`/s/${schoolSlug}/api/exams/moderation`);
         setModeration(res.data ?? []);
+      } else if (tab === "cbt") {
+        setCbtPapers((await api.get(`/s/${schoolSlug}/api/cbt/papers`)).data ?? []);
+      } else if (tab === "banks") {
+        setBanks((await api.get(`/s/${schoolSlug}/api/exams/question-banks`)).data ?? []);
+      } else if (tab === "rankings" && rankClassId) {
+        setRankings((await api.get(`/s/${schoolSlug}/api/exams/rankings?classId=${rankClassId}`)).data ?? []);
+      } else if (tab === "analytics") {
+        setExamAnalytics((await api.get(`/s/${schoolSlug}/api/exams/analytics`)).data);
       } else {
         const res = await api.get(`/s/${schoolSlug}/api/exams/report-cards`);
         setReportCards(res.data ?? []);
@@ -46,7 +60,7 @@ export const Exams: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, [schoolSlug, tab]);
+  useEffect(() => { load(); }, [schoolSlug, tab, rankClassId]);
 
   useEffect(() => {
     if (!schoolSlug) return;
@@ -197,7 +211,7 @@ export const Exams: React.FC = () => {
       </div>
 
       <div className="flex gap-2">
-        {(["assessments", "marks", "moderation", "reports"] as const).map((t) => (
+        {(["assessments", "marks", "moderation", "reports", "cbt", "banks", "rankings", "analytics"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm capitalize ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"}`}>
             {t}
           </button>
@@ -342,6 +356,73 @@ export const Exams: React.FC = () => {
           </div>
         )} />
         </>
+      )}
+
+      {tab === "cbt" && (
+        <div className="space-y-4">
+          <form className="card p-4 flex flex-wrap gap-2" onSubmit={async (e) => {
+            e.preventDefault();
+            await api.post(`/s/${schoolSlug}/api/cbt/papers`, { title: cbtForm.title, durationMinutes: Number(cbtForm.durationMinutes), mode: cbtForm.mode });
+            setCbtForm({ title: "", durationMinutes: "60", mode: "graded" });
+            load();
+            toast("CBT paper created", "success");
+          }}>
+            <input className="input flex-1" placeholder="Paper title" required value={cbtForm.title} onChange={(e) => setCbtForm({ ...cbtForm, title: e.target.value })} />
+            <input className="input w-24" type="number" value={cbtForm.durationMinutes} onChange={(e) => setCbtForm({ ...cbtForm, durationMinutes: e.target.value })} />
+            <select className="input w-32" value={cbtForm.mode} onChange={(e) => setCbtForm({ ...cbtForm, mode: e.target.value })}>
+              <option value="graded">Graded</option>
+              <option value="practice">Practice</option>
+            </select>
+            <button type="submit" className="btn-primary">Create paper</button>
+          </form>
+          <DataTable loading={loading} rows={cbtPapers} cols={[
+            { k: "title", l: "Title" },
+            { k: "mode", l: "Mode" },
+            { k: "published", l: "Live", r: (x) => x.published ? "Yes" : "No" },
+          ]} actions={(row) => (
+            <button type="button" className="btn-ghost text-xs" onClick={async () => {
+              await api.patch(`/s/${schoolSlug}/api/cbt/papers/${row.id}`, { published: !row.published });
+              load();
+            }}>{row.published ? "Unpublish" : "Publish"}</button>
+          )} />
+        </div>
+      )}
+
+      {tab === "banks" && (
+        <div className="card p-4">
+          <button type="button" className="btn-primary mb-4" onClick={async () => {
+            const name = window.prompt("Bank name");
+            if (!name) return;
+            await api.post(`/s/${schoolSlug}/api/exams/question-banks`, { name });
+            load();
+          }}>New question bank</button>
+          {banks.map((b) => <p key={b.id} className="text-slate-300">{b.name}</p>)}
+        </div>
+      )}
+
+      {tab === "rankings" && (
+        <div className="space-y-4">
+          <select className="input max-w-xs" value={rankClassId} onChange={(e) => setRankClassId(e.target.value)}>
+            <option value="">Select class…</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <DataTable loading={loading} rows={rankings} cols={[
+            { k: "firstName", l: "Student", r: (x) => `${x.firstName} ${x.lastName}` },
+            { k: "rank", l: "Rank" },
+            { k: "average", l: "Average", r: (x) => x.average?.toFixed(1) ?? "—" },
+          ]} />
+        </div>
+      )}
+
+      {tab === "analytics" && examAnalytics && (
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="card p-4"><p className="text-slate-500 text-sm">Pass rate</p><p className="text-2xl font-bold text-white">{examAnalytics.passRate}%</p></div>
+          <div className="card p-4"><p className="text-slate-500 text-sm">Marks sampled</p><p className="text-2xl font-bold text-white">{examAnalytics.totalMarks}</p></div>
+          <div className="card p-4 col-span-full">
+            <p className="text-slate-400 text-sm mb-2">Distribution</p>
+            <pre className="text-xs text-slate-300">{JSON.stringify(examAnalytics.distribution, null, 2)}</pre>
+          </div>
+        </div>
       )}
     </div>
   );

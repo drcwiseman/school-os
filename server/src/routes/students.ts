@@ -15,6 +15,7 @@ import { softDeleteStudent } from "../services/soft-delete";
 import { writeTenantFile } from "../lib/uploads";
 import { NotFoundError, ConflictError } from "../middleware/error";
 import { paginationSchema, paginate, paginatedResponse } from "../utils/pagination";
+import { getCampusId, campusCondition } from "../lib/campus-scope";
 import { z } from "zod";
 
 const router = Router();
@@ -41,6 +42,8 @@ router.get("/", ...guard, requirePermission("students.view"), async (req: Reques
     const { limit, offset } = paginate(q.page, q.limit);
 
     const conditions = [eq(students.tenantId, tenant.id), isNull(students.deletedAt)];
+    const c = campusCondition(students, getCampusId(req));
+    if (c) conditions.push(c);
     if (q.status) conditions.push(eq(students.status, q.status as any));
     if (q.search) {
       const s = `%${q.search}%`;

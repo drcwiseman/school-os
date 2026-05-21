@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { attendanceSessions, attendanceRecords, students, studentClassHistory } from "../db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -34,6 +34,7 @@ const sessionSchema = z.object({
   classId: z.string().uuid(),
   streamId: z.string().uuid().optional(),
   date: z.string(), // ISO Date string
+  periodNo: z.number().int().min(1).max(12).optional(),
 });
 
 attendanceRouter.post("/session", requirePermission("attendance.take"), async (req: Request, res: Response, next: NextFunction) => {
@@ -42,14 +43,19 @@ attendanceRouter.post("/session", requirePermission("attendance.take"), async (r
     const body = sessionSchema.parse(req.body);
     const targetDate = new Date(body.date);
     
-    // Check if session already exists
+    const periodNo = body.periodNo ?? null;
+
+    // Check if session already exists (same class, date, period)
     let [session] = await db.select()
       .from(attendanceSessions)
       .where(
         and(
           eq(attendanceSessions.tenantId, tenantId),
           eq(attendanceSessions.classId, body.classId),
-          eq(attendanceSessions.date, targetDate)
+          eq(attendanceSessions.date, targetDate),
+          periodNo != null
+            ? eq(attendanceSessions.periodNo, periodNo)
+            : sql`${attendanceSessions.periodNo} IS NULL`
         )
       );
 
@@ -60,6 +66,7 @@ attendanceRouter.post("/session", requirePermission("attendance.take"), async (r
         classId: body.classId,
         streamId: body.streamId || null,
         date: targetDate,
+        periodNo,
         takenBy: (req as any).user!.id
       }).returning();
 

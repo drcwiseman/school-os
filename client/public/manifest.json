@@ -1,0 +1,12 @@
+{
+  "name": "SchoolOS Portal",
+  "short_name": "SchoolOS",
+  "description": "Parent and student school portal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

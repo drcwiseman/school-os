@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { announcements, messageTemplates, campaigns, deliveryLogs } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { announcements, messageTemplates, campaigns, deliveryLogs, internalMessages, pushSubscriptions } from "../db/schema";
+import { sendViaIntegration } from "../services/integration-runtime";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -129,13 +130,19 @@ router.get("/campaigns", ...guard, requirePermission("messaging.view"), async (r
 });
 
 router.post("/campaigns", ...guard, requirePermission("messaging.send"),
-  validate({ body: z.object({ name: z.string(), templateId: z.string().uuid().optional(), audience: z.string().default("parents"), audienceFilter: z.record(z.string()).optional() }) }),
+  validate({ body: z.object({
+    name: z.string(),
+    channel: z.enum(["sms", "email", "whatsapp"]).default("sms"),
+    templateId: z.string().uuid().optional(),
+    audience: z.string().default("parents"),
+    audienceFilter: z.record(z.string()).optional(),
+  }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
       const user = (req as any).user;
       const [row] = await db.insert(campaigns).values({
-        tenantId: tenant.id, name: req.body.name, templateId: req.body.templateId,
+        tenantId: tenant.id, name: req.body.name, channel: req.body.channel, templateId: req.body.templateId,
         audience: req.body.audience, audienceFilter: req.body.audienceFilter ?? {},
         createdBy: user.id,
       }).returning();
@@ -152,6 +159,42 @@ router.post("/campaigns/:id/send", ...guard, requirePermission("messaging.send")
   } catch (e) { next(e); }
 });
 
+router.get("/internal", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const rows = await db.select().from(internalMessages)
+      .where(and(eq(internalMessages.tenantId, tenant.id), sql`(${internalMessages.toUserId} = ${user.id} OR ${internalMessages.toUserId} IS NULL OR ${internalMessages.fromUserId} = ${user.id})`))
+      .orderBy(desc(internalMessages.createdAt))
+      .limit(100);
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/internal", ...guard, requirePermission("messaging.send"),
+  validate({ body: z.object({ toUserId: z.string().uuid().optional(), body: z.string().min(1) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [row] = await db.insert(internalMessages).values({
+        tenantId: tenant.id, fromUserId: user.id, toUserId: req.body.toUserId, body: req.body.body,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.post("/whatsapp/test", ...guard, requirePermission("messaging.send"),
+  validate({ body: z.object({ phone: z.string(), message: z.string() }) }),
+  async (req, res, next) => {
+    try {
+      const result = await sendViaIntegration("whatsapp_business", { to: req.body.phone, body: req.body.message, channel: "whatsapp" });
+      res.json({ success: result.success, data: result });
+    } catch (e) { next(e); }
+  }
+);
+
 router.get("/delivery-logs", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -159,5 +202,22 @@ router.get("/delivery-logs", ...guard, requirePermission("messaging.view"), asyn
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
+
+router.post("/push/subscribe", ...guard,
+  validate({ body: z.object({ endpoint: z.string().url(), keys: z.object({ p256dh: z.string(), auth: z.string() }) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [row] = await db.insert(pushSubscriptions).values({
+        tenantId: tenant.id,
+        userId: user.id,
+        endpoint: req.body.endpoint,
+        keysJson: req.body.keys,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
 
 export default router;

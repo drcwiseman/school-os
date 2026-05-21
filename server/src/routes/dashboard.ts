@@ -1,76 +1,45 @@
 import { Router } from "express";
 import { db } from "../db";
-import {
-  students, invoices, applicants, attendanceSessions, auditLogs, users,
-} from "../db/schema";
-import { eq, and, sql, isNull, desc, gte, lt } from "drizzle-orm";
+import { auditLogs, users } from "../db/schema";
+import { eq, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { getUserPermissions } from "../middleware/rbac";
+import { buildCommandCenterKpis, type CommandCenterKpis } from "../services/command-center";
+import { getCampusId } from "../lib/campus-scope";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
+
+function filterKpisByPermission(kpis: CommandCenterKpis, can: (code: string) => boolean): Partial<CommandCenterKpis> & { recentActivity?: unknown[] } {
+  const out: Partial<CommandCenterKpis> & { recentActivity?: unknown[] } = {};
+  if (can("students.view") || can("attendance.view") || can("academics.view") || can("exams.view")) {
+    out.academic = kpis.academic;
+  }
+  if (can("finance.view") || can("payroll.view")) {
+    out.finance = kpis.finance;
+  }
+  if (can("library.view") || can("transport.view") || can("boarding.view") || can("health.view") || can("inventory.view")) {
+    out.operations = kpis.operations;
+  }
+  if (can("messaging.view")) {
+    out.communication = kpis.communication;
+  }
+  if (can("students.view") || can("finance.view") || can("attendance.view")) {
+    out.aiInsights = kpis.aiInsights;
+  }
+  return out;
+}
 
 router.get("/", ...guard, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
     const user = (req as any).user;
     const perms = await getUserPermissions(user.id, tenant.id);
-
     const can = (code: string) => perms.includes(code);
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
 
-    const data: Record<string, unknown> = {};
-
-    if (can("students.view")) {
-      const [studentStats] = await db
-        .select({
-          total: sql<number>`count(*)`,
-          active: sql<number>`count(*) filter (where ${students.status} = 'active')`,
-        })
-        .from(students)
-        .where(and(eq(students.tenantId, tenant.id), isNull(students.deletedAt)));
-      data.totalStudents = Number(studentStats?.total ?? 0);
-      data.activeStudents = Number(studentStats?.active ?? 0);
-    }
-
-    if (can("finance.view")) {
-      const [unpaid] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(invoices)
-        .where(and(
-          eq(invoices.tenantId, tenant.id),
-          isNull(invoices.deletedAt),
-          sql`${invoices.paidAmount} < ${invoices.totalAmount}`,
-        ));
-      data.unpaidInvoices = Number(unpaid?.count ?? 0);
-    }
-
-    if (can("admissions.view")) {
-      const [pipeline] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(applicants)
-        .where(and(
-          eq(applicants.tenantId, tenant.id),
-          isNull(applicants.convertedTo),
-        ));
-      data.applicantsInPipeline = Number(pipeline?.count ?? 0);
-    }
-
-    if (can("attendance.view")) {
-      const [todaySessions] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(attendanceSessions)
-        .where(and(
-          eq(attendanceSessions.tenantId, tenant.id),
-          gte(attendanceSessions.date, startOfDay),
-          lt(attendanceSessions.date, endOfDay),
-        ));
-      data.todayAttendanceSessions = Number(todaySessions?.count ?? 0);
-    }
+    const kpis = await buildCommandCenterKpis(tenant.id, getCampusId(req));
+    const data = filterKpisByPermission(kpis, can);
 
     if (can("audit.view")) {
       data.recentActivity = await db

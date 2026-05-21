@@ -1,10 +1,20 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+function campusHeaders(): Record<string, string> {
+  try {
+    const id = localStorage.getItem("schoolos_campus_id");
+    return id ? { "X-Campus-Id": id } : {};
+  } catch {
+    return {};
+  }
+}
+
 class ApiClient {
   private async request(endpoint: string, options: RequestInit = {}) {
     const url = `${API_BASE}${endpoint}`;
     const headers = {
       "Content-Type": "application/json",
+      ...campusHeaders(),
       ...options.headers,
     };
 

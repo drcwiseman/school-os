@@ -4,8 +4,10 @@ import { db } from "../db";
 import {
   academicYears, terms, classes, streams, subjects, rooms, teacherAssignments,
   timetables, timetablePeriods, assignments, assignmentSubmissions,
+  students, studentClassHistory, seatingLayouts, lessonLogs, smartDevices, users,
 } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { pushCampusFilter } from "../lib/campus-scope";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -69,7 +71,9 @@ router.post("/terms", ...guard, requirePermission("academics.manage"),
 router.get("/classes", ...guard, requirePermission("academics.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(classes).where(eq(classes.tenantId, tenant.id)).orderBy(classes.level);
+    const conditions = [eq(classes.tenantId, tenant.id)];
+    pushCampusFilter(conditions, classes, req);
+    const rows = await db.select().from(classes).where(and(...conditions)).orderBy(classes.level);
     res.json({ success: true, data: rows });
   } catch (err) { next(err); }
 });
@@ -221,5 +225,151 @@ router.post("/assignments/:id/submit", ...guard, requirePermission("academics.vi
     } catch (e) { next(e); }
   }
 );
+
+router.get("/teacher-assignments", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select({
+      id: teacherAssignments.id,
+      userId: teacherAssignments.userId,
+      classId: teacherAssignments.classId,
+      subjectId: teacherAssignments.subjectId,
+      role: teacherAssignments.role,
+      teacherName: sql<string>`${users.firstName} || ' ' || ${users.lastName}`,
+      className: classes.name,
+      subjectName: subjects.name,
+    })
+      .from(teacherAssignments)
+      .leftJoin(users, eq(users.id, teacherAssignments.userId))
+      .leftJoin(classes, eq(classes.id, teacherAssignments.classId))
+      .leftJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+      .where(eq(teacherAssignments.tenantId, tenant.id));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/teacher-assignments", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ userId: z.string().uuid(), classId: z.string().uuid(), subjectId: z.string().uuid().optional(), role: z.enum(["subject", "class_teacher"]).default("subject") }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(teacherAssignments).values({
+        tenantId: tenant.id,
+        userId: req.body.userId,
+        classId: req.body.classId,
+        subjectId: req.body.role === "class_teacher" ? null : req.body.subjectId,
+        role: req.body.role,
+      }).returning();
+      if (req.body.role === "class_teacher" && req.body.subjectId) {
+        await db.update(streams).set({ classTeacherUserId: req.body.userId })
+          .where(and(eq(streams.tenantId, tenant.id), eq(streams.classId, req.body.classId)));
+      }
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/streams/:streamId/roster", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [stream] = await db.select().from(streams).where(and(eq(streams.id, req.params.streamId), eq(streams.tenantId, tenant.id))).limit(1);
+    if (!stream) throw new NotFoundError("Stream not found");
+    const roster = await db.select({
+      id: students.id,
+      firstName: students.firstName,
+      lastName: students.lastName,
+      admissionNumber: students.admissionNumber,
+    })
+      .from(studentClassHistory)
+      .innerJoin(students, eq(students.id, studentClassHistory.studentId))
+      .where(and(
+        eq(studentClassHistory.tenantId, tenant.id),
+        eq(studentClassHistory.classId, stream.classId),
+        isNull(studentClassHistory.toDate),
+        isNull(students.deletedAt),
+      ));
+    res.json({ success: true, data: { stream, roster } });
+  } catch (e) { next(e); }
+});
+
+router.get("/streams/:streamId/seating", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [layout] = await db.select().from(seatingLayouts).where(and(eq(seatingLayouts.streamId, req.params.streamId), eq(seatingLayouts.tenantId, tenant.id))).limit(1);
+    res.json({ success: true, data: layout ?? null });
+  } catch (e) { next(e); }
+});
+
+router.put("/streams/:streamId/seating", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ rows: z.number(), cols: z.number(), seatsJson: z.array(z.object({ row: z.number(), col: z.number(), studentId: z.string().uuid().optional() })) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [existing] = await db.select().from(seatingLayouts).where(and(eq(seatingLayouts.streamId, req.params.streamId), eq(seatingLayouts.tenantId, tenant.id))).limit(1);
+      if (existing) {
+        const [row] = await db.update(seatingLayouts).set({ ...req.body, updatedAt: new Date() }).where(eq(seatingLayouts.id, existing.id)).returning();
+        return res.json({ success: true, data: row });
+      }
+      const [row] = await db.insert(seatingLayouts).values({ tenantId: tenant.id, streamId: req.params.streamId, ...req.body }).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/lesson-logs", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(lessonLogs).where(eq(lessonLogs.tenantId, tenant.id)).orderBy(desc(lessonLogs.logDate)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/lesson-logs", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ classId: z.string().uuid(), subjectId: z.string().uuid().optional(), topic: z.string(), notes: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [row] = await db.insert(lessonLogs).values({ tenantId: tenant.id, userId: user.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/smart-devices", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(smartDevices).where(eq(smartDevices.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/smart-devices", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ name: z.string(), deviceType: z.string().optional(), roomId: z.string().uuid().optional(), serialNo: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(smartDevices).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/timetables/:id/conflicts", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const periods = await db.select().from(timetablePeriods).where(and(eq(timetablePeriods.timetableId, req.params.id), eq(timetablePeriods.tenantId, tenant.id)));
+    const conflicts: Array<{ type: string; detail: string }> = [];
+    for (let i = 0; i < periods.length; i++) {
+      for (let j = i + 1; j < periods.length; j++) {
+        const a = periods[i];
+        const b = periods[j];
+        if (a.dayOfWeek === b.dayOfWeek && a.periodNo === b.periodNo) {
+          if (a.roomId && b.roomId && a.roomId === b.roomId) conflicts.push({ type: "room", detail: `Room clash period ${a.periodNo} day ${a.dayOfWeek}` });
+          if (a.teacherUserId && b.teacherUserId && a.teacherUserId === b.teacherUserId) conflicts.push({ type: "teacher", detail: `Teacher clash period ${a.periodNo} day ${a.dayOfWeek}` });
+        }
+      }
+    }
+    res.json({ success: true, data: { conflicts, periodCount: periods.length } });
+  } catch (e) { next(e); }
+});
 
 export default router;

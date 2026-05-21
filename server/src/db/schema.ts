@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, timestamp, boolean, jsonb, pgEnum, integer, bigint, uniqueIndex, index
+  pgTable, uuid, text, timestamp, boolean, jsonb, pgEnum, integer, bigint, uniqueIndex, index, date
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -56,10 +56,24 @@ export const tenantSettings = pgTable("tenant_settings", {
   currency:         text("currency").notNull().default("UGX"),
   timezone:         text("timezone").notNull().default("UTC"),
   smtpSettingsJson: jsonb("smtp_settings_json").$type<TenantSmtpSettings>().default({}),
+  communicationsJson: jsonb("communications_json").$type<TenantCommunicationsSettings>().default({}),
+  curriculumFramework: text("curriculum_framework"),
+  latePenaltyPercent: integer("late_penalty_percent").default(0),
+  paymentProvidersJson: jsonb("payment_providers_json").$type<Record<string, unknown>>().default({}),
+  securityJson: jsonb("security_json").$type<{ ipAllowlist?: string[]; mfaRequired?: boolean }>().default({}),
+  brandingExtendedJson: jsonb("branding_extended_json").$type<Record<string, unknown>>().default({}),
   updatedAt:        timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
   tenantIdx: uniqueIndex("tenant_settings_tenant_idx").on(t.tenantId),
 }));
+
+export type TenantCommunicationsSettings = {
+  smsProvider?: string;
+  smsSenderId?: string;
+  whatsappEnabled?: boolean;
+  pushEnabled?: boolean;
+  emailBrandingName?: string;
+};
 
 export type TenantSmtpSettings = {
   enabled?: boolean;
@@ -83,6 +97,9 @@ export const users = pgTable("users", {
   firstName:    text("first_name").notNull().default(""),
   lastName:     text("last_name").notNull().default(""),
   status:       userStatusEnum("status").notNull().default("active"),
+  campusId:     uuid("campus_id").references((): any => tenantCampuses.id, { onDelete: "set null" }),
+  mfaEnabled:   boolean("mfa_enabled").notNull().default(false),
+  mfaSecret:    text("mfa_secret"),
   deletedAt:    timestamp("deleted_at"),
   deletedBy:    uuid("deleted_by").references((): any => users.id, { onDelete: "set null" }),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
@@ -101,6 +118,7 @@ export const sessions = pgTable("sessions", {
   userAgent: text("user_agent"),
   metadata:  jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
   expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   tokenIdx:  uniqueIndex("sessions_token_idx").on(t.token),
@@ -173,6 +191,7 @@ export const studentStatusEnum = pgEnum("student_status", ["active", "inactive",
 export const students = pgTable("students", {
   id:              uuid("id").primaryKey().defaultRandom(),
   tenantId:        uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  campusId:        uuid("campus_id").references((): any => tenantCampuses.id, { onDelete: "set null" }),
   admissionNumber: text("admission_number").notNull(),
   firstName:       text("first_name").notNull(),
   lastName:        text("last_name").notNull(),
@@ -245,6 +264,7 @@ export const terms = pgTable("terms", {
 export const classes = pgTable("classes", {
   id:        uuid("id").primaryKey().defaultRandom(),
   tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  campusId:  uuid("campus_id").references((): any => tenantCampuses.id, { onDelete: "set null" }),
   name:      text("name").notNull(),
   level:     integer("level").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -253,11 +273,12 @@ export const classes = pgTable("classes", {
 }));
 
 export const streams = pgTable("streams", {
-  id:        uuid("id").primaryKey().defaultRandom(),
-  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  classId:   uuid("class_id").notNull().references(() => classes.id, { onDelete: "cascade" }),
-  name:      text("name").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  id:                 uuid("id").primaryKey().defaultRandom(),
+  tenantId:           uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  classId:            uuid("class_id").notNull().references(() => classes.id, { onDelete: "cascade" }),
+  name:               text("name").notNull(),
+  classTeacherUserId: uuid("class_teacher_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt:          timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   tenantIdx: index("streams_tenant_idx").on(t.tenantId),
 }));
@@ -307,6 +328,7 @@ export const feeHeads = pgTable("fee_heads", {
 export const invoices = pgTable("invoices", {
   id:          uuid("id").primaryKey().defaultRandom(),
   tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  campusId:    uuid("campus_id").references((): any => tenantCampuses.id, { onDelete: "set null" }),
   studentId:   uuid("student_id").notNull().references(() => students.id),
   termId:      uuid("term_id").references(() => terms.id),
   invoiceNo:   text("invoice_no").notNull(),
@@ -419,6 +441,7 @@ export const attendanceSessions = pgTable("attendance_sessions", {
   tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   classId:   uuid("class_id").notNull().references(() => classes.id),
   streamId:  uuid("stream_id").references(() => streams.id),
+  periodNo:  integer("period_no"),
   date:      timestamp("date").notNull(),
   takenBy:   uuid("taken_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -465,8 +488,9 @@ export const teacherAssignments = pgTable("teacher_assignments", {
   tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   userId:    uuid("user_id").notNull().references(() => users.id),
   classId:   uuid("class_id").notNull().references(() => classes.id),
-  subjectId: uuid("subject_id").notNull().references(() => subjects.id),
+  subjectId: uuid("subject_id").references(() => subjects.id),
   termId:    uuid("term_id").references(() => terms.id),
+  role:      text("role").notNull().default("subject"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("teacher_assign_tenant_idx").on(t.tenantId) }));
 
@@ -862,16 +886,71 @@ export const transportStops = pgTable("transport_stops", {
   routeId:  uuid("route_id").notNull().references(() => transportRoutes.id, { onDelete: "cascade" }),
   name:     text("name").notNull(),
   orderNo:  integer("order_no").notNull().default(0),
+  lat:      text("lat"),
+  lng:      text("lng"),
 }, (t) => ({ tenantIdx: index("transport_stops_tenant_idx").on(t.tenantId) }));
 
 export const transportVehicles = pgTable("transport_vehicles", {
   id:           uuid("id").primaryKey().defaultRandom(),
   tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  routeId:      uuid("route_id").references(() => transportRoutes.id),
   registration: text("registration").notNull(),
   capacity:     integer("capacity"),
 }, (t) => ({
   tenantRegIdx: uniqueIndex("vehicles_reg_idx").on(t.tenantId, t.registration),
 }));
+
+export const transportDrivers = pgTable("transport_drivers", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:       text("name").notNull(),
+  phone:      text("phone"),
+  licenseNo:  text("license_no"),
+  vehicleId:  uuid("vehicle_id").references(() => transportVehicles.id),
+  status:     text("status").notNull().default("active"),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+});
+
+export const vehicleGpsPings = pgTable("vehicle_gps_pings", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  vehicleId:  uuid("vehicle_id").notNull().references(() => transportVehicles.id, { onDelete: "cascade" }),
+  lat:        text("lat").notNull(),
+  lng:        text("lng").notNull(),
+  speedKph:   text("speed_kph"),
+  recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+});
+
+export const transportFuelLogs = pgTable("transport_fuel_logs", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  vehicleId:  uuid("vehicle_id").notNull().references(() => transportVehicles.id),
+  liters:     text("liters").notNull(),
+  costMinor:  integer("cost_minor"),
+  odometerKm: integer("odometer_km"),
+  loggedAt:   timestamp("logged_at").notNull().defaultNow(),
+});
+
+export const vehicleMaintenanceLogs = pgTable("vehicle_maintenance_logs", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  vehicleId:   uuid("vehicle_id").notNull().references(() => transportVehicles.id),
+  description: text("description").notNull(),
+  costMinor:   integer("cost_minor"),
+  serviceDate: date("service_date").notNull(),
+  nextDueDate: date("next_due_date"),
+});
+
+export const transportAlerts = pgTable("transport_alerts", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  routeId:   uuid("route_id").references(() => transportRoutes.id),
+  studentId: uuid("student_id").references(() => students.id),
+  alertType: text("alert_type").notNull(),
+  message:   text("message").notNull(),
+  sentAt:    timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const routeAssignments = pgTable("route_assignments", {
   id:        uuid("id").primaryKey().defaultRandom(),
@@ -914,6 +993,447 @@ export const welfareNotes = pgTable("welfare_notes", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("welfare_notes_tenant_idx").on(t.tenantId) }));
 
+export const hostelVisitors = pgTable("hostel_visitors", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  visitorName: text("visitor_name").notNull(),
+  studentId:   uuid("student_id").references(() => students.id),
+  checkIn:     timestamp("check_in").notNull().defaultNow(),
+  checkOut:    timestamp("check_out"),
+  purpose:     text("purpose"),
+});
+
+export const hostelAttendance = pgTable("hostel_attendance", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId: uuid("student_id").notNull().references(() => students.id),
+  date:      date("date").notNull(),
+  status:    text("status").notNull().default("present"),
+  notes:     text("notes"),
+});
+
+export const hostelMeals = pgTable("hostel_meals", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  date:            date("date").notNull(),
+  mealType:        text("meal_type").notNull(),
+  menuJson:        jsonb("menu_json").$type<Record<string, unknown>>().default({}),
+  attendanceCount: integer("attendance_count").default(0),
+});
+
+export const hostelDisciplinary = pgTable("hostel_disciplinary", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId:   uuid("student_id").notNull().references(() => students.id),
+  incident:    text("incident").notNull(),
+  actionTaken: text("action_taken"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const boardingRoomHistory = pgTable("boarding_room_history", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId:  uuid("student_id").notNull().references(() => students.id),
+  fromRoomId: uuid("from_room_id").references(() => boardingRooms.id),
+  toRoomId:   uuid("to_room_id").references(() => boardingRooms.id),
+  changedAt:  timestamp("changed_at").notNull().defaultNow(),
+  changedBy:  uuid("changed_by").references(() => users.id),
+});
+
+export const campusDepartments = pgTable("campus_departments", {
+  id:       uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  campusId: uuid("campus_id").notNull().references(() => tenantCampuses.id, { onDelete: "cascade" }),
+  name:     text("name").notNull(),
+  parentId: uuid("parent_id").references((): any => campusDepartments.id),
+});
+
+export const tenantApiKeys = pgTable("tenant_api_keys", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:       text("name").notNull(),
+  keyPrefix:  text("key_prefix").notNull(),
+  keyHash:    text("key_hash").notNull(),
+  scopesJson: jsonb("scopes_json").$type<string[]>().default([]),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+});
+
+export const tenantWebhookEndpoints = pgTable("tenant_webhook_endpoints", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  url:        text("url").notNull(),
+  eventsJson: jsonb("events_json").$type<string[]>().default([]),
+  secret:     text("secret"),
+  active:     boolean("active").notNull().default(true),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+});
+
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  userId:          uuid("user_id").references(() => users.id),
+  parentAccountId: uuid("parent_account_id"),
+  endpoint:        text("endpoint").notNull(),
+  keysJson:        jsonb("keys_json").notNull(),
+  createdAt:       timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─── Phase B: Teacher workspace & portal messaging ───────────────────────────
+
+export const lessonPlans = pgTable("lesson_plans", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  userId:    uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  classId:   uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
+  subjectId: uuid("subject_id").references(() => subjects.id, { onDelete: "set null" }),
+  title:     text("title").notNull(),
+  content:   text("content").notNull().default(""),
+  weekNo:    integer("week_no"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({ tenantIdx: index("lesson_plans_tenant_idx").on(t.tenantId) }));
+
+export const schemeOfWork = pgTable("scheme_of_work", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  userId:     uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  classId:    uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
+  subjectId:  uuid("subject_id").references(() => subjects.id, { onDelete: "set null" }),
+  termId:     uuid("term_id").references(() => terms.id, { onDelete: "set null" }),
+  weekNo:     integer("week_no").notNull().default(1),
+  topic:      text("topic").notNull(),
+  objectives: text("objectives"),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({ tenantIdx: index("scheme_of_work_tenant_idx").on(t.tenantId) }));
+
+export const teacherMeetings = pgTable("teacher_meetings", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  userId:      uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title:       text("title").notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  notes:       text("notes"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({ tenantIdx: index("teacher_meetings_tenant_idx").on(t.tenantId) }));
+
+export const portalMessages = pgTable("portal_messages", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId:         uuid("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+  senderType:        text("sender_type").notNull(),
+  staffUserId:       uuid("staff_user_id").references(() => users.id, { onDelete: "set null" }),
+  parentAccountId:   uuid("parent_account_id").references((): any => parentAccounts.id, { onDelete: "set null" }),
+  body:              text("body").notNull(),
+  readAt:            timestamp("read_at"),
+  createdAt:         timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({ tenantIdx: index("portal_messages_tenant_student_idx").on(t.tenantId, t.studentId) }));
+
+export const seatingLayouts = pgTable("seating_layouts", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  streamId:  uuid("stream_id").notNull().references(() => streams.id, { onDelete: "cascade" }),
+  rows:      integer("rows").notNull().default(5),
+  cols:      integer("cols").notNull().default(6),
+  seatsJson: jsonb("seats_json").$type<Array<{ row: number; col: number; studentId?: string }>>().default([]),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const lessonLogs = pgTable("lesson_logs", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  classId:   uuid("class_id").notNull().references(() => classes.id),
+  subjectId: uuid("subject_id").references(() => subjects.id),
+  userId:    uuid("user_id").references(() => users.id),
+  logDate:   timestamp("log_date").notNull().defaultNow(),
+  topic:     text("topic").notNull(),
+  notes:     text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({ tenantIdx: index("lesson_logs_tenant_idx").on(t.tenantId) }));
+
+export const smartDevices = pgTable("smart_devices", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  roomId:     uuid("room_id").references(() => rooms.id),
+  name:       text("name").notNull(),
+  deviceType: text("device_type").notNull().default("smartboard"),
+  serialNo:   text("serial_no"),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+});
+
+export const staffAttendance = pgTable("staff_attendance", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  userId:      uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date:        text("date").notNull(),
+  status:      text("status").notNull().default("present"),
+  checkedInAt: timestamp("checked_in_at").notNull().defaultNow(),
+});
+
+export const substituteAssignments = pgTable("substitute_assignments", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  absentUserId:     uuid("absent_user_id").notNull().references(() => users.id),
+  substituteUserId: uuid("substitute_user_id").notNull().references(() => users.id),
+  classId:          uuid("class_id").references(() => classes.id),
+  date:             text("date").notNull(),
+  notes:            text("notes"),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+});
+
+export const internalMessages = pgTable("internal_messages", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  fromUserId: uuid("from_user_id").notNull().references(() => users.id),
+  toUserId:   uuid("to_user_id").references(() => users.id),
+  body:       text("body").notNull(),
+  readAt:     timestamp("read_at"),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({ tenantIdx: index("internal_messages_tenant_idx").on(t.tenantId) }));
+
+export const cbtPapers = pgTable("cbt_papers", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  title:           text("title").notNull(),
+  classId:         uuid("class_id").references(() => classes.id),
+  subjectId:       uuid("subject_id").references(() => subjects.id),
+  termId:          uuid("term_id").references(() => terms.id),
+  durationMinutes: integer("duration_minutes").notNull().default(60),
+  mode:            text("mode").notNull().default("graded"),
+  randomize:       boolean("randomize").notNull().default(false),
+  lockdown:        boolean("lockdown").notNull().default(false),
+  published:       boolean("published").notNull().default(false),
+  createdBy:       uuid("created_by").references(() => users.id),
+  createdAt:       timestamp("created_at").notNull().defaultNow(),
+});
+
+export const cbtQuestions = pgTable("cbt_questions", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  paperId:      uuid("paper_id").notNull().references(() => cbtPapers.id, { onDelete: "cascade" }),
+  prompt:       text("prompt").notNull(),
+  questionType: text("question_type").notNull().default("mcq"),
+  optionsJson:  jsonb("options_json").$type<string[]>().default([]),
+  correctIndex: integer("correct_index").notNull().default(0),
+  points:       integer("points").notNull().default(1),
+  orderNo:      integer("order_no").notNull().default(0),
+  maxWords:     integer("max_words"),
+});
+
+// ─── Phase C: Curriculum ─────────────────────────────────────────────────────
+
+export const curriculumFrameworks = pgTable("curriculum_frameworks", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  code:         text("code").notNull(),
+  name:         text("name").notNull(),
+  examBoard:    text("exam_board"),
+  version:      text("version").default("1.0"),
+  active:       boolean("active").notNull().default(true),
+  settingsJson: jsonb("settings_json").$type<Record<string, unknown>>().default({}),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+});
+
+export const curriculumUnits = pgTable("curriculum_units", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  frameworkId: uuid("framework_id").notNull().references(() => curriculumFrameworks.id, { onDelete: "cascade" }),
+  subjectId:   uuid("subject_id").references(() => subjects.id),
+  classId:     uuid("class_id").references(() => classes.id),
+  title:       text("title").notNull(),
+  orderNo:     integer("order_no").notNull().default(0),
+  termId:      uuid("term_id").references(() => terms.id),
+});
+
+export const curriculumCompetencies = pgTable("curriculum_competencies", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  frameworkId: uuid("framework_id").notNull().references(() => curriculumFrameworks.id, { onDelete: "cascade" }),
+  code:        text("code").notNull(),
+  name:        text("name").notNull(),
+  description: text("description"),
+});
+
+export const curriculumOutcomes = pgTable("curriculum_outcomes", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  unitId:       uuid("unit_id").notNull().references(() => curriculumUnits.id, { onDelete: "cascade" }),
+  competencyId: uuid("competency_id").references(() => curriculumCompetencies.id),
+  description:  text("description").notNull(),
+  orderNo:      integer("order_no").notNull().default(0),
+});
+
+export const studentCompetencyTracking = pgTable("student_competency_tracking", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId:    uuid("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+  competencyId: uuid("competency_id").notNull().references(() => curriculumCompetencies.id, { onDelete: "cascade" }),
+  termId:       uuid("term_id").references(() => terms.id),
+  level:        text("level").notNull().default("developing"),
+  notes:        text("notes"),
+  updatedAt:    timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const curriculumCrossLinks = pgTable("curriculum_cross_links", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  fromUnitId: uuid("from_unit_id").notNull().references(() => curriculumUnits.id, { onDelete: "cascade" }),
+  toUnitId:   uuid("to_unit_id").notNull().references(() => curriculumUnits.id, { onDelete: "cascade" }),
+  note:       text("note"),
+});
+
+export const gradingScales = pgTable("grading_scales", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  frameworkId: uuid("framework_id").references(() => curriculumFrameworks.id),
+  name:        text("name").notNull(),
+  bandsJson:   jsonb("bands_json").$type<{ label: string; min: number; max: number }[]>().default([]),
+});
+
+export const curriculumPacks = pgTable("curriculum_packs", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:          text("name").notNull(),
+  frameworkCode: text("framework_code").notNull(),
+  packJson:      jsonb("pack_json").notNull(),
+  importedAt:    timestamp("imported_at").notNull().defaultNow(),
+});
+
+export const questionBanks = pgTable("question_banks", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:      text("name").notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const questionBankItems = pgTable("question_bank_items", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  bankId:        uuid("bank_id").notNull().references(() => questionBanks.id, { onDelete: "cascade" }),
+  prompt:        text("prompt").notNull(),
+  questionType:  text("question_type").notNull().default("mcq"),
+  optionsJson:   jsonb("options_json").$type<string[]>().default([]),
+  correctIndex:  integer("correct_index").default(0),
+  points:        integer("points").notNull().default(1),
+});
+
+export const gradingRules = pgTable("grading_rules", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  classId:      uuid("class_id").references(() => classes.id),
+  termId:       uuid("term_id").references(() => terms.id),
+  name:         text("name").notNull(),
+  rulesJson:    jsonb("rules_json").$type<{ assessmentType: string; weight: number }[]>().default([]),
+  gpaScaleJson: jsonb("gpa_scale_json").$type<Record<string, number>>(),
+});
+
+export const cbtSessions = pgTable("cbt_sessions", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  paperId:           uuid("paper_id").notNull().references(() => cbtPapers.id, { onDelete: "cascade" }),
+  studentId:         uuid("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+  startedAt:         timestamp("started_at").notNull().defaultNow(),
+  endsAt:            timestamp("ends_at"),
+  submittedAt:       timestamp("submitted_at"),
+  ipAddress:         text("ip_address"),
+  deviceFingerprint: text("device_fingerprint"),
+  score:             integer("score"),
+  maxScore:          integer("max_score"),
+  status:            text("status").notNull().default("in_progress"),
+});
+
+export const cbtAnswers = pgTable("cbt_answers", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  sessionId:  uuid("session_id").notNull().references(() => cbtSessions.id, { onDelete: "cascade" }),
+  questionId: uuid("question_id").notNull().references(() => cbtQuestions.id, { onDelete: "cascade" }),
+  answerJson: jsonb("answer_json"),
+  score:      integer("score"),
+  gradedAt:   timestamp("graded_at"),
+  gradedBy:   uuid("graded_by").references(() => users.id),
+});
+
+export const installmentPlans = pgTable("installment_plans", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  invoiceId:        uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  installmentsJson: jsonb("installments_json").$type<{ dueDate: string; amountMinor: number; paid?: boolean }[]>().notNull(),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+});
+
+export const feeDiscounts = pgTable("fee_discounts", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId:   uuid("student_id").references(() => students.id),
+  invoiceId:   uuid("invoice_id").references(() => invoices.id),
+  name:        text("name").notNull(),
+  percent:     integer("percent"),
+  amountMinor: integer("amount_minor"),
+  reason:      text("reason"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const feeSponsorships = pgTable("fee_sponsorships", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId:   uuid("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+  sponsorName: text("sponsor_name").notNull(),
+  amountMinor: integer("amount_minor").notNull(),
+  termId:      uuid("term_id").references(() => terms.id),
+  notes:       text("notes"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const financeRefunds = pgTable("finance_refunds", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  paymentId:   uuid("payment_id").notNull().references(() => payments.id),
+  amountMinor: integer("amount_minor").notNull(),
+  status:      text("status").notNull().default("pending"),
+  reason:      text("reason"),
+  createdBy:   uuid("created_by").references(() => users.id),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const chartOfAccounts = pgTable("chart_of_accounts", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  code:        text("code").notNull(),
+  name:        text("name").notNull(),
+  accountType: text("account_type").notNull().default("asset"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const journalEntries = pgTable("journal_entries", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  entryDate:   date("entry_date").notNull(),
+  description: text("description").notNull(),
+  reference:   text("reference"),
+  createdBy:   uuid("created_by").references(() => users.id),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const journalLines = pgTable("journal_lines", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  entryId:    uuid("entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
+  accountId:  uuid("account_id").notNull().references(() => chartOfAccounts.id),
+  debitMinor: integer("debit_minor").notNull().default(0),
+  creditMinor: integer("credit_minor").notNull().default(0),
+});
+
+export const budgets = pgTable("budgets", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  fiscalYear:  integer("fiscal_year").notNull(),
+  category:    text("category").notNull(),
+  amountMinor: integer("amount_minor").notNull(),
+  spentMinor:  integer("spent_minor").notNull().default(0),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
 // ─── Phase 11: Messaging ─────────────────────────────────────────────────────
 
 export const messageTemplates = pgTable("message_templates", {
@@ -942,6 +1462,7 @@ export const campaigns = pgTable("campaigns", {
   id:         uuid("id").primaryKey().defaultRandom(),
   tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name:       text("name").notNull(),
+  channel:    text("channel").notNull().default("sms"),
   templateId: uuid("template_id").references(() => messageTemplates.id),
   audience:   text("audience").notNull().default("parents"),
   audienceFilter: jsonb("audience_filter").$type<Record<string, string>>().default({}),
@@ -1303,6 +1824,28 @@ export const platformWebhookEvents = pgTable("platform_webhook_events", {
   createdAt:  timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   providerExtIdx: uniqueIndex("platform_webhook_events_provider_ext_idx").on(t.provider, t.externalId),
+}));
+
+export const savedReports = pgTable("saved_reports", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:        text("name").notNull(),
+  reportType:  text("report_type").notNull(),
+  configJson:  jsonb("config_json").$type<Record<string, unknown>>().default({}),
+  createdBy:   uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantIdx: index("saved_reports_tenant_idx").on(t.tenantId),
+}));
+
+export const aiUsageLog = pgTable("ai_usage_log", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  feature:   text("feature").notNull(),
+  credits:   integer("credits").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  tenantIdx: index("ai_usage_log_tenant_idx").on(t.tenantId),
 }));
 
 export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {

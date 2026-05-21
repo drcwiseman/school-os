@@ -8,7 +8,13 @@ export const Messaging: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"announcements" | "campaigns" | "logs">("announcements");
+  const [tab, setTab] = useState<"announcements" | "campaigns" | "templates" | "internal" | "whatsapp" | "logs">("announcements");
+  const [internal, setInternal] = useState<any[]>([]);
+  const [staffUsers, setStaffUsers] = useState<any[]>([]);
+  const [internalForm, setInternalForm] = useState({ toUserId: "", body: "" });
+  const [waForm, setWaForm] = useState({ phone: "", message: "" });
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [tplForm, setTplForm] = useState({ name: "", channel: "sms", subject: "", body: "" });
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -21,6 +27,8 @@ export const Messaging: React.FC = () => {
   const [editForm, setEditForm] = useState({ title: "", body: "", audience: "all" as "all" | "parents" | "staff" });
   const [campaignForm, setCampaignForm] = useState({
     name: "",
+    channel: "sms" as "sms" | "email" | "whatsapp",
+    templateId: "",
     audience: "parents",
     classId: "",
   });
@@ -31,7 +39,23 @@ export const Messaging: React.FC = () => {
       if (tab === "announcements") {
         setAnnouncements((await api.get(`/s/${schoolSlug}/api/messaging/announcements`)).data ?? []);
       } else if (tab === "campaigns") {
-        setCampaigns((await api.get(`/s/${schoolSlug}/api/messaging/campaigns`)).data ?? []);
+        const [c, t] = await Promise.all([
+          api.get(`/s/${schoolSlug}/api/messaging/campaigns`),
+          api.get(`/s/${schoolSlug}/api/messaging/templates`),
+        ]);
+        setCampaigns(c.data ?? []);
+        setTemplates(t.data ?? []);
+      } else if (tab === "templates") {
+        setTemplates((await api.get(`/s/${schoolSlug}/api/messaging/templates`)).data ?? []);
+      } else if (tab === "internal") {
+        const [m, u] = await Promise.all([
+          api.get(`/s/${schoolSlug}/api/messaging/internal`),
+          api.get(`/s/${schoolSlug}/api/admin/users`),
+        ]);
+        setInternal(m.data ?? []);
+        setStaffUsers(u.data ?? []);
+      } else if (tab === "whatsapp") {
+        /* settings-driven test */
       } else {
         setLogs((await api.get(`/s/${schoolSlug}/api/messaging/delivery-logs`)).data ?? []);
       }
@@ -121,11 +145,13 @@ export const Messaging: React.FC = () => {
         : {};
       await api.post(`/s/${schoolSlug}/api/messaging/campaigns`, {
         name: campaignForm.name,
+        channel: campaignForm.channel,
+        templateId: campaignForm.templateId || undefined,
         audience: campaignForm.audience,
         audienceFilter,
       });
       toast("Campaign created", "success");
-      setCampaignForm({ name: "", audience: "parents", classId: "" });
+      setCampaignForm({ name: "", channel: "sms", templateId: "", audience: "parents", classId: "" });
       load();
     } catch (err: any) { toast(err.message, "error"); }
   };
@@ -153,6 +179,9 @@ export const Messaging: React.FC = () => {
       <div className="flex gap-2">
         <button type="button" onClick={() => setTab("announcements")} className={tabBtn("announcements")}>announcements</button>
         <button type="button" onClick={() => setTab("campaigns")} className={tabBtn("campaigns")}>campaigns</button>
+        <button type="button" onClick={() => setTab("templates")} className={tabBtn("templates")}>templates</button>
+        <button type="button" onClick={() => setTab("internal")} className={tabBtn("internal")}>staff chat</button>
+        <button type="button" onClick={() => setTab("whatsapp")} className={tabBtn("whatsapp")}>WhatsApp</button>
         <button type="button" onClick={() => setTab("logs")} className={tabBtn("logs")}>delivery logs</button>
       </div>
 
@@ -235,10 +264,25 @@ export const Messaging: React.FC = () => {
           )}
           {tab === "campaigns" && (
             <div className="space-y-4">
-              <form onSubmit={createCampaign} className="card p-5 grid md:grid-cols-4 gap-3 items-end">
+              <form onSubmit={createCampaign} className="card p-5 grid md:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
                 <div>
                   <label className="label">Campaign name</label>
                   <input className="input" required value={campaignForm.name} onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Channel</label>
+                  <select className="input" value={campaignForm.channel} onChange={(e) => setCampaignForm({ ...campaignForm, channel: e.target.value as "sms" | "email" | "whatsapp" })}>
+                    <option value="sms">SMS</option>
+                    <option value="email">Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Template</label>
+                  <select className="input" value={campaignForm.templateId} onChange={(e) => setCampaignForm({ ...campaignForm, templateId: e.target.value })}>
+                    <option value="">None</option>
+                    {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="label">Audience</label>
@@ -266,7 +310,7 @@ export const Messaging: React.FC = () => {
                   <div key={c.id} className="flex justify-between items-center py-2 border-b border-slate-800">
                     <span className="text-slate-200">
                       {c.name}{" "}
-                      <span className="text-xs text-slate-500">({c.audience} · {c.status})</span>
+                      <span className="text-xs text-slate-500">({c.channel ?? "sms"} · {c.audience} · {c.status})</span>
                     </span>
                     {c.status === "draft" && (
                       <button type="button" className="btn-ghost text-primary-400" onClick={() => sendCampaign(c.id)}>
@@ -277,6 +321,75 @@ export const Messaging: React.FC = () => {
                 ))}
               </div>
             </div>
+          )}
+          {tab === "templates" && (
+            <div className="grid lg:grid-cols-2 gap-6">
+              <form
+                className="card p-5 space-y-3"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await api.post(`/s/${schoolSlug}/api/messaging/templates`, tplForm);
+                    toast("Template saved", "success");
+                    setTplForm({ name: "", channel: "sms", subject: "", body: "" });
+                    load();
+                  } catch (err: any) { toast(err.message, "error"); }
+                }}
+              >
+                <h3 className="font-semibold text-white">New template</h3>
+                <input className="input" placeholder="Name" required value={tplForm.name} onChange={(e) => setTplForm({ ...tplForm, name: e.target.value })} />
+                <select className="input" value={tplForm.channel} onChange={(e) => setTplForm({ ...tplForm, channel: e.target.value })}>
+                  <option value="sms">SMS</option>
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+                <input className="input" placeholder="Email subject" value={tplForm.subject} onChange={(e) => setTplForm({ ...tplForm, subject: e.target.value })} />
+                <textarea className="input min-h-[100px]" placeholder="Body" required value={tplForm.body} onChange={(e) => setTplForm({ ...tplForm, body: e.target.value })} />
+                <button type="submit" className="btn-primary">Save template</button>
+              </form>
+              <div className="card p-5">
+                <ul className="text-sm text-slate-300 space-y-2">
+                  {templates.map((t) => (
+                    <li key={t.id}><strong>{t.name}</strong> · {t.channel}<p className="text-slate-500">{t.body.slice(0, 80)}</p></li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          {tab === "internal" && (
+            <div className="grid lg:grid-cols-2 gap-6">
+              <form className="card p-5 space-y-3" onSubmit={async (e) => {
+                e.preventDefault();
+                await api.post(`/s/${schoolSlug}/api/messaging/internal`, { toUserId: internalForm.toUserId || undefined, body: internalForm.body });
+                toast("Sent", "success");
+                setInternalForm({ toUserId: "", body: "" });
+                load();
+              }}>
+                <h3 className="font-semibold text-white">Staff message</h3>
+                <select className="input" value={internalForm.toUserId} onChange={(e) => setInternalForm({ ...internalForm, toUserId: e.target.value })}>
+                  <option value="">Broadcast (all staff)</option>
+                  {staffUsers.map((u) => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
+                </select>
+                <textarea className="input min-h-[80px]" required value={internalForm.body} onChange={(e) => setInternalForm({ ...internalForm, body: e.target.value })} />
+                <button type="submit" className="btn-primary">Send</button>
+              </form>
+              <div className="card p-5 text-sm text-slate-300 max-h-80 overflow-y-auto">
+                {internal.map((m) => <p key={m.id} className="mb-2">{m.body}</p>)}
+              </div>
+            </div>
+          )}
+          {tab === "whatsapp" && (
+            <form className="card p-5 space-y-3 max-w-md" onSubmit={async (e) => {
+              e.preventDefault();
+              const res = await api.post(`/s/${schoolSlug}/api/messaging/whatsapp/test`, waForm);
+              toast(res.success ? "WhatsApp test sent" : res.message ?? "Failed", res.success ? "success" : "error");
+            }}>
+              <h3 className="font-semibold text-white">WhatsApp test</h3>
+              <p className="text-xs text-slate-500">Requires platform WhatsApp Business integration enabled.</p>
+              <input className="input" placeholder="Phone +256…" required value={waForm.phone} onChange={(e) => setWaForm({ ...waForm, phone: e.target.value })} />
+              <textarea className="input" required value={waForm.message} onChange={(e) => setWaForm({ ...waForm, message: e.target.value })} />
+              <button type="submit" className="btn-primary">Send test</button>
+            </form>
           )}
           {tab === "logs" && (
             <div className="card p-5 overflow-x-auto">

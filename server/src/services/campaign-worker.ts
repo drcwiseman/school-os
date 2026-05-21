@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { campaigns, deliveryLogs, guardians, studentGuardians, students, studentClassHistory, users } from "../db/schema";
+import { campaigns, deliveryLogs, guardians, studentGuardians, students, studentClassHistory, users, messageTemplates } from "../db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { getMessagingProvider } from "./messaging";
 import { incrementUsage, checkUsageAllowed } from "./usage-billing";
@@ -44,23 +44,36 @@ export async function processCampaignJob(tenantId: string, payload: { campaignId
     }
   }
 
-  const body = campaign.name;
+  let body = campaign.name;
+  let subject = campaign.name;
+  let channel: "sms" | "email" | "whatsapp" = (campaign.channel as "sms" | "email" | "whatsapp") ?? "sms";
+
+  if (campaign.templateId) {
+    const [tpl] = await db.select().from(messageTemplates)
+      .where(eq(messageTemplates.id, campaign.templateId)).limit(1);
+    if (tpl) {
+      body = tpl.body;
+      subject = tpl.subject ?? campaign.name;
+      channel = (tpl.channel as "sms" | "email" | "whatsapp") ?? channel;
+    }
+  }
+
   let sent = 0;
   for (const r of recipients) {
-    const isEmail = r.to.includes("@");
+    const resolvedChannel = channel === "email" ? "email" : channel === "whatsapp" ? "whatsapp" : (r.to.includes("@") ? "email" : "sms");
     const gate = await checkUsageAllowed(tenantId, "sms_volume", 1);
     if (!gate.allowed) break;
     const result = await provider.send({
       to: r.to,
       body,
-      channel: isEmail ? "email" : "sms",
-      subject: isEmail ? campaign.name : undefined,
+      channel: resolvedChannel,
+      subject: resolvedChannel === "email" ? subject : undefined,
     });
     await db.insert(deliveryLogs).values({
       tenantId,
       campaignId: campaign.id,
       recipient: r.to,
-      channel: provider.name,
+      channel: resolvedChannel,
       status: result.success ? "sent" : "failed",
       providerRef: result.providerRef,
       error: result.error,

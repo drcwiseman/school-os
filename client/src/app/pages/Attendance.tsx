@@ -12,6 +12,7 @@ export const Attendance: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [classId, setClassId] = useState("");
+  const [periodNo, setPeriodNo] = useState("1");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   // Active Session state
@@ -42,7 +43,11 @@ export const Attendance: React.FC = () => {
   const handleStartSession = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await api.post(`/s/${schoolSlug}/api/attendance/session`, { classId, date });
+      const res = await api.post(`/s/${schoolSlug}/api/attendance/session`, {
+        classId,
+        date,
+        periodNo: Number(periodNo) || undefined,
+      });
       setActiveSession(res.data.session);
       setRecords(res.data.records);
       setShowCreate(false);
@@ -73,7 +78,11 @@ export const Attendance: React.FC = () => {
         <div className="page-header">
           <div>
             <h1 className="page-title">Take Attendance</h1>
-            <p className="text-slate-400 mt-1">Class {activeSession.classId} • Date: {new Date(activeSession.date).toLocaleDateString()}</p>
+            <p className="text-slate-400 mt-1">
+              Class {activeSession.classId}
+              {activeSession.periodNo != null ? ` • Period ${activeSession.periodNo}` : ""}
+              {" • "}Date: {new Date(activeSession.date).toLocaleDateString()}
+            </p>
           </div>
           <div className="flex gap-3">
             <button onClick={() => setActiveSession(null)} className="btn-ghost">Cancel</button>
@@ -146,6 +155,10 @@ export const Attendance: React.FC = () => {
                 ))}
               </select>
             </div>
+            <div className="w-28">
+              <label className="label">Period</label>
+              <input type="number" min={1} max={12} className="input" value={periodNo} onChange={(e) => setPeriodNo(e.target.value)} />
+            </div>
             <div className="flex-1">
               <label className="label">Date</label>
               <input type="date" required className="input" value={date} onChange={e => setDate(e.target.value)} />
@@ -168,7 +181,10 @@ export const Attendance: React.FC = () => {
               </span>
             </div>
             <h3 className="font-semibold text-white truncate">Class {session.classId.substring(0,8)}...</h3>
-            <p className="text-slate-400 text-sm mt-1">{new Date(session.date).toLocaleDateString()}</p>
+            <p className="text-slate-400 text-sm mt-1">
+              {new Date(session.date).toLocaleDateString()}
+              {session.periodNo != null ? ` · Period ${session.periodNo}` : ""}
+            </p>
           </div>
         ))}
       </div>

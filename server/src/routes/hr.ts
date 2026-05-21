@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { staff, staffContracts, leaveRequests } from "../db/schema";
+import { staff, staffContracts, leaveRequests, staffAttendance } from "../db/schema";
 import { eq, and, desc, isNull, inArray, sql, ne } from "drizzle-orm";
 import { softDeleteStaffMember } from "../services/soft-delete";
 import { createAuditLog } from "../services/audit";
@@ -230,5 +230,35 @@ router.patch("/leave/:id", ...guard, requirePermission("hr.manage"),
     } catch (e) { next(e); }
   }
 );
+
+router.post("/staff-attendance/check-in", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ userId: z.string().uuid().optional(), status: z.enum(["present", "absent", "late"]).default("present") }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const uid = req.body.userId ?? user.id;
+      const date = new Date().toISOString().slice(0, 10);
+      const [existing] = await db.select().from(staffAttendance).where(and(
+        eq(staffAttendance.tenantId, tenant.id), eq(staffAttendance.userId, uid), eq(staffAttendance.date, date),
+      )).limit(1);
+      let row;
+      if (existing) {
+        [row] = await db.update(staffAttendance).set({ status: req.body.status, checkedInAt: new Date() }).where(eq(staffAttendance.id, existing.id)).returning();
+      } else {
+        [row] = await db.insert(staffAttendance).values({ tenantId: tenant.id, userId: uid, date, status: req.body.status }).returning();
+      }
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/staff-attendance/today", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const date = new Date().toISOString().slice(0, 10);
+    res.json({ success: true, data: await db.select().from(staffAttendance).where(and(eq(staffAttendance.tenantId, tenant.id), eq(staffAttendance.date, date))) });
+  } catch (e) { next(e); }
+});
 
 export default router;

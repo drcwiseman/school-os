@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { libraryBooks, libraryCopies, libraryLoans, libraryFines } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -41,6 +41,14 @@ router.post("/books/:id/copies", ...guard, requirePermission("library.manage"),
   }
 );
 
+router.get("/loans", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select().from(libraryLoans).where(eq(libraryLoans.tenantId, tenant.id)).orderBy(desc(libraryLoans.loanedAt));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
 router.post("/loans", ...guard, requirePermission("library.manage"),
   validate({ body: z.object({ copyId: z.string().uuid(), studentId: z.string().uuid(), dueAt: z.string().optional() }) }),
   async (req, res, next) => {
@@ -58,6 +66,26 @@ router.post("/loans", ...guard, requirePermission("library.manage"),
   }
 );
 
+router.get("/books/:id/copies", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(libraryCopies).where(and(eq(libraryCopies.bookId, req.params.id), eq(libraryCopies.tenantId, tenant.id))) });
+  } catch (e) { next(e); }
+});
+
+router.get("/loans/overdue", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const now = new Date();
+    const rows = await db.select().from(libraryLoans).where(and(
+      eq(libraryLoans.tenantId, tenant.id),
+      sql`${libraryLoans.returnedAt} is null`,
+      sql`${libraryLoans.dueAt} < ${now}`,
+    ));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
 router.post("/loans/:id/return", ...guard, requirePermission("library.manage"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -65,6 +93,11 @@ router.post("/loans/:id/return", ...guard, requirePermission("library.manage"), 
     if (!loan) throw new NotFoundError("Loan not found");
     await db.update(libraryLoans).set({ returnedAt: new Date() }).where(eq(libraryLoans.id, loan.id));
     await db.update(libraryCopies).set({ status: "available" }).where(eq(libraryCopies.id, loan.copyId));
+    if (loan.dueAt && loan.dueAt < new Date() && !loan.returnedAt) {
+      const daysLate = Math.ceil((Date.now() - loan.dueAt.getTime()) / 86400000);
+      const amount = daysLate * 500;
+      await db.insert(libraryFines).values({ tenantId: tenant.id, loanId: loan.id, amount });
+    }
     res.json({ success: true });
   } catch (e) { next(e); }
 });

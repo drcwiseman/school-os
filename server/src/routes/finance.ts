@@ -4,8 +4,11 @@ import { db } from "../db";
 import {
   feeHeads, feeStructures, feeStructureItems, invoices, invoiceItems,
   payments, paymentAllocations, receipts, expenses, students, studentClassHistory,
+  installmentPlans, feeDiscounts, feeSponsorships, financeRefunds,
+  chartOfAccounts, journalEntries, journalLines, budgets, tenantSettings,
 } from "../db/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { getCampusId, pushCampusFilter } from "../lib/campus-scope";
 import { softDeleteInvoice, voidPayment, softDeleteFeeStructure } from "../services/soft-delete";
 import { nextReceiptNumber } from "../utils/receipts";
 import { requireAuth } from "../middleware/auth";
@@ -62,6 +65,7 @@ router.post("/invoices", ...guard, requirePermission("finance.invoice.create"),
       if (existing) throw new ConflictError("Invoice number already exists");
       const [invoice] = await db.insert(invoices).values({
         tenantId: tenant.id,
+        campusId: student.campusId ?? undefined,
         studentId: req.body.studentId,
         termId: req.body.termId,
         invoiceNo: req.body.invoiceNo,
@@ -206,7 +210,9 @@ router.post("/payments/:id/void", ...guard, requirePermission("finance.refund.cr
 router.get("/debtors", ...guard, requirePermission("finance.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt), sql`${invoices.paidAmount} < ${invoices.totalAmount}`)).orderBy(desc(invoices.dueDate));
+    const conditions = [eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt), sql`${invoices.paidAmount} < ${invoices.totalAmount}`];
+    pushCampusFilter(conditions, invoices, req);
+    const rows = await db.select().from(invoices).where(and(...conditions)).orderBy(desc(invoices.dueDate));
     const withBalance = rows.map(r => ({ ...r, balance: r.totalAmount - r.paidAmount }));
     res.json({ success: true, data: withBalance });
   } catch (e) { next(e); }
@@ -320,5 +326,247 @@ router.post("/payments/gateway/initiate", ...guard, requirePermission("finance.p
     } catch (err) { next(err); }
   },
 );
+
+router.post("/installments", ...guard, requirePermission("finance.invoice.create"),
+  validate({ body: z.object({ invoiceId: z.string().uuid(), installments: z.array(z.object({ dueDate: z.string(), amountMinor: z.number().int().positive() })) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(installmentPlans).values({
+        tenantId: tenant.id,
+        invoiceId: req.body.invoiceId,
+        installmentsJson: req.body.installments,
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/installments/:invoiceId", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.select().from(installmentPlans).where(and(eq(installmentPlans.invoiceId, req.params.invoiceId), eq(installmentPlans.tenantId, tenant.id))).limit(1);
+    res.json({ success: true, data: row ?? null });
+  } catch (e) { next(e); }
+});
+
+router.post("/discounts", ...guard, requirePermission("finance.invoice.create"),
+  validate({ body: z.object({ name: z.string(), studentId: z.string().uuid().optional(), invoiceId: z.string().uuid().optional(), percent: z.number().optional(), amountMinor: z.number().optional(), reason: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(feeDiscounts).values({ tenantId: tenant.id, ...req.body }).returning();
+      if (req.body.invoiceId && req.body.amountMinor) {
+        const [inv] = await db.select().from(invoices).where(eq(invoices.id, req.body.invoiceId)).limit(1);
+        if (inv) await db.update(invoices).set({ totalAmount: Math.max(0, inv.totalAmount - req.body.amountMinor) }).where(eq(invoices.id, inv.id));
+      }
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/discounts", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(feeDiscounts).where(eq(feeDiscounts.tenantId, tenant.id)).orderBy(desc(feeDiscounts.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/sponsorships", ...guard, requirePermission("finance.invoice.create"),
+  validate({ body: z.object({ studentId: z.string().uuid(), sponsorName: z.string(), amountMinor: z.number().int().positive(), termId: z.string().uuid().optional(), notes: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(feeSponsorships).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/sponsorships", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(feeSponsorships).where(eq(feeSponsorships.tenantId, tenant.id)).orderBy(desc(feeSponsorships.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.get("/arrears-aging", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const now = new Date();
+    const rows = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt), sql`${invoices.paidAmount} < ${invoices.totalAmount}`));
+    const buckets = { current: [] as any[], d30: [] as any[], d60: [] as any[], d90: [] as any[] };
+    for (const inv of rows) {
+      const balance = inv.totalAmount - inv.paidAmount;
+      const due = inv.dueDate ? new Date(inv.dueDate) : now;
+      const days = Math.floor((now.getTime() - due.getTime()) / 86400000);
+      const item = { ...inv, balance, daysOverdue: Math.max(0, days) };
+      if (days <= 0) buckets.current.push(item);
+      else if (days <= 30) buckets.d30.push(item);
+      else if (days <= 60) buckets.d60.push(item);
+      else buckets.d90.push(item);
+    }
+    res.json({ success: true, data: buckets });
+  } catch (e) { next(e); }
+});
+
+router.post("/refunds", ...guard, requirePermission("finance.refund.create"),
+  validate({ body: z.object({ paymentId: z.string().uuid(), amountMinor: z.number().int().positive(), reason: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [row] = await db.insert(financeRefunds).values({ tenantId: tenant.id, ...req.body, createdBy: user.id }).returning();
+      await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "refund.request", entityType: "finance_refund", entityId: row.id, after: row, ip: req.ip });
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/refunds", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(financeRefunds).where(eq(financeRefunds.tenantId, tenant.id)).orderBy(desc(financeRefunds.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.get("/accounts", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(chartOfAccounts).where(eq(chartOfAccounts.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/accounts", ...guard, requirePermission("finance.payment.create"),
+  validate({ body: z.object({ code: z.string(), name: z.string(), accountType: z.enum(["asset", "liability", "equity", "revenue", "expense"]).optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(chartOfAccounts).values({ tenantId: tenant.id, code: req.body.code, name: req.body.name, accountType: req.body.accountType ?? "asset" }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.post("/journal", ...guard, requirePermission("finance.payment.create"),
+  validate({
+    body: z.object({
+      entryDate: z.string(),
+      description: z.string(),
+      reference: z.string().optional(),
+      lines: z.array(z.object({ accountId: z.string().uuid(), debitMinor: z.number().int().default(0), creditMinor: z.number().int().default(0) })).min(2),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const debit = req.body.lines.reduce((s: number, l: any) => s + l.debitMinor, 0);
+      const credit = req.body.lines.reduce((s: number, l: any) => s + l.creditMinor, 0);
+      if (debit !== credit) return res.status(400).json({ success: false, message: "Debits must equal credits" });
+      const [entry] = await db.insert(journalEntries).values({
+        tenantId: tenant.id,
+        entryDate: req.body.entryDate,
+        description: req.body.description,
+        reference: req.body.reference,
+        createdBy: user.id,
+      }).returning();
+      await db.insert(journalLines).values(req.body.lines.map((l: any) => ({ tenantId: tenant.id, entryId: entry.id, ...l })));
+      res.status(201).json({ success: true, data: entry });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/ledger", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const lines = await db.select({
+      entryDate: journalEntries.entryDate,
+      description: journalEntries.description,
+      accountCode: chartOfAccounts.code,
+      accountName: chartOfAccounts.name,
+      debitMinor: journalLines.debitMinor,
+      creditMinor: journalLines.creditMinor,
+    }).from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.entryId, journalEntries.id))
+      .innerJoin(chartOfAccounts, eq(journalLines.accountId, chartOfAccounts.id))
+      .where(eq(journalLines.tenantId, tenant.id))
+      .orderBy(desc(journalEntries.entryDate));
+    res.json({ success: true, data: lines });
+  } catch (e) { next(e); }
+});
+
+router.get("/budgets", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(budgets).where(eq(budgets.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/budgets", ...guard, requirePermission("finance.payment.create"),
+  validate({ body: z.object({ fiscalYear: z.number(), category: z.string(), amountMinor: z.number().int().positive() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(budgets).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/statements", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [inv] = await db.select({
+      revenue: sql<number>`coalesce(sum(${invoices.paidAmount}), 0)`,
+      invoiced: sql<number>`coalesce(sum(${invoices.totalAmount}), 0)`,
+    }).from(invoices).where(and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt)));
+    const [exp] = await db.select({ total: sql<number>`coalesce(sum(${expenses.amount}), 0)` }).from(expenses).where(eq(expenses.tenantId, tenant.id));
+    const net = Number(inv?.revenue ?? 0) - Number(exp?.total ?? 0);
+    res.json({
+      success: true,
+      data: {
+        profitAndLoss: { revenueMinor: Number(inv?.revenue ?? 0), expensesMinor: Number(exp?.total ?? 0), netMinor: net },
+        balanceSheet: { assetsMinor: Number(inv?.revenue ?? 0), liabilitiesMinor: Number(inv?.invoiced ?? 0) - Number(inv?.revenue ?? 0) },
+      },
+    });
+  } catch (e) { next(e); }
+});
+
+router.get("/command-center", ...guard, requirePermission("finance.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [dash] = await db.select({
+      totalInvoiced: sql<number>`coalesce(sum(${invoices.totalAmount}), 0)`,
+      totalPaid: sql<number>`coalesce(sum(${invoices.paidAmount}), 0)`,
+      unpaidCount: sql<number>`count(*) filter (where ${invoices.status} = 'unpaid')`,
+      overdueCount: sql<number>`count(*) filter (where ${invoices.dueDate} < now() and ${invoices.paidAmount} < ${invoices.totalAmount})`,
+    }).from(invoices).where(and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt)));
+    const [refundPending] = await db.select({ count: sql<number>`count(*)` }).from(financeRefunds).where(and(eq(financeRefunds.tenantId, tenant.id), eq(financeRefunds.status, "pending")));
+    res.json({ success: true, data: { ...dash, pendingRefunds: Number(refundPending?.count ?? 0) } });
+  } catch (e) { next(e); }
+});
+
+router.post("/apply-late-penalties", ...guard, requirePermission("finance.invoice.create"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+    const pct = settings?.latePenaltyPercent ?? 0;
+    if (!pct) return res.json({ success: true, data: { applied: 0 } });
+    const overdue = await db.select().from(invoices).where(and(
+      eq(invoices.tenantId, tenant.id),
+      isNull(invoices.deletedAt),
+      sql`${invoices.dueDate} < now()`,
+      sql`${invoices.paidAmount} < ${invoices.totalAmount}`,
+    ));
+    let applied = 0;
+    for (const inv of overdue) {
+      const penalty = Math.round(inv.totalAmount * (pct / 100));
+      await db.update(invoices).set({ totalAmount: inv.totalAmount + penalty }).where(eq(invoices.id, inv.id));
+      applied++;
+    }
+    res.json({ success: true, data: { applied, penaltyPercent: pct } });
+  } catch (e) { next(e); }
+});
 
 export default router;

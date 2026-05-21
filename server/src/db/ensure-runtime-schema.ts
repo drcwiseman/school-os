@@ -236,6 +236,11 @@ export async function ensureRuntimeSchema() {
     "0016_platform_email.sql",
     "0017_platform_backups.sql",
     "0018_platform_extras.sql",
+    "0019_phase_b.sql",
+    "0020_phase_ab_complete.sql",
+    "0021_phase_c.sql",
+    "0022_phase_d.sql",
+    "0023_post_d.sql",
   ]) {
     await runMigrationFile(file);
   }

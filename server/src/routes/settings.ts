@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { tenantSettings } from "../db/schema";
-import type { TenantSmtpSettings } from "../db/schema";
+import type { TenantSmtpSettings, TenantCommunicationsSettings } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
@@ -73,6 +73,17 @@ router.patch("/", ...guard, requirePermission("settings.manage"),
       currency: z.string().min(3).max(3).optional(),
       timezone: z.string().min(1).optional(),
       brandingJson: z.record(z.string()).optional(),
+      brandingExtendedJson: z.record(z.unknown()).optional(),
+      paymentProvidersJson: z.record(z.unknown()).optional(),
+      curriculumFramework: z.string().optional(),
+      latePenaltyPercent: z.number().int().min(0).max(100).optional(),
+      communicationsJson: z.object({
+        smsProvider: z.string().optional(),
+        smsSenderId: z.string().optional(),
+        whatsappEnabled: z.boolean().optional(),
+        pushEnabled: z.boolean().optional(),
+        emailBrandingName: z.string().optional(),
+      }).optional(),
       featureFlagsJson: z.record(z.boolean()).optional(),
       smtpSettingsJson: smtpBodySchema.optional(),
     }),
@@ -163,6 +174,55 @@ router.post(
         html: "<p>If you received this message, your school's <strong>SMTP settings</strong> are working correctly.</p>",
       });
       res.json({ success: true, message: `Test email sent to ${to}` });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/export", ...guard, requirePermission("settings.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+    const flags = await getTenantFeatureFlags(tenant.id);
+    res.json({
+      success: true,
+      data: {
+        exportedAt: new Date().toISOString(),
+        settings: settings ? { ...settings, smtpSettingsJson: undefined } : null,
+        featureFlags: flags,
+      },
+    });
+  } catch (e) { next(e); }
+});
+
+router.post("/import", ...guard, requirePermission("settings.manage"),
+  validate({
+    body: z.object({
+      brandingJson: z.record(z.string()).optional(),
+      brandingExtendedJson: z.record(z.unknown()).optional(),
+      communicationsJson: z.record(z.unknown()).optional(),
+      paymentProvidersJson: z.record(z.unknown()).optional(),
+      country: z.string().length(2).optional(),
+      currency: z.string().optional(),
+      timezone: z.string().optional(),
+      curriculumFramework: z.string().optional(),
+      latePenaltyPercent: z.number().int().min(0).max(100).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [before] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+      if (!before) throw new NotFoundError("Settings not found");
+      const [updated] = await db.update(tenantSettings)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(tenantSettings.tenantId, tenant.id))
+        .returning();
+      await createAuditLog({
+        tenantId: tenant.id, actorUserId: user.id, action: "settings.import",
+        entityType: "tenant_settings", entityId: updated.id, before, after: updated, ip: req.ip,
+      });
+      res.json({ success: true, data: updated });
     } catch (e) { next(e); }
   },
 );

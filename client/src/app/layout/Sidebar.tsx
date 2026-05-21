@@ -2,8 +2,8 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import {
-  LayoutDashboard, Users, UserCog,   LogOut, Settings, GraduationCap, DollarSign,
-  CalendarCheck, BookOpen, ClipboardList, Briefcase, Wallet, Bus, Megaphone, FileBarChart,
+  LayoutDashboard, Users, UserCog, LogOut, Settings, GraduationCap, DollarSign, BookMarked, Building2, Shield, Sparkles,
+  CalendarCheck, BookOpen, ClipboardList, Briefcase, Wallet, Bus, Megaphone, FileBarChart, School,
   ShieldAlert, HeartPulse, Library, Package, Home, ExternalLink,
 } from "lucide-react";
 import { OPERATIONS_MODULES } from "../pages/operations-modules";
@@ -37,6 +37,8 @@ export const Sidebar: React.FC = () => {
     { name: "Students", path: `/s/${schoolSlug}/students`, icon: GraduationCap, perm: "students.view", feature: MODULE_FEATURE_CODES.students },
     { name: "Attendance", path: `/s/${schoolSlug}/attendance`, icon: CalendarCheck, perm: "attendance.view", feature: MODULE_FEATURE_CODES.attendance },
     { name: "Academics", path: `/s/${schoolSlug}/academics`, icon: BookOpen, perm: "academics.view", feature: MODULE_FEATURE_CODES.academics },
+    { name: "Curriculum", path: `/s/${schoolSlug}/curriculum`, icon: BookMarked, perm: "academics.view", feature: MODULE_FEATURE_CODES.academics },
+    { name: "Teacher workspace", path: `/s/${schoolSlug}/teacher`, icon: School, perm: "academics.view" },
     { name: "Exams", path: `/s/${schoolSlug}/exams`, icon: ClipboardList, perm: "exams.view", feature: MODULE_FEATURE_CODES.exams },
     { name: "Finance", path: `/s/${schoolSlug}/finance`, icon: DollarSign, perm: "finance.view", feature: MODULE_FEATURE_CODES.finance },
     { name: "HR", path: `/s/${schoolSlug}/hr`, icon: Briefcase, perm: "hr.view", feature: MODULE_FEATURE_CODES.hr },
@@ -51,7 +53,10 @@ export const Sidebar: React.FC = () => {
     { name: "Messaging", path: `/s/${schoolSlug}/messaging`, icon: Megaphone, perm: "messaging.view", feature: MODULE_FEATURE_CODES.messaging },
     { name: "Parent portal", path: `/s/${schoolSlug}/portal/login`, icon: ExternalLink, feature: MODULE_FEATURE_CODES.portal, external: true },
     { name: "Reports", path: `/s/${schoolSlug}/reports`, icon: FileBarChart, perm: "reports.view", feature: MODULE_FEATURE_CODES.reports },
+    { name: "AI Admin", path: `/s/${schoolSlug}/ai-admin`, icon: Sparkles, perm: "settings.view", feature: "ai_homework" },
     { name: "Users & Roles", path: `/s/${schoolSlug}/admin`, icon: Users, perm: "rbac.manage.roles" },
+    { name: "Campuses", path: `/s/${schoolSlug}/campuses`, icon: Building2, feature: "multi_campus" },
+    { name: "Security", path: `/s/${schoolSlug}/security`, icon: Shield, perm: "settings.view" },
     { name: "Settings", path: `/s/${schoolSlug}/settings`, icon: Settings, perm: "settings.view" },
   ];
   const links = allLinks.filter((l) => {

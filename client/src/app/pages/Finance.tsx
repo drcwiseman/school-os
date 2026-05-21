@@ -29,7 +29,11 @@ export const Finance: React.FC = () => {
   const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [tab, setTab] = useState<"overview" | "billing" | "collect" | "payments" | "debtors" | "receipts" | "fees">("overview");
+  const [tab, setTab] = useState<"overview" | "billing" | "collect" | "payments" | "debtors" | "receipts" | "fees" | "aging" | "accounting" | "statements">("overview");
+  const [aging, setAging] = useState<any>(null);
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [statements, setStatements] = useState<any>(null);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [collectForm, setCollectForm] = useState({ invoiceId: "", amount: "", method: "cash" });
   const [invoiceForm, setInvoiceForm] = useState({ studentId: "", invoiceNo: "", totalAmount: "", termId: "", dueDate: "" });
   const [bulkForm, setBulkForm] = useState({ termId: "", classId: "", feeStructureId: "" });
@@ -92,6 +96,17 @@ export const Finance: React.FC = () => {
         setClasses(cls.data ?? []);
       } else if (tab === "debtors") {
         setDebtors((await api.get(`/s/${schoolSlug}/api/finance/debtors`)).data ?? []);
+      } else if (tab === "aging") {
+        setAging((await api.get(`/s/${schoolSlug}/api/finance/arrears-aging`)).data);
+      } else if (tab === "accounting") {
+        const [acc, led] = await Promise.all([
+          api.get(`/s/${schoolSlug}/api/finance/accounts`),
+          api.get(`/s/${schoolSlug}/api/finance/ledger`),
+        ]);
+        setAccounts(acc.data ?? []);
+        setLedger(led.data ?? []);
+      } else if (tab === "statements") {
+        setStatements((await api.get(`/s/${schoolSlug}/api/finance/statements`)).data);
       } else {
         setReceipts((await api.get(`/s/${schoolSlug}/api/finance/receipts`)).data ?? []);
       }
@@ -257,6 +272,9 @@ export const Finance: React.FC = () => {
         <button type="button" onClick={() => setTab("fees")} className={tabBtn("fees")}>fee structures</button>
         <button type="button" onClick={() => setTab("debtors")} className={tabBtn("debtors")}>debtors</button>
         <button type="button" onClick={() => setTab("receipts")} className={tabBtn("receipts")}>receipts</button>
+        <button type="button" onClick={() => setTab("aging")} className={tabBtn("aging")}>arrears aging</button>
+        <button type="button" onClick={() => setTab("accounting")} className={tabBtn("accounting")}>accounting</button>
+        <button type="button" onClick={() => setTab("statements")} className={tabBtn("statements")}>statements</button>
       </div>
 
       {tab === "overview" && (
@@ -522,6 +540,68 @@ export const Finance: React.FC = () => {
       {tab === "receipts" && (
         <div className="card overflow-hidden">
           <ReceiptsSection receipts={receipts} formatMoney={formatMoney} />
+        </div>
+      )}
+
+      {tab === "aging" && aging && (
+        <div className="grid md:grid-cols-4 gap-4">
+          {(["current", "d30", "d60", "d90"] as const).map((k) => (
+            <div key={k} className="card p-4">
+              <p className="text-slate-500 text-sm capitalize">{k}</p>
+              <p className="text-2xl font-bold text-white">{(aging[k] ?? []).length}</p>
+              <p className="text-xs text-slate-500 mt-1">invoices</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "accounting" && (
+        <div className="space-y-4">
+          <div className="card p-4 flex gap-2">
+            <button type="button" className="btn-primary" onClick={async () => {
+              const code = window.prompt("Account code");
+              const name = window.prompt("Account name");
+              if (!code || !name) return;
+              await api.post(`/s/${schoolSlug}/api/finance/accounts`, { code, name });
+              load();
+            }}>Add account</button>
+          </div>
+          <div className="card p-4">
+            <h3 className="font-semibold text-white mb-2">Chart of accounts</h3>
+            {accounts.map((a) => <p key={a.id} className="text-slate-300 text-sm">{a.code} — {a.name}</p>)}
+          </div>
+          <div className="card overflow-hidden">
+            <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">General ledger</h3></div>
+            <table className="table">
+              <thead><tr><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead>
+              <tbody>
+                {ledger.map((l, i) => (
+                  <tr key={i}>
+                    <td>{l.entryDate}</td>
+                    <td>{l.accountCode} {l.accountName}</td>
+                    <td>{formatMoney(l.debitMinor)}</td>
+                    <td>{formatMoney(l.creditMinor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === "statements" && statements && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="card p-5">
+            <h3 className="font-semibold text-white">Profit & Loss</h3>
+            <p className="text-slate-400 mt-2">Revenue: {formatMoney(statements.profitAndLoss?.revenueMinor)}</p>
+            <p className="text-slate-400">Expenses: {formatMoney(statements.profitAndLoss?.expensesMinor)}</p>
+            <p className="text-white font-bold mt-2">Net: {formatMoney(statements.profitAndLoss?.netMinor)}</p>
+          </div>
+          <div className="card p-5">
+            <h3 className="font-semibold text-white">Balance sheet (summary)</h3>
+            <p className="text-slate-400 mt-2">Assets: {formatMoney(statements.balanceSheet?.assetsMinor)}</p>
+            <p className="text-slate-400">Liabilities: {formatMoney(statements.balanceSheet?.liabilitiesMinor)}</p>
+          </div>
         </div>
       )}
     </div>
