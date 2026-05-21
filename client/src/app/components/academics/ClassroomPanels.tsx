@@ -162,28 +162,82 @@ export const LessonLogPanel: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const [logs, setLogs] = useState<any[]>([]);
-  const [form, setForm] = useState({ classId: "", topic: "", notes: "" });
+  const [progress, setProgress] = useState<any[]>([]);
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+  const [subjects, setSubjects] = useState<{ id: string; name: string }[]>([]);
+  const [filterClass, setFilterClass] = useState("");
+  const [form, setForm] = useState({ classId: "", subjectId: "", topic: "", notes: "", progressPercent: "0" });
 
-  const load = () => api.get(`/s/${schoolSlug}/api/academics/lesson-logs`).then((r) => setLogs(r.data ?? []));
-  useEffect(() => { load(); }, [schoolSlug]);
+  const load = () => {
+    api.get(`/s/${schoolSlug}/api/academics/lesson-logs`).then((r) => setLogs(r.data ?? []));
+    const q = filterClass ? `?classId=${filterClass}` : "";
+    api.get(`/s/${schoolSlug}/api/academics/lesson-logs/progress${q}`).then((r) => setProgress(r.data ?? []));
+  };
+
+  useEffect(() => {
+    Promise.all([
+      api.get(`/s/${schoolSlug}/api/academics/classes`),
+      api.get(`/s/${schoolSlug}/api/academics/subjects`),
+    ]).then(([c, s]) => {
+      setClasses(c.data ?? []);
+      setSubjects(s.data ?? []);
+    });
+    load();
+  }, [schoolSlug, filterClass]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.post(`/s/${schoolSlug}/api/academics/lesson-logs`, form);
+    await api.post(`/s/${schoolSlug}/api/academics/lesson-logs`, {
+      ...form,
+      progressPercent: Number(form.progressPercent) || 0,
+      subjectId: form.subjectId || undefined,
+    });
     toast("Logged", "success");
     load();
   };
 
   return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      <form onSubmit={submit} className="card p-5 space-y-3">
-        <h3 className="font-semibold text-white">Lesson tracking</h3>
-        <input className="input" placeholder="Class UUID" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} />
-        <input className="input" placeholder="Topic" required value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} />
-        <textarea className="input" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-        <button type="submit" className="btn-primary">Log lesson</button>
-      </form>
-      <div className="card p-5 text-sm text-slate-300">{logs.map((l) => <p key={l.id}>{l.topic}</p>)}</div>
+    <div className="space-y-6">
+      <div className="grid lg:grid-cols-2 gap-6">
+        <form onSubmit={submit} className="card p-5 space-y-3">
+          <h3 className="font-semibold text-white">Lesson tracking</h3>
+          <select className="input" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}>
+            <option value="">Class…</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select className="input" value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })}>
+            <option value="">Subject…</option>
+            {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input className="input" placeholder="Topic" required value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} />
+          <textarea className="input" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <div>
+            <label className="label">Progress % for this subject</label>
+            <input className="input" type="number" min={0} max={100} value={form.progressPercent} onChange={(e) => setForm({ ...form, progressPercent: e.target.value })} />
+          </div>
+          <button type="submit" className="btn-primary">Log lesson</button>
+        </form>
+        <div className="card p-5">
+          <h3 className="font-semibold text-white mb-3">Progress by subject</h3>
+          <select className="input mb-3" value={filterClass} onChange={(e) => setFilterClass(e.target.value)}>
+            <option value="">All classes</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <ul className="space-y-2 text-sm">
+            {progress.map((p, i) => (
+              <li key={i} className="flex justify-between border-b border-slate-800 pb-2">
+                <span className="text-slate-300">{p.subjectName ?? "General"} · {p.topicCount} lessons</span>
+                <span className="text-primary-300 font-medium">{p.avgProgress}%</span>
+              </li>
+            ))}
+            {!progress.length && <p className="text-slate-500">No lesson data yet.</p>}
+          </ul>
+        </div>
+      </div>
+      <div className="card p-5 text-sm text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+        <h4 className="text-white font-medium mb-2">Recent logs</h4>
+        {logs.map((l) => <p key={l.id}>{l.topic} — {l.progressPercent ?? 0}%</p>)}
+      </div>
     </div>
   );
 };

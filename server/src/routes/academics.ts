@@ -5,9 +5,12 @@ import {
   academicYears, terms, classes, streams, subjects, rooms, teacherAssignments,
   timetables, timetablePeriods, assignments, assignmentSubmissions,
   students, studentClassHistory, seatingLayouts, lessonLogs, smartDevices, users,
-  studentMaterials, onlineClassLinks,
+  studentMaterials, onlineClassLinks, onlineClassAttendance,
+  attendanceSessions, attendanceRecords,
 } from "../db/schema";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { writeTenantFile, resolveTenantFile } from "../lib/uploads";
+import { ConflictError } from "../middleware/error";
 import { pushCampusFilter } from "../lib/campus-scope";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
@@ -221,8 +224,64 @@ router.post("/assignments/:id/submit", ...guard, requirePermission("academics.vi
       const tenant = (req as any).tenant;
       const [row] = await db.insert(assignmentSubmissions).values({
         tenantId: tenant.id, assignmentId: req.params.id, studentId: req.body.studentId, content: req.body.content,
+        status: "submitted",
       }).returning();
       res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  }
+);
+
+router.get("/assignments/:id/submissions", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select({
+      id: assignmentSubmissions.id,
+      studentId: assignmentSubmissions.studentId,
+      content: assignmentSubmissions.content,
+      score: assignmentSubmissions.score,
+      maxScore: assignmentSubmissions.maxScore,
+      feedback: assignmentSubmissions.feedback,
+      status: assignmentSubmissions.status,
+      submittedAt: assignmentSubmissions.submittedAt,
+      gradedAt: assignmentSubmissions.gradedAt,
+      firstName: students.firstName,
+      lastName: students.lastName,
+      admissionNumber: students.admissionNumber,
+    })
+      .from(assignmentSubmissions)
+      .innerJoin(students, eq(students.id, assignmentSubmissions.studentId))
+      .where(and(eq(assignmentSubmissions.assignmentId, req.params.id), eq(assignmentSubmissions.tenantId, tenant.id)))
+      .orderBy(desc(assignmentSubmissions.submittedAt));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.patch("/assignments/submissions/:submissionId/grade", ...guard, requirePermission("academics.manage"),
+  validate({
+    body: z.object({
+      score: z.number().min(0),
+      maxScore: z.number().min(1).optional(),
+      feedback: z.string().optional(),
+      status: z.enum(["graded", "returned"]).optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [row] = await db.update(assignmentSubmissions).set({
+        score: String(req.body.score),
+        maxScore: req.body.maxScore != null ? String(req.body.maxScore) : undefined,
+        feedback: req.body.feedback ?? null,
+        status: req.body.status ?? "graded",
+        gradedAt: new Date(),
+        gradedBy: user.id,
+      }).where(and(
+        eq(assignmentSubmissions.id, req.params.submissionId),
+        eq(assignmentSubmissions.tenantId, tenant.id),
+      )).returning();
+      if (!row) throw new NotFoundError("Submission not found");
+      res.json({ success: true, data: row });
     } catch (e) { next(e); }
   }
 );
@@ -325,7 +384,13 @@ router.get("/lesson-logs", ...guard, requirePermission("academics.view"), async 
 });
 
 router.post("/lesson-logs", ...guard, requirePermission("academics.manage"),
-  validate({ body: z.object({ classId: z.string().uuid(), subjectId: z.string().uuid().optional(), topic: z.string(), notes: z.string().optional() }) }),
+  validate({ body: z.object({
+    classId: z.string().uuid(),
+    subjectId: z.string().uuid().optional(),
+    topic: z.string(),
+    notes: z.string().optional(),
+    progressPercent: z.number().int().min(0).max(100).optional(),
+  }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
@@ -335,6 +400,27 @@ router.post("/lesson-logs", ...guard, requirePermission("academics.manage"),
     } catch (e) { next(e); }
   }
 );
+
+router.get("/lesson-logs/progress", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const classId = String(req.query.classId ?? "");
+    const conditions = [eq(lessonLogs.tenantId, tenant.id)];
+    if (classId) conditions.push(eq(lessonLogs.classId, classId));
+    const rows = await db.select({
+      subjectId: lessonLogs.subjectId,
+      subjectName: subjects.name,
+      topicCount: sql<number>`count(*)::int`,
+      avgProgress: sql<number>`coalesce(avg(${lessonLogs.progressPercent}), 0)::int`,
+      lastTopic: sql<string>`max(${lessonLogs.topic})`,
+    })
+      .from(lessonLogs)
+      .leftJoin(subjects, eq(subjects.id, lessonLogs.subjectId))
+      .where(and(...conditions))
+      .groupBy(lessonLogs.subjectId, subjects.name);
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
 
 router.get("/smart-devices", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
@@ -384,21 +470,60 @@ router.get("/materials", ...guard, requirePermission("academics.view"), async (r
 });
 
 router.post("/materials", ...guard, requirePermission("academics.manage"),
-  validate({ body: z.object({ title: z.string().min(1), subject: z.string().optional(), url: z.string().optional(), classId: z.string().uuid().optional() }) }),
+  validate({ body: z.object({
+    title: z.string().min(1),
+    subject: z.string().optional(),
+    subjectId: z.string().uuid().optional(),
+    url: z.string().optional(),
+    classId: z.string().uuid().optional(),
+    folder: z.string().optional(),
+    fileName: z.string().optional(),
+    contentBase64: z.string().optional(),
+    mimeType: z.string().optional(),
+  }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      let filePath: string | null = null;
+      let fileName: string | null = req.body.fileName ?? null;
+      let mimeType: string | null = req.body.mimeType ?? null;
+      if (req.body.contentBase64 && req.body.fileName) {
+        const { validateUpload } = await import("../middleware/upload");
+        const { safeName, size } = validateUpload(req.body.fileName, req.body.mimeType, req.body.contentBase64);
+        const buffer = Buffer.from(req.body.contentBase64, "base64");
+        if (buffer.length !== size) throw new ConflictError("Invalid file payload");
+        filePath = writeTenantFile(tenant.id, ["materials"], `${Date.now()}_${safeName}`, buffer);
+        fileName = safeName;
+        mimeType = req.body.mimeType ?? null;
+      }
       const [row] = await db.insert(studentMaterials).values({
         tenantId: tenant.id,
         title: req.body.title,
         subject: req.body.subject ?? null,
+        subjectId: req.body.subjectId ?? null,
         url: req.body.url || null,
         classId: req.body.classId ?? null,
+        folder: req.body.folder ?? "general",
+        filePath,
+        fileName,
+        mimeType,
       }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
   },
 );
+
+router.get("/materials/:id/file", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [mat] = await db.select().from(studentMaterials).where(and(
+      eq(studentMaterials.id, req.params.id),
+      eq(studentMaterials.tenantId, tenant.id),
+    )).limit(1);
+    if (!mat?.filePath) throw new NotFoundError("File not found");
+    res.sendFile(resolveTenantFile(tenant.id, mat.filePath));
+  } catch (e) { next(e); }
+});
 
 router.delete("/materials/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
   try {
@@ -419,7 +544,14 @@ router.get("/online-classes", ...guard, requirePermission("academics.view"), asy
 });
 
 router.post("/online-classes", ...guard, requirePermission("academics.manage"),
-  validate({ body: z.object({ title: z.string().min(1), url: z.string().url(), classId: z.string().uuid().optional(), scheduledAt: z.string().optional() }) }),
+  validate({ body: z.object({
+    title: z.string().min(1),
+    url: z.string().url(),
+    classId: z.string().uuid().optional(),
+    subjectId: z.string().uuid().optional(),
+    scheduledAt: z.string().optional(),
+    durationMinutes: z.number().int().optional(),
+  }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
@@ -428,12 +560,177 @@ router.post("/online-classes", ...guard, requirePermission("academics.manage"),
         title: req.body.title,
         url: req.body.url,
         classId: req.body.classId ?? null,
+        subjectId: req.body.subjectId ?? null,
         scheduledAt: req.body.scheduledAt ? new Date(req.body.scheduledAt) : null,
+        durationMinutes: req.body.durationMinutes ?? 60,
       }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
   },
 );
+
+router.get("/online-classes/:id/attendance", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [link] = await db.select().from(onlineClassLinks).where(and(
+      eq(onlineClassLinks.id, req.params.id),
+      eq(onlineClassLinks.tenantId, tenant.id),
+    )).limit(1);
+    if (!link) throw new NotFoundError("Live class not found");
+    const rows = await db.select({
+      id: onlineClassAttendance.id,
+      studentId: onlineClassAttendance.studentId,
+      status: onlineClassAttendance.status,
+      joinedAt: onlineClassAttendance.joinedAt,
+      performanceScore: onlineClassAttendance.performanceScore,
+      notes: onlineClassAttendance.notes,
+      firstName: students.firstName,
+      lastName: students.lastName,
+      admissionNumber: students.admissionNumber,
+    })
+      .from(onlineClassAttendance)
+      .innerJoin(students, eq(students.id, onlineClassAttendance.studentId))
+      .where(and(eq(onlineClassAttendance.onlineClassId, link.id), eq(onlineClassAttendance.tenantId, tenant.id)));
+    res.json({ success: true, data: { link, attendance: rows } });
+  } catch (e) { next(e); }
+});
+
+router.post("/online-classes/:id/attendance", ...guard, requirePermission("academics.manage"),
+  validate({
+    body: z.object({
+      records: z.array(z.object({
+        studentId: z.string().uuid(),
+        status: z.enum(["present", "absent", "late", "excused"]).default("present"),
+        performanceScore: z.number().int().min(0).max(100).optional(),
+        notes: z.string().optional(),
+      })),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [link] = await db.select().from(onlineClassLinks).where(and(
+        eq(onlineClassLinks.id, req.params.id),
+        eq(onlineClassLinks.tenantId, tenant.id),
+      )).limit(1);
+      if (!link) throw new NotFoundError("Live class not found");
+      const saved = [];
+      for (const rec of req.body.records) {
+        const [existing] = await db.select().from(onlineClassAttendance).where(and(
+          eq(onlineClassAttendance.onlineClassId, link.id),
+          eq(onlineClassAttendance.studentId, rec.studentId),
+        )).limit(1);
+        if (existing) {
+          const [row] = await db.update(onlineClassAttendance).set({
+            status: rec.status,
+            performanceScore: rec.performanceScore ?? null,
+            notes: rec.notes ?? null,
+            markedBy: user.id,
+            joinedAt: existing.joinedAt ?? new Date(),
+          }).where(eq(onlineClassAttendance.id, existing.id)).returning();
+          saved.push(row);
+        } else {
+          const [row] = await db.insert(onlineClassAttendance).values({
+            tenantId: tenant.id,
+            onlineClassId: link.id,
+            studentId: rec.studentId,
+            status: rec.status,
+            performanceScore: rec.performanceScore ?? null,
+            notes: rec.notes ?? null,
+            markedBy: user.id,
+            joinedAt: new Date(),
+          }).returning();
+          saved.push(row);
+        }
+      }
+      res.json({ success: true, data: saved });
+    } catch (e) { next(e); }
+  }
+);
+
+router.post("/online-classes/:id/init-roster", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [link] = await db.select().from(onlineClassLinks).where(and(
+      eq(onlineClassLinks.id, req.params.id),
+      eq(onlineClassLinks.tenantId, tenant.id),
+    )).limit(1);
+    if (!link?.classId) throw new NotFoundError("Live class needs a class to load roster");
+    const classStudents = await db.select({ id: students.id })
+      .from(studentClassHistory)
+      .innerJoin(students, eq(students.id, studentClassHistory.studentId))
+      .where(and(
+        eq(studentClassHistory.tenantId, tenant.id),
+        eq(studentClassHistory.classId, link.classId),
+        isNull(studentClassHistory.toDate),
+        isNull(students.deletedAt),
+      ));
+    const created = [];
+    for (const s of classStudents) {
+      const [ex] = await db.select().from(onlineClassAttendance).where(and(
+        eq(onlineClassAttendance.onlineClassId, link.id),
+        eq(onlineClassAttendance.studentId, s.id),
+      )).limit(1);
+      if (!ex) {
+        const [row] = await db.insert(onlineClassAttendance).values({
+          tenantId: tenant.id,
+          onlineClassId: link.id,
+          studentId: s.id,
+          status: "absent",
+        }).returning();
+        created.push(row);
+      }
+    }
+    res.json({ success: true, data: { initialized: created.length } });
+  } catch (e) { next(e); }
+});
+
+router.post("/online-classes/:id/sync-attendance", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [link] = await db.select().from(onlineClassLinks).where(and(
+      eq(onlineClassLinks.id, req.params.id),
+      eq(onlineClassLinks.tenantId, tenant.id),
+    )).limit(1);
+    if (!link?.classId) throw new NotFoundError("Class required to sync attendance");
+    const sessionDate = link.scheduledAt ?? new Date();
+    let sessionId = link.attendanceSessionId;
+    if (!sessionId) {
+      const [session] = await db.insert(attendanceSessions).values({
+        tenantId: tenant.id,
+        classId: link.classId,
+        date: sessionDate,
+        periodNo: 99,
+        takenBy: user.id,
+      }).returning();
+      sessionId = session.id;
+      await db.update(onlineClassLinks).set({ attendanceSessionId: sessionId }).where(eq(onlineClassLinks.id, link.id));
+    }
+    const oca = await db.select().from(onlineClassAttendance).where(eq(onlineClassAttendance.onlineClassId, link.id));
+    let synced = 0;
+    for (const row of oca) {
+      const attStatus = row.status === "late" ? "late" : row.status === "absent" ? "absent" : "present";
+      const [ex] = await db.select().from(attendanceRecords).where(and(
+        eq(attendanceRecords.sessionId, sessionId!),
+        eq(attendanceRecords.studentId, row.studentId),
+      )).limit(1);
+      if (ex) {
+        await db.update(attendanceRecords).set({ status: attStatus as "present" | "absent" | "late" }).where(eq(attendanceRecords.id, ex.id));
+      } else {
+        await db.insert(attendanceRecords).values({
+          tenantId: tenant.id,
+          sessionId: sessionId!,
+          studentId: row.studentId,
+          status: attStatus as "present" | "absent" | "late",
+        });
+      }
+      synced += 1;
+    }
+    res.json({ success: true, data: { sessionId, synced } });
+  } catch (e) { next(e); }
+});
 
 router.delete("/online-classes/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
   try {

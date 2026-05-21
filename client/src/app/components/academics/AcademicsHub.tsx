@@ -38,7 +38,7 @@ export const ACADEMIC_MODULES = [
     title: "Homework Management",
     description: "Assign, collect, and evaluate homework submissions efficiently.",
     icon: ClipboardList,
-    tab: "assignments" as const,
+    tab: "homework" as const,
   },
   {
     id: "lessons",
@@ -59,7 +59,7 @@ export const ACADEMIC_MODULES = [
     title: "Events",
     description: "Plan and share details of academic and cultural events with stakeholders.",
     icon: CalendarDays,
-    externalPath: "messaging" as const,
+    tab: "events" as const,
   },
 ] as const;
 

@@ -27,6 +27,7 @@ import inventoryRoutes from "./inventory";
 import transportRoutes from "./transport";
 import boardingRoutes from "./boarding";
 import messagingRoutes from "./messaging";
+import eventsRoutes from "./events";
 import reportsRoutes from "./reports";
 import portalRoutes from "./portal";
 import settingsRoutes from "./settings";
@@ -93,6 +94,7 @@ router.use("/s/:schoolSlug/api/inventory",   ...schoolApi, ...featureGuard("inve
 router.use("/s/:schoolSlug/api/transport",   ...schoolApi, ...featureGuard("transport"), transportRoutes);
 router.use("/s/:schoolSlug/api/boarding",    ...schoolApi, ...featureGuard("boarding"), boardingRoutes);
 router.use("/s/:schoolSlug/api/messaging",   ...schoolApi, ...featureGuard("messaging"), messagingRoutes);
+router.use("/s/:schoolSlug/api/events",      ...schoolApi, ...featureGuard("messaging"), eventsRoutes);
 router.use("/s/:schoolSlug/api/reports",     ...schoolApi, ...featureGuard("reports"), reportsRoutes);
 router.use("/s/:schoolSlug/api/portal",      resolveTenant, requireTenantFeature("portal_enabled"), portalRoutes);
 router.use("/s/:schoolSlug/api/saas",        ...schoolApi, saasRoutes);

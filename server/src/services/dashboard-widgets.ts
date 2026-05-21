@@ -1,6 +1,6 @@
 import { db } from "../db";
 import {
-  students, invoices, payments, expenses, announcements, portalMessages, auditLogs,
+  students, invoices, payments, expenses, announcements, schoolEvents, portalMessages, auditLogs,
 } from "../db/schema";
 import { eq, and, isNull, sql, gte, desc, isNotNull, lt } from "drizzle-orm";
 import { campusCondition } from "../lib/campus-scope";
@@ -73,7 +73,20 @@ export async function buildDashboardWidgets(tenantId: string, campusId?: string)
   const inThirtyDays = new Date(now);
   inThirtyDays.setDate(inThirtyDays.getDate() + 30);
 
-  const upcoming = await db
+  const upcomingSchool = await safeDb("widgets-school-events", [] as { id: string; title: string; at: Date }[], async () =>
+    db.select({ id: schoolEvents.id, title: schoolEvents.title, at: schoolEvents.startsAt })
+      .from(schoolEvents)
+      .where(and(
+        eq(schoolEvents.tenantId, tenantId),
+        eq(schoolEvents.published, true),
+        gte(schoolEvents.startsAt, now),
+        lt(schoolEvents.startsAt, inThirtyDays),
+      ))
+      .orderBy(schoolEvents.startsAt)
+      .limit(8),
+  );
+
+  const upcomingAnnouncements = await db
     .select({ id: announcements.id, title: announcements.title, at: announcements.publishAt })
     .from(announcements)
     .where(and(
@@ -84,6 +97,13 @@ export async function buildDashboardWidgets(tenantId: string, campusId?: string)
     ))
     .orderBy(announcements.publishAt)
     .limit(8);
+
+  const upcoming = [
+    ...upcomingSchool.map((e) => ({ id: e.id, title: e.title, at: e.at })),
+    ...upcomingAnnouncements.filter((e) => e.at).map((e) => ({ id: e.id, title: e.title, at: e.at! })),
+  ]
+    .sort((a, b) => a.at.getTime() - b.at.getTime())
+    .slice(0, 8);
 
   const recent = await db
     .select({ id: announcements.id, title: announcements.title, createdAt: announcements.createdAt })

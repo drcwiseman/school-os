@@ -4,9 +4,11 @@ import { StreamsPanel } from "../components/StreamsPanel";
 import { TeacherAssignPanel, RosterPanel, TimetableBuilderPanel, LessonLogPanel, SmartDevicesPanel, SeatingPanel } from "../components/academics/ClassroomPanels";
 import { AcademicsHub } from "../components/academics/AcademicsHub";
 import { OnlineClassesPanel, StudyMaterialsPanel } from "../components/academics/LearningResourcesPanels";
+import { EventsPanel } from "../components/academics/EventsPanel";
+import { HomeworkGradingPanel } from "../components/academics/HomeworkGradingPanel";
 import { useParams } from "react-router-dom";
 
-const TABS = ["overview", "live", "materials", "years", "terms", "classes", "streams", "teachers", "roster", "seating", "timetable", "lessons", "devices", "subjects", "rooms", "assignments"] as const;
+const TABS = ["overview", "live", "materials", "homework", "grading", "events", "years", "terms", "classes", "streams", "teachers", "roster", "seating", "timetable", "lessons", "devices", "subjects", "rooms"] as const;
 
 export const Academics: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
@@ -28,6 +30,8 @@ export const Academics: React.FC = () => {
       )}
       {tab === "live" && <OnlineClassesPanel />}
       {tab === "materials" && <StudyMaterialsPanel />}
+      {tab === "grading" && <HomeworkGradingPanel />}
+      {tab === "events" && <EventsPanel />}
 
       {tab === "years" && (
         <ModuleCrud title="Academic years" apiPath="academics/years"
@@ -82,8 +86,8 @@ export const Academics: React.FC = () => {
           columns={[{ key: "name", label: "Room" }, { key: "capacity", label: "Capacity" }]}
           fields={[{ name: "name", label: "Name", required: true }, { name: "capacity", label: "Capacity", type: "number" }]} />
       )}
-      {tab === "assignments" && (
-        <ModuleCrud title="Assignments" apiPath="academics/assignments"
+      {tab === "homework" && (
+        <ModuleCrud title="Homework assignments" apiPath="academics/assignments"
           columns={[{ key: "title", label: "Title" }, { key: "description", label: "Details", render: (r) => (r.description ?? "").slice(0, 40) }, { key: "dueDate", label: "Due", render: (r) => r.dueDate ? new Date(r.dueDate).toLocaleDateString() : "—" }]}
           fields={[
             { name: "title", label: "Title", required: true },
@@ -102,6 +106,8 @@ function TabBar({ tab, setTab }: { tab: string; setTab: (t: (typeof TABS)[number
     overview: "Overview",
     live: "Live classes",
     materials: "Study material",
+    grading: "Grade homework",
+    events: "Events",
     years: "Years",
     terms: "Terms",
     classes: "Classes",
@@ -114,7 +120,7 @@ function TabBar({ tab, setTab }: { tab: string; setTab: (t: (typeof TABS)[number
     devices: "Devices",
     subjects: "Subjects",
     rooms: "Rooms",
-    assignments: "Homework",
+    homework: "Create homework",
   };
   return (
     <div className="flex gap-2 flex-wrap">

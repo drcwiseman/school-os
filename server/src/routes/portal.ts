@@ -6,6 +6,7 @@ import {
   reportCards, announcements, assignments, attendanceRecords, attendanceSessions,
   portalMessages, routeAssignments, transportRoutes, transportStops, tenantSettings,
   curriculumFrameworks, curriculumUnits, cbtPapers, timetablePeriods, studentMaterials, onlineClassLinks,
+  onlineClassAttendance, assignmentSubmissions, studentClassHistory, schoolEvents,
   vehicleGpsPings,
 } from "../db/schema";
 import { adminAssistantReply, studyRecommendations } from "../services/ai-admin";
@@ -189,7 +190,21 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
       const studentId = principal.account.studentId;
       const [student] = await db.select().from(students).where(and(eq(students.id, studentId), eq(students.tenantId, tenant.id))).limit(1);
       if (!student) throw new NotFoundError("Student not found");
-      const classAssignments = await db.select().from(assignments).where(eq(assignments.tenantId, tenant.id)).orderBy(desc(assignments.dueDate)).limit(20);
+      const [enrollment] = await db.select().from(studentClassHistory).where(and(
+        eq(studentClassHistory.studentId, student.id),
+        eq(studentClassHistory.tenantId, tenant.id),
+        isNull(studentClassHistory.toDate),
+      )).orderBy(desc(studentClassHistory.fromDate)).limit(1);
+      const classAssignments = enrollment
+        ? await db.select().from(assignments).where(and(
+            eq(assignments.tenantId, tenant.id),
+            eq(assignments.classId, enrollment.classId),
+          )).orderBy(desc(assignments.dueDate)).limit(20)
+        : [];
+      const mySubmissions = await db.select().from(assignmentSubmissions).where(and(
+        eq(assignmentSubmissions.tenantId, tenant.id),
+        eq(assignmentSubmissions.studentId, student.id),
+      ));
       let reportCard: unknown = null;
       if (resultsVisible) {
         const [rc] = await db.select().from(reportCards).where(and(eq(reportCards.studentId, student.id), eq(reportCards.published, true))).orderBy(desc(reportCards.createdAt)).limit(1);
@@ -204,7 +219,10 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
         .where(and(eq(attendanceRecords.tenantId, tenant.id), eq(attendanceRecords.studentId, student.id)))
         .orderBy(desc(attendanceSessions.date))
         .limit(30);
-      res.json({ success: true, data: { student, assignments: classAssignments, reportCard, attendance } });
+      res.json({
+        success: true,
+        data: { student, assignments: classAssignments, submissions: mySubmissions, reportCard, attendance },
+      });
     }
   } catch (e) { next(e); }
 });
@@ -463,6 +481,101 @@ router.get("/student/online-classes", requirePortalAuth, async (req, res, next) 
   try {
     const tenant = (req as any).tenant;
     res.json({ success: true, data: await db.select().from(onlineClassLinks).where(eq(onlineClassLinks.tenantId, tenant.id)).limit(30) });
+  } catch (e) { next(e); }
+});
+
+router.post("/student/online-classes/:id/join", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    if (principal.kind !== "student") throw new ForbiddenError("Students only");
+    const studentId = principal.account.studentId;
+    const [link] = await db.select().from(onlineClassLinks).where(and(
+      eq(onlineClassLinks.id, req.params.id),
+      eq(onlineClassLinks.tenantId, tenant.id),
+    )).limit(1);
+    if (!link) throw new NotFoundError("Class not found");
+    const [ex] = await db.select().from(onlineClassAttendance).where(and(
+      eq(onlineClassAttendance.onlineClassId, link.id),
+      eq(onlineClassAttendance.studentId, studentId),
+    )).limit(1);
+    if (ex) {
+      const [row] = await db.update(onlineClassAttendance).set({
+        status: "present",
+        joinedAt: new Date(),
+      }).where(eq(onlineClassAttendance.id, ex.id)).returning();
+      return res.json({ success: true, data: row });
+    }
+    const [row] = await db.insert(onlineClassAttendance).values({
+      tenantId: tenant.id,
+      onlineClassId: link.id,
+      studentId,
+      status: "present",
+      joinedAt: new Date(),
+    }).returning();
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+router.post("/student/assignments/:id/submit", requirePortalAuth,
+  validate({ body: z.object({ content: z.string().min(1) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const principal = (req as any).portalPrincipal;
+      if (principal.kind !== "student") throw new ForbiddenError("Students only");
+      const studentId = principal.account.studentId;
+      const [a] = await db.select().from(assignments).where(and(
+        eq(assignments.id, req.params.id),
+        eq(assignments.tenantId, tenant.id),
+      )).limit(1);
+      if (!a) throw new NotFoundError("Assignment not found");
+      const [ex] = await db.select().from(assignmentSubmissions).where(and(
+        eq(assignmentSubmissions.assignmentId, a.id),
+        eq(assignmentSubmissions.studentId, studentId),
+      )).limit(1);
+      if (ex) {
+        const [row] = await db.update(assignmentSubmissions).set({
+          content: req.body.content,
+          submittedAt: new Date(),
+          status: "submitted",
+        }).where(eq(assignmentSubmissions.id, ex.id)).returning();
+        return res.json({ success: true, data: row });
+      }
+      const [row] = await db.insert(assignmentSubmissions).values({
+        tenantId: tenant.id,
+        assignmentId: a.id,
+        studentId,
+        content: req.body.content,
+        status: "submitted",
+      }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/student/events", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const now = new Date();
+    const rows = await db.select().from(schoolEvents).where(and(
+      eq(schoolEvents.tenantId, tenant.id),
+      eq(schoolEvents.published, true),
+    )).orderBy(schoolEvents.startsAt).limit(30);
+    res.json({ success: true, data: rows.filter((e) => !e.endsAt || e.endsAt >= now) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/materials/:id/file", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [mat] = await db.select().from(studentMaterials).where(and(
+      eq(studentMaterials.id, req.params.id),
+      eq(studentMaterials.tenantId, tenant.id),
+    )).limit(1);
+    if (!mat?.filePath) throw new NotFoundError("File not found");
+    const { resolveTenantFile } = await import("../lib/uploads");
+    res.sendFile(resolveTenantFile(tenant.id, mat.filePath));
   } catch (e) { next(e); }
 });
 

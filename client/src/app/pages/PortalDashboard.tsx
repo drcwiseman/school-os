@@ -26,6 +26,7 @@ export const PortalDashboard: React.FC = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [timetable, setTimetable] = useState<any[]>([]);
   const [onlineClasses, setOnlineClasses] = useState<any[]>([]);
+  const [schoolEvents, setSchoolEvents] = useState<any[]>([]);
 
   const load = async () => {
     try {
@@ -50,10 +51,12 @@ export const PortalDashboard: React.FC = () => {
       api.get(`/s/${schoolSlug}/api/portal/student/materials`).catch(() => ({ data: [] })),
       api.get(`/s/${schoolSlug}/api/portal/student/timetable`).catch(() => ({ data: [] })),
       api.get(`/s/${schoolSlug}/api/portal/student/online-classes`).catch(() => ({ data: [] })),
-    ]).then(([m, t, o]) => {
+      api.get(`/s/${schoolSlug}/api/portal/student/events`).catch(() => ({ data: [] })),
+    ]).then(([m, t, o, ev]) => {
       setMaterials(m.data ?? []);
       setTimetable(t.data ?? []);
       setOnlineClasses(o.data ?? []);
+      setSchoolEvents(ev.data ?? []);
     });
   }, [schoolSlug, account?.type]);
 
@@ -286,12 +289,12 @@ export const PortalDashboard: React.FC = () => {
                 <button type="button" className="btn-ghost text-xs" onClick={() => downloadReportCard(data.reportCard.id)}>Download PDF</button>
               </PortalCard>
             )}
-            <PortalCard title="Assignments">
-              <ul className="text-slate-300 text-sm space-y-1">
-                {(data.assignments ?? []).map((a: any) => (
-                  <li key={a.id}>{a.title} — due {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "—"}</li>
-                ))}
-              </ul>
+            <PortalCard title="Homework">
+              <HomeworkPortalList
+                schoolSlug={schoolSlug!}
+                assignments={data.assignments ?? []}
+                submissions={data.submissions ?? []}
+              />
             </PortalCard>
             <PortalCard title="Attendance">
               <AttendanceList rows={data.attendance ?? []} />
@@ -310,15 +313,44 @@ export const PortalDashboard: React.FC = () => {
             <PortalCard title="Study materials">
               <ul className="text-slate-300 text-sm space-y-1">
                 {materials.map((m: any) => (
-                  <li key={m.id}>{m.title}{m.url ? <> — <a href={m.url} className="text-primary-400" target="_blank" rel="noreferrer">open</a></> : null}</li>
+                  <li key={m.id}>
+                    {m.title}
+                    {m.filePath ? (
+                      <> — <a href={`/s/${schoolSlug}/api/portal/student/materials/${m.id}/file`} className="text-primary-400" target="_blank" rel="noreferrer">download</a></>
+                    ) : m.url ? (
+                      <> — <a href={m.url} className="text-primary-400" target="_blank" rel="noreferrer">open</a></>
+                    ) : null}
+                  </li>
                 ))}
               </ul>
             </PortalCard>
             <PortalCard title="Online classes">
-              <ul className="text-slate-300 text-sm space-y-1">
+              <ul className="text-slate-300 text-sm space-y-2">
                 {onlineClasses.map((c: any) => (
-                  <li key={c.id}><a href={c.url} className="text-primary-400" target="_blank" rel="noreferrer">{c.title}</a></li>
+                  <li key={c.id} className="flex flex-wrap items-center gap-2">
+                    <a href={c.url} className="text-primary-400" target="_blank" rel="noreferrer">{c.title}</a>
+                    <button
+                      type="button"
+                      className="text-xs btn-ghost py-0.5"
+                      onClick={async () => {
+                        await api.post(`/s/${schoolSlug}/api/portal/student/online-classes/${c.id}/join`, {});
+                      }}
+                    >
+                      Mark joined
+                    </button>
+                  </li>
                 ))}
+              </ul>
+            </PortalCard>
+            <PortalCard title="School events" icon={Calendar}>
+              <ul className="text-slate-300 text-sm space-y-1">
+                {schoolEvents.map((e: any) => (
+                  <li key={e.id}>
+                    <strong className="text-white">{e.title}</strong>
+                    <span className="text-slate-500 block text-xs capitalize">{e.eventType} · {new Date(e.startsAt).toLocaleString()}{e.venue ? ` · ${e.venue}` : ""}</span>
+                  </li>
+                ))}
+                {!schoolEvents.length && <p className="text-slate-500">No upcoming events.</p>}
               </ul>
             </PortalCard>
             <PortalCard title="AI tutor" icon={Sparkles}>
@@ -345,6 +377,57 @@ function PortalCard({ title, children, icon: Icon }: { title: string; children: 
       </h2>
       {children}
     </div>
+  );
+}
+
+function HomeworkPortalList({
+  schoolSlug,
+  assignments,
+  submissions,
+}: {
+  schoolSlug: string;
+  assignments: any[];
+  submissions: any[];
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const subByAssignment = Object.fromEntries(submissions.map((s: any) => [s.assignmentId, s]));
+
+  const submit = async (assignmentId: string) => {
+    const content = drafts[assignmentId]?.trim();
+    if (!content) return;
+    await api.post(`/s/${schoolSlug}/api/portal/student/assignments/${assignmentId}/submit`, { content });
+    window.location.reload();
+  };
+
+  if (!assignments.length) return <p className="text-slate-500 text-sm">No homework assigned.</p>;
+
+  return (
+    <ul className="text-slate-300 text-sm space-y-3">
+      {assignments.map((a: any) => {
+        const sub = subByAssignment[a.id];
+        return (
+          <li key={a.id} className="border-b border-slate-800 pb-2">
+            <p className="text-white font-medium">{a.title}</p>
+            <p className="text-xs text-slate-500">Due {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "—"}</p>
+            {sub ? (
+              <p className="text-xs text-emerald-400 mt-1">
+                Submitted · {sub.status}{sub.score != null ? ` · Score: ${sub.score}/${sub.maxScore ?? 100}` : ""}
+              </p>
+            ) : (
+              <div className="mt-2 space-y-1">
+                <textarea
+                  className="input text-sm min-h-[60px]"
+                  placeholder="Your answer…"
+                  value={drafts[a.id] ?? ""}
+                  onChange={(e) => setDrafts({ ...drafts, [a.id]: e.target.value })}
+                />
+                <button type="button" className="btn-primary text-xs" onClick={() => submit(a.id)}>Submit</button>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
