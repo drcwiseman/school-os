@@ -8,16 +8,15 @@ import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { NotFoundError } from "../middleware/error";
+import { safeList } from "../lib/safe-route";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
 
-router.get("/incidents", ...guard, requirePermission("discipline.view"), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(disciplineIncidents).where(eq(disciplineIncidents.tenantId, tenant.id)).orderBy(desc(disciplineIncidents.incidentDate)) });
-  } catch (e) { next(e); }
-});
+router.get("/incidents", ...guard, requirePermission("discipline.view"), safeList("discipline", [], async (req) => {
+  const tenant = (req as any).tenant;
+  return db.select().from(disciplineIncidents).where(eq(disciplineIncidents.tenantId, tenant.id)).orderBy(desc(disciplineIncidents.incidentDate));
+}));
 
 router.post("/incidents", ...guard, requirePermission("discipline.manage"),
   validate({ body: z.object({ studentId: z.string().uuid(), category: z.string(), description: z.string(), severity: z.string().optional() }) }),

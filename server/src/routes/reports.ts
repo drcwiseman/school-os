@@ -5,6 +5,7 @@ import { eq, and, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getCampusId, pushCampusFilter } from "../lib/campus-scope";
 import { validate } from "../utils/validate";
+import { safeList } from "../lib/safe-route";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -91,13 +92,10 @@ router.get("/pdf/payslip/:id", ...guard, requirePermission("reports.export"), as
   } catch (e) { next(e); }
 });
 
-router.get("/builder", ...guard, requirePermission("reports.view"), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    const rows = await db.select().from(savedReports).where(eq(savedReports.tenantId, tenant.id)).orderBy(desc(savedReports.createdAt));
-    res.json({ success: true, data: rows });
-  } catch (e) { next(e); }
-});
+router.get("/builder", ...guard, requirePermission("reports.view"), safeList("saved-reports", [], async (req) => {
+  const tenant = (req as any).tenant;
+  return db.select().from(savedReports).where(eq(savedReports.tenantId, tenant.id)).orderBy(desc(savedReports.createdAt));
+}));
 
 router.post("/builder", ...guard, requirePermission("reports.export"),
   validate({ body: z.object({ name: z.string().min(1), reportType: z.string().min(1), configJson: z.record(z.unknown()).optional() }) }),

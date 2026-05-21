@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { tenantSettings } from "../db/schema";
+import { tenantSettingsCoreColumns } from "../lib/tenant-settings-columns";
+import { safeDb } from "../lib/safe-db";
 import type { TenantSmtpSettings, TenantCommunicationsSettings } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
@@ -48,7 +50,27 @@ function mergeSmtp(
 router.get("/", ...guard, requirePermission("settings.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+    let settings = await safeDb("settings-full", null as typeof tenantSettings.$inferSelect | null, async () => {
+      const [row] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+      return row ?? null;
+    });
+    if (!settings) {
+      const [row] = await db.select(tenantSettingsCoreColumns).from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+      settings = row ? {
+        ...row,
+        smtpSettingsJson: {},
+        communicationsJson: {},
+        paymentProvidersJson: {},
+        securityJson: {},
+        brandingExtendedJson: {},
+        themeJson: {},
+        sidebarOrderJson: [],
+        admissionWorkflowJson: [],
+        onboardingChecklistJson: [],
+        curriculumFramework: null,
+        latePenaltyPercent: 0,
+      } as typeof tenantSettings.$inferSelect : null;
+    }
     if (!settings) throw new NotFoundError("Settings not found");
     const flags = await getTenantFeatureFlags(tenant.id);
     const smtpAllowed = await isTenantFeatureEnabled(tenant.id, "custom_smtp");

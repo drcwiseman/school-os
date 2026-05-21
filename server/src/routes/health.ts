@@ -7,16 +7,15 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
+import { safeList } from "../lib/safe-route";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
 
-router.get("/visits", ...guard, requirePermission("health.view"), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(sickbayVisits).where(eq(sickbayVisits.tenantId, tenant.id)).orderBy(desc(sickbayVisits.visitDate)) });
-  } catch (e) { next(e); }
-});
+router.get("/visits", ...guard, requirePermission("health.view"), safeList("health-visits", [], async (req) => {
+  const tenant = (req as any).tenant;
+  return db.select().from(sickbayVisits).where(eq(sickbayVisits.tenantId, tenant.id)).orderBy(desc(sickbayVisits.visitDate));
+}));
 
 router.post("/visits", ...guard, requirePermission("health.manage"),
   validate({ body: z.object({ studentId: z.string().uuid(), complaint: z.string(), treatment: z.string().optional() }) }),

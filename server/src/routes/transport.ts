@@ -10,16 +10,15 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
+import { safeList } from "../lib/safe-route";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
 
-router.get("/routes", ...guard, requirePermission("transport.view"), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(transportRoutes).where(eq(transportRoutes.tenantId, tenant.id)) });
-  } catch (e) { next(e); }
-});
+router.get("/routes", ...guard, requirePermission("transport.view"), safeList("transport-routes", [], async (req) => {
+  const tenant = (req as any).tenant;
+  return db.select().from(transportRoutes).where(eq(transportRoutes.tenantId, tenant.id));
+}));
 
 router.post("/routes", ...guard, requirePermission("transport.manage"),
   validate({ body: z.object({ name: z.string() }) }),

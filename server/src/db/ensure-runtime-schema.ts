@@ -5,6 +5,7 @@ import { db } from "./index";
 import { FEATURE_CATALOG } from "../lib/feature-catalog";
 import { splitMigrationSql } from "./sql-runner";
 import { applyVpsSchemaPatch } from "./vps-schema-patch";
+import { runAllSqlMigrationFiles } from "./run-all-sql-migrations";
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 
@@ -280,20 +281,5 @@ export async function ensureRuntimeSchema() {
     console.warn("[ensureRuntimeSchema] plan features:", (err as Error).message?.slice(0, 120));
   }
 
-  for (const file of [
-    "0010_saas_ecosystem.sql",
-    "0014_platform_support_tickets.sql",
-    "0016_platform_email.sql",
-    "0017_platform_backups.sql",
-    "0018_platform_extras.sql",
-    "0019_phase_b.sql",
-    "0020_phase_ab_complete.sql",
-    "0021_phase_c.sql",
-    "0022_phase_d.sql",
-    "0023_post_d.sql",
-    "0024_remaining.sql",
-    "0025_akkhor_admin.sql",
-  ]) {
-    await runMigrationFile(file);
-  }
+  await runAllSqlMigrationFiles(false);
 }

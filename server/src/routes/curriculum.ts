@@ -30,7 +30,13 @@ router.get("/frameworks", ...guard, requirePermission("academics.view"), async (
     const tenant = (req as any).tenant;
     const rows = await db.select().from(curriculumFrameworks).where(eq(curriculumFrameworks.tenantId, tenant.id)).orderBy(desc(curriculumFrameworks.createdAt));
     res.json({ success: true, data: rows, presets: FRAMEWORK_PRESETS });
-  } catch (e) { next(e); }
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    if (err.code === "42703" || err.code === "42P01" || err.message?.includes("does not exist")) {
+      return res.json({ success: true, data: [], presets: FRAMEWORK_PRESETS });
+    }
+    next(e);
+  }
 });
 
 router.post("/frameworks", ...guard, requirePermission("academics.manage"),

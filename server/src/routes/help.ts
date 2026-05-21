@@ -6,6 +6,7 @@ import { eq, asc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { validate } from "../utils/validate";
+import { safeList } from "../lib/safe-route";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
@@ -16,18 +17,16 @@ const DEFAULT_ARTICLES = [
   { title: "Parent portal", category: "portal", bodyMd: "Parents log in at /s/your-school/portal/login to pay fees, view results, and message teachers." },
 ];
 
-router.get("/", ...guard, async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    let rows = await db.select().from(tenantHelpArticles).where(eq(tenantHelpArticles.tenantId, tenant.id)).orderBy(asc(tenantHelpArticles.sortOrder));
-    if (!rows.length) {
-      rows = await db.insert(tenantHelpArticles).values(
-        DEFAULT_ARTICLES.map((a, i) => ({ tenantId: tenant.id, ...a, sortOrder: i })),
-      ).returning();
-    }
-    res.json({ success: true, data: rows });
-  } catch (e) { next(e); }
-});
+router.get("/", ...guard, safeList("help", DEFAULT_ARTICLES.map((a, i) => ({ ...a, sortOrder: i })), async (req) => {
+  const tenant = (req as any).tenant;
+  let rows = await db.select().from(tenantHelpArticles).where(eq(tenantHelpArticles.tenantId, tenant.id)).orderBy(asc(tenantHelpArticles.sortOrder));
+  if (!rows.length) {
+    rows = await db.insert(tenantHelpArticles).values(
+      DEFAULT_ARTICLES.map((a, i) => ({ tenantId: tenant.id, ...a, sortOrder: i })),
+    ).returning();
+  }
+  return rows;
+}));
 
 router.post("/", ...guard, validate({
   body: z.object({ title: z.string(), category: z.string().optional(), bodyMd: z.string(), sortOrder: z.number().optional() }),

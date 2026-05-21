@@ -1,15 +1,11 @@
 /**
- * One-off repair for VPS DBs where migrations stalled mid-way.
- * Each statement auto-commits. Safe to re-run.
+ * One-off repair for VPS DBs where migrations stalled at 0017 in drizzle journal.
+ * Applies patch SQL + ALL migration files 0000–0025. Safe to re-run.
  */
+import { applyVpsSchemaPatch } from "../src/db/vps-schema-patch";
+import { runAllSqlMigrationFiles } from "../src/db/run-all-sql-migrations";
 import { sql } from "drizzle-orm";
 import { db } from "../src/db";
-import { splitMigrationSql } from "../src/db/sql-runner";
-import { applyVpsSchemaPatch } from "../src/db/vps-schema-patch";
-import fs from "fs";
-import path from "path";
-
-const MIGRATIONS = path.join(__dirname, "../src/db/migrations");
 
 async function run(statement: string) {
   const trimmed = statement.trim();
@@ -28,28 +24,11 @@ async function run(statement: string) {
   }
 }
 
-async function runSqlFile(filename: string) {
-  const filePath = path.join(MIGRATIONS, filename);
-  if (!fs.existsSync(filePath)) {
-    console.log(`Skip missing ${filename}`);
-    return;
-  }
-  console.log(`\n── ${filename} ──`);
-  const parts = splitMigrationSql(fs.readFileSync(filePath, "utf8"));
-  for (const part of parts) {
-    await run(part);
-  }
-}
-
 async function main() {
   console.log("Repairing schema (idempotent)…\n");
 
-  console.log("── VPS schema patch (0019–0025 columns) ──");
+  console.log("── VPS schema patch ──");
   await applyVpsSchemaPatch(run);
-
-  await run(
-    `ALTER TABLE "platform_admins" ADD COLUMN IF NOT EXISTS "role" text NOT NULL DEFAULT 'super_admin'`,
-  );
 
   for (const label of ["suspended", "disabled", "pending"]) {
     try {
@@ -61,11 +40,8 @@ async function main() {
     }
   }
 
-  const files = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
-  for (const file of files) {
-    if (file === "full_schema.sql") continue;
-    await runSqlFile(file);
-  }
+  console.log("\n── All SQL migrations (0000–0025) ──");
+  await runAllSqlMigrationFiles(true);
 
   console.log("\n✅ Repair applied.");
   console.log("Next: npm run build && pm2 restart school-os --update-env");

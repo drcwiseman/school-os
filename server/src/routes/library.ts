@@ -8,16 +8,15 @@ import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { NotFoundError } from "../middleware/error";
+import { safeList } from "../lib/safe-route";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
 
-router.get("/books", ...guard, requirePermission("library.view"), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(libraryBooks).where(eq(libraryBooks.tenantId, tenant.id)) });
-  } catch (e) { next(e); }
-});
+router.get("/books", ...guard, requirePermission("library.view"), safeList("library-books", [], async (req) => {
+  const tenant = (req as any).tenant;
+  return db.select().from(libraryBooks).where(eq(libraryBooks.tenantId, tenant.id));
+}));
 
 router.post("/books", ...guard, requirePermission("library.manage"),
   validate({ body: z.object({ title: z.string(), author: z.string().optional(), isbn: z.string().optional() }) }),
