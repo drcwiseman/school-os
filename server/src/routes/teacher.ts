@@ -33,6 +33,8 @@ router.get("/lesson-plans", ...guard, requirePermission("academics.view"), async
   try {
     const tenant = (req as any).tenant;
     const user = (req as any).user;
+    const { tableExists } = await import("../lib/table-columns");
+    if (!(await tableExists("lesson_plans"))) return res.json({ success: true, data: [] });
     const rows = await db.select().from(lessonPlans)
       .where(and(eq(lessonPlans.tenantId, tenant.id), eq(lessonPlans.userId, user.id)))
       .orderBy(desc(lessonPlans.updatedAt));
@@ -70,6 +72,8 @@ router.get("/scheme-of-work", ...guard, requirePermission("academics.view"), asy
   try {
     const tenant = (req as any).tenant;
     const user = (req as any).user;
+    const { tableExists } = await import("../lib/table-columns");
+    if (!(await tableExists("scheme_of_work"))) return res.json({ success: true, data: [] });
     const rows = await db.select().from(schemeOfWork)
       .where(and(eq(schemeOfWork.tenantId, tenant.id), eq(schemeOfWork.userId, user.id)))
       .orderBy(schemeOfWork.weekNo);
@@ -93,6 +97,8 @@ router.get("/meetings", ...guard, requirePermission("academics.view"), async (re
   try {
     const tenant = (req as any).tenant;
     const user = (req as any).user;
+    const { tableExists } = await import("../lib/table-columns");
+    if (!(await tableExists("teacher_meetings"))) return res.json({ success: true, data: [] });
     const rows = await db.select().from(teacherMeetings)
       .where(and(eq(teacherMeetings.tenantId, tenant.id), eq(teacherMeetings.userId, user.id)))
       .orderBy(teacherMeetings.scheduledAt);

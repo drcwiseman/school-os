@@ -35,27 +35,64 @@ export const TeacherWorkspace: React.FC = () => {
   const [questionForm, setQuestionForm] = useState({ paperId: "", prompt: "", options: "A,B,C,D", correctIndex: "0" });
   const [subForm, setSubForm] = useState({ absentUserId: "", substituteUserId: "", date: "", notes: "" });
 
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const emptyWs = {
+    myClasses: [],
+    periodsToday: [],
+    upcomingAssignments: [],
+    gradingQueue: [],
+    draftMarks: [],
+    announcements: [],
+    meetings: [],
+    unreadParentMessages: 0,
+    overloaded: false,
+  };
+
   const load = async () => {
     setLoading(true);
+    setApiError(null);
     try {
       const w = await api.get(`/s/${schoolSlug}/api/teacher/workspace`);
-      setWs(w.data);
+      setWs(w.data ?? emptyWs);
       const [lp, sw, mt] = await Promise.all([
-        api.get(`/s/${schoolSlug}/api/teacher/lesson-plans`),
-        api.get(`/s/${schoolSlug}/api/teacher/scheme-of-work`),
-        api.get(`/s/${schoolSlug}/api/teacher/meetings`),
+        api.get(`/s/${schoolSlug}/api/teacher/lesson-plans`).catch(() => ({ data: [] })),
+        api.get(`/s/${schoolSlug}/api/teacher/scheme-of-work`).catch(() => ({ data: [] })),
+        api.get(`/s/${schoolSlug}/api/teacher/meetings`).catch(() => ({ data: [] })),
       ]);
       setLessonPlans(lp.data ?? []);
       setScheme(sw.data ?? []);
       setMeetings(mt.data ?? []);
     } catch (err: any) {
-      toast(err.message, "error");
+      const msg = err.message ?? "Could not load teacher workspace";
+      setApiError(msg);
+      setWs(emptyWs);
+      toast(msg, "error");
     } finally {
       setLoading(false);
     }
   };
 
+  const loadTab = async (t: Tab) => {
+    if (!schoolSlug) return;
+    try {
+      if (t === "gradebook") setGradebook((await api.get(`/s/${schoolSlug}/api/teacher/gradebook`)).data ?? []);
+      if (t === "cbt") setCbtPapers((await api.get(`/s/${schoolSlug}/api/teacher/cbt-papers`)).data ?? []);
+      if (t === "substitute") setSubstitutes((await api.get(`/s/${schoolSlug}/api/teacher/substitutes`)).data ?? []);
+      if (t === "performance") setPerformance((await api.get(`/s/${schoolSlug}/api/teacher/performance`)).data);
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
   useEffect(() => { if (schoolSlug) load(); }, [schoolSlug]);
+
+  useEffect(() => {
+    if (!schoolSlug || loading) return;
+    if (tab !== "overview" && tab !== "lessons" && tab !== "scheme" && tab !== "messages" && tab !== "meetings") {
+      loadTab(tab);
+    }
+  }, [tab, schoolSlug, loading]);
 
   const loadMessages = async (studentId: string) => {
     setSelectedStudent(studentId);
@@ -126,23 +163,6 @@ export const TeacherWorkspace: React.FC = () => {
     } catch (err: any) { toast(err.message, "error"); }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      </div>
-    );
-  }
-
-  const loadTab = async (t: Tab) => {
-    if (t === "gradebook") setGradebook((await api.get(`/s/${schoolSlug}/api/teacher/gradebook`)).data ?? []);
-    if (t === "cbt") setCbtPapers((await api.get(`/s/${schoolSlug}/api/teacher/cbt-papers`)).data ?? []);
-    if (t === "substitute") setSubstitutes((await api.get(`/s/${schoolSlug}/api/teacher/substitutes`)).data ?? []);
-    if (t === "performance") setPerformance((await api.get(`/s/${schoolSlug}/api/teacher/performance`)).data);
-  };
-
-  useEffect(() => { if (schoolSlug && tab !== "overview" && tab !== "lessons" && tab !== "scheme" && tab !== "messages" && tab !== "meetings") loadTab(tab); }, [tab, schoolSlug]);
-
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Today" },
     { id: "lessons", label: "Lesson plans" },
@@ -156,15 +176,26 @@ export const TeacherWorkspace: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {loading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/60 rounded-xl">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+        </div>
+      )}
+      {apiError && (
+        <div className="card p-4 border border-red-900/50 text-sm text-slate-300">
+          Teacher workspace API error: <strong className="text-red-400">{apiError}</strong>. On the server run{" "}
+          <code className="text-xs bg-slate-800 px-1 rounded">npm run db:repair --prefix server</code> then restart.
+        </div>
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">Teacher workspace</h1>
           <p className="text-slate-400 mt-1">Daily tools for {user?.firstName} — timetable, grading, lesson planning, parent messages.</p>
         </div>
-        {ws?.overloaded && (
-          <span className="text-xs px-3 py-1 rounded-full bg-amber-900/40 text-amber-300">High workload — {ws.myClasses?.length} class assignments</span>
-        )}
+        {ws?.overloaded ? (
+          <span className="text-xs px-3 py-1 rounded-full bg-amber-900/40 text-amber-300">High workload — {ws?.myClasses?.length ?? 0} class assignments</span>
+        ) : null}
       </div>
 
       <div className="flex gap-2 flex-wrap">

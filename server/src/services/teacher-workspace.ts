@@ -5,13 +5,26 @@ import {
   teacherMeetings, portalMessages,
 } from "../db/schema";
 import { eq, and, desc, gte, lte, isNull, sql, inArray } from "drizzle-orm";
+import { getTableColumns, tableExists } from "../lib/table-columns";
+
+const EMPTY = {
+  myClasses: [] as unknown[],
+  periodsToday: [] as unknown[],
+  upcomingAssignments: [] as unknown[],
+  gradingQueue: [] as unknown[],
+  draftMarks: [] as unknown[],
+  announcements: [] as unknown[],
+  meetings: [] as unknown[],
+  unreadParentMessages: 0,
+  overloaded: false,
+};
 
 export async function getTeacherWorkspace(tenantId: string, userId: string) {
+  if (!(await tableExists("teacher_assignments"))) return { ...EMPTY };
+
   const day = new Date().getDay();
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setDate(endOfDay.getDate() + 1);
   const inSevenDays = new Date();
   inSevenDays.setDate(inSevenDays.getDate() + 7);
 
@@ -25,36 +38,46 @@ export async function getTeacherWorkspace(tenantId: string, userId: string) {
     })
     .from(teacherAssignments)
     .innerJoin(classes, eq(classes.id, teacherAssignments.classId))
-    .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+    .leftJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
     .where(and(eq(teacherAssignments.tenantId, tenantId), eq(teacherAssignments.userId, userId)));
 
   const classIds = [...new Set(myAssignments.map((a) => a.classId))];
 
-  const periodsToday = classIds.length
-    ? await db
-        .select({
-          id: timetablePeriods.id,
-          dayOfWeek: timetablePeriods.dayOfWeek,
-          periodNo: timetablePeriods.periodNo,
-          startTime: timetablePeriods.startTime,
-          endTime: timetablePeriods.endTime,
-          className: classes.name,
-          subjectName: subjects.name,
-        })
+  let periodsToday: typeof EMPTY.periodsToday = [];
+  if (classIds.length && (await tableExists("timetable_periods")) && (await tableExists("timetables"))) {
+    const tpCols = await getTableColumns("timetable_periods");
+    try {
+      const shape: Record<string, unknown> = {
+        id: timetablePeriods.id,
+        dayOfWeek: timetablePeriods.dayOfWeek,
+        periodNo: timetablePeriods.periodNo,
+        className: classes.name,
+        subjectName: subjects.name,
+      };
+      if (tpCols.has("start_time")) shape.startTime = timetablePeriods.startTime;
+      if (tpCols.has("end_time")) shape.endTime = timetablePeriods.endTime;
+      const conds = [
+        eq(timetablePeriods.tenantId, tenantId),
+        eq(timetablePeriods.dayOfWeek, day),
+      ];
+      if (tpCols.has("teacher_user_id")) conds.push(eq(timetablePeriods.teacherUserId, userId));
+      periodsToday = await db
+        .select(shape as any)
         .from(timetablePeriods)
         .innerJoin(timetables, eq(timetables.id, timetablePeriods.timetableId))
         .innerJoin(classes, eq(classes.id, timetables.classId))
         .leftJoin(subjects, eq(subjects.id, timetablePeriods.subjectId))
-        .where(and(
-          eq(timetablePeriods.tenantId, tenantId),
-          eq(timetablePeriods.dayOfWeek, day),
-          eq(timetablePeriods.teacherUserId, userId),
-        ))
-        .orderBy(timetablePeriods.periodNo)
-    : [];
+        .where(and(...conds))
+        .orderBy(timetablePeriods.periodNo);
+    } catch {
+      periodsToday = [];
+    }
+  }
 
-  const upcomingAssignments = classIds.length
-    ? await db
+  let upcomingAssignments: typeof EMPTY.upcomingAssignments = [];
+  if (classIds.length && (await tableExists("assignments"))) {
+    try {
+      upcomingAssignments = await db
         .select()
         .from(assignments)
         .where(and(
@@ -64,11 +87,16 @@ export async function getTeacherWorkspace(tenantId: string, userId: string) {
           inArray(assignments.classId, classIds),
         ))
         .orderBy(assignments.dueDate)
-        .limit(10)
-    : [];
+        .limit(10);
+    } catch {
+      upcomingAssignments = [];
+    }
+  }
 
-  const gradingQueue = classIds.length
-    ? await db
+  let gradingQueue: typeof EMPTY.gradingQueue = [];
+  if (classIds.length && (await tableExists("assignment_submissions"))) {
+    try {
+      gradingQueue = await db
         .select({
           submissionId: assignmentSubmissions.id,
           assignmentId: assignments.id,
@@ -81,49 +109,90 @@ export async function getTeacherWorkspace(tenantId: string, userId: string) {
         .innerJoin(assignments, eq(assignments.id, assignmentSubmissions.assignmentId))
         .where(and(eq(assignmentSubmissions.tenantId, tenantId), inArray(assignments.classId, classIds)))
         .orderBy(desc(assignmentSubmissions.submittedAt))
-        .limit(20)
-    : [];
+        .limit(20);
+    } catch {
+      gradingQueue = [];
+    }
+  }
 
-  const draftMarks = await db
-    .select({
-      markId: marks.id,
-      assessmentId: assessments.id,
-      assessmentName: assessments.name,
-      studentId: marks.studentId,
-      score: marks.score,
-    })
-    .from(marks)
-    .innerJoin(assessments, eq(assessments.id, marks.assessmentId))
-    .where(and(
-      eq(marks.tenantId, tenantId),
-      eq(marks.status, "draft"),
-      eq(marks.enteredBy, userId),
-      isNull(marks.deletedAt),
-    ))
-    .limit(15);
+  let draftMarks: typeof EMPTY.draftMarks = [];
+  if (await tableExists("marks") && (await tableExists("assessments"))) {
+    try {
+      const markCols = await getTableColumns("marks");
+      const conds = [
+        eq(marks.tenantId, tenantId),
+        eq(marks.enteredBy, userId),
+      ];
+      if (markCols.has("status")) conds.push(eq(marks.status, "draft"));
+      if (markCols.has("deleted_at")) conds.push(isNull(marks.deletedAt));
+      draftMarks = await db
+        .select({
+          markId: marks.id,
+          assessmentId: assessments.id,
+          assessmentName: assessments.name,
+          studentId: marks.studentId,
+          score: marks.score,
+        })
+        .from(marks)
+        .innerJoin(assessments, eq(assessments.id, marks.assessmentId))
+        .where(and(...conds))
+        .limit(15);
+    } catch {
+      draftMarks = [];
+    }
+  }
 
-  const recentAnnouncements = await db
-    .select()
-    .from(announcements)
-    .where(and(eq(announcements.tenantId, tenantId), eq(announcements.published, true)))
-    .orderBy(desc(announcements.createdAt))
-    .limit(5);
+  let recentAnnouncements: typeof EMPTY.announcements = [];
+  if (await tableExists("announcements")) {
+    try {
+      const annCols = await getTableColumns("announcements");
+      const conds = [eq(announcements.tenantId, tenantId)];
+      if (annCols.has("published")) conds.push(eq(announcements.published, true));
+      recentAnnouncements = await db
+        .select()
+        .from(announcements)
+        .where(and(...conds))
+        .orderBy(desc(announcements.createdAt))
+        .limit(5);
+    } catch {
+      recentAnnouncements = [];
+    }
+  }
 
-  const meetings = await db
-    .select()
-    .from(teacherMeetings)
-    .where(and(eq(teacherMeetings.tenantId, tenantId), eq(teacherMeetings.userId, userId), gte(teacherMeetings.scheduledAt, startOfDay)))
-    .orderBy(teacherMeetings.scheduledAt)
-    .limit(10);
+  let meetings: typeof EMPTY.meetings = [];
+  if (await tableExists("teacher_meetings")) {
+    try {
+      meetings = await db
+        .select()
+        .from(teacherMeetings)
+        .where(and(
+          eq(teacherMeetings.tenantId, tenantId),
+          eq(teacherMeetings.userId, userId),
+          gte(teacherMeetings.scheduledAt, startOfDay),
+        ))
+        .orderBy(teacherMeetings.scheduledAt)
+        .limit(10);
+    } catch {
+      meetings = [];
+    }
+  }
 
-  const unreadMessages = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(portalMessages)
-    .where(and(
-      eq(portalMessages.tenantId, tenantId),
-      eq(portalMessages.senderType, "parent"),
-      isNull(portalMessages.readAt),
-    ));
+  let unreadParentMessages = 0;
+  if (await tableExists("portal_messages")) {
+    try {
+      const unreadMessages = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(portalMessages)
+        .where(and(
+          eq(portalMessages.tenantId, tenantId),
+          eq(portalMessages.senderType, "parent"),
+          isNull(portalMessages.readAt),
+        ));
+      unreadParentMessages = Number(unreadMessages[0]?.count ?? 0);
+    } catch {
+      unreadParentMessages = 0;
+    }
+  }
 
   return {
     myClasses: myAssignments,
@@ -133,7 +202,7 @@ export async function getTeacherWorkspace(tenantId: string, userId: string) {
     draftMarks,
     announcements: recentAnnouncements,
     meetings,
-    unreadParentMessages: Number(unreadMessages[0]?.count ?? 0),
+    unreadParentMessages,
     overloaded: myAssignments.length > 5,
   };
 }
