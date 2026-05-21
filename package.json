@@ -17,6 +17,7 @@
     "db:seed": "npm run db:seed --prefix server",
     "db:ensure-platform": "npm run db:ensure-platform --prefix server",
     "db:repair": "npm run db:repair --prefix server",
+    "db:ensure-facilities-base": "npm run db:ensure-facilities-base --prefix server",
     "db:doctor": "npm run db:doctor --prefix server",
     "db:build-full-migration": "npm run db:build-full-migration --prefix server",
     "docker:up": "docker compose up -d --build"

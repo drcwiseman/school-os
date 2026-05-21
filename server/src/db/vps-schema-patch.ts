@@ -2,6 +2,8 @@
  * Idempotent SQL patches for production DBs that never ran migrations 0019–0025.
  * Used at boot (ensureRuntimeSchema) and via `npm run db:repair`.
  */
+import { FACILITIES_BASE_TABLES_SQL } from "./facilities-base-sql";
+
 export const VPS_SCHEMA_PATCH_SQL: string[] = [
   `CREATE TABLE IF NOT EXISTS "staff" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -55,6 +57,7 @@ export const VPS_SCHEMA_PATCH_SQL: string[] = [
     "status" text DEFAULT 'active' NOT NULL,
     "created_at" timestamp DEFAULT now() NOT NULL
   )`,
+  ...FACILITIES_BASE_TABLES_SQL,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "campus_id" uuid REFERENCES "tenant_campuses"("id") ON DELETE SET NULL`,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_enabled" boolean NOT NULL DEFAULT false`,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_secret" text`,
@@ -261,6 +264,84 @@ export const VPS_SCHEMA_PATCH_SQL: string[] = [
   `ALTER TABLE "timetable_periods" ADD COLUMN IF NOT EXISTS "teacher_user_id" uuid REFERENCES "users"("id") ON DELETE set null`,
   `ALTER TABLE "timetable_periods" ADD COLUMN IF NOT EXISTS "start_time" text`,
   `ALTER TABLE "timetable_periods" ADD COLUMN IF NOT EXISTS "end_time" text`,
+  `DO $$ BEGIN CREATE TYPE "leave_status" AS ENUM('pending', 'approved', 'rejected', 'cancelled'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `CREATE TABLE IF NOT EXISTS "staff_contracts" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "staff_id" uuid NOT NULL REFERENCES "staff"("id") ON DELETE cascade,
+    "salary" integer NOT NULL,
+    "start_date" timestamp NOT NULL,
+    "end_date" timestamp,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "staff_contracts_tenant_idx" ON "staff_contracts" ("tenant_id")`,
+  `CREATE TABLE IF NOT EXISTS "leave_requests" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "staff_id" uuid NOT NULL REFERENCES "staff"("id"),
+    "start_date" timestamp NOT NULL,
+    "end_date" timestamp NOT NULL,
+    "reason" text,
+    "status" "leave_status" DEFAULT 'pending' NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "leave_requests_tenant_idx" ON "leave_requests" ("tenant_id")`,
+  `CREATE TABLE IF NOT EXISTS "staff_attendance" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "staff_id" uuid REFERENCES "staff"("id") ON DELETE cascade,
+    "user_id" uuid REFERENCES "users"("id") ON DELETE cascade,
+    "date" text NOT NULL,
+    "status" text NOT NULL DEFAULT 'present',
+    "checked_in_at" timestamp DEFAULT now() NOT NULL,
+    "notes" text
+  )`,
+  `ALTER TABLE "staff_attendance" ADD COLUMN IF NOT EXISTS "staff_id" uuid REFERENCES "staff"("id") ON DELETE cascade`,
+  `ALTER TABLE "staff_attendance" ADD COLUMN IF NOT EXISTS "notes" text`,
+  `CREATE INDEX IF NOT EXISTS "staff_attendance_staff_date_idx" ON "staff_attendance" ("tenant_id", "staff_id", "date")`,
+  `DO $$ BEGIN CREATE TYPE "payroll_status" AS ENUM('draft', 'pending_approval', 'approved', 'paid'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `CREATE TABLE IF NOT EXISTS "payroll_runs" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "period" text NOT NULL,
+    "status" "payroll_status" DEFAULT 'draft' NOT NULL,
+    "run_at" timestamp DEFAULT now() NOT NULL,
+    "approved_by" uuid REFERENCES "users"("id"),
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp`,
+  `ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "deleted_by" uuid REFERENCES "users"("id") ON DELETE SET NULL`,
+  `CREATE INDEX IF NOT EXISTS "payroll_runs_tenant_idx" ON "payroll_runs" ("tenant_id")`,
+  `CREATE TABLE IF NOT EXISTS "payroll_items" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "payroll_run_id" uuid NOT NULL REFERENCES "payroll_runs"("id") ON DELETE cascade,
+    "staff_id" uuid NOT NULL REFERENCES "staff"("id"),
+    "gross_pay" integer NOT NULL,
+    "deductions" integer DEFAULT 0 NOT NULL,
+    "net_pay" integer NOT NULL
+  )`,
+  `ALTER TABLE "payroll_items" ADD COLUMN IF NOT EXISTS "deductions_json" jsonb DEFAULT '{}'::jsonb`,
+  `ALTER TABLE "payroll_items" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp`,
+  `ALTER TABLE "payroll_items" ADD COLUMN IF NOT EXISTS "deleted_by" uuid REFERENCES "users"("id") ON DELETE SET NULL`,
+  `CREATE INDEX IF NOT EXISTS "payroll_items_tenant_idx" ON "payroll_items" ("tenant_id")`,
+  `CREATE TABLE IF NOT EXISTS "payslips" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "payroll_item_id" uuid NOT NULL REFERENCES "payroll_items"("id"),
+    "staff_id" uuid NOT NULL REFERENCES "staff"("id"),
+    "data_json" jsonb DEFAULT '{}'::jsonb,
+    "issued_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "payslips_tenant_idx" ON "payslips" ("tenant_id")`,
+  `CREATE TABLE IF NOT EXISTS "payroll_tax_rules" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "name" text NOT NULL,
+    "rate_percent" integer DEFAULT 0 NOT NULL,
+    "threshold_minor" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS "platform_impersonation_tokens" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
     "token" text NOT NULL,

@@ -5,6 +5,7 @@
  */
 import { sql } from "drizzle-orm";
 import { db } from "./index";
+import { applyFacilitiesBaseTables } from "./facilities-base-sql";
 import { splitMigrationSql } from "./sql-runner";
 import path from "path";
 import fs from "fs";
@@ -87,6 +88,10 @@ async function main() {
     const hash = crypto.createHash("sha256").update(query).digest("hex");
 
     console.log(`\n▶ ${entry.tag}`);
+    if (entry.tag === "0022_phase_d") {
+      console.log("  · ensure transport/library/boarding base tables");
+      await applyFacilitiesBaseTables(runStatement);
+    }
     for (const stmt of statements) {
       await runStatement(stmt);
     }
