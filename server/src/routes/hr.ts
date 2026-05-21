@@ -40,7 +40,10 @@ router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, ne
         ilike(staff.department, "%teacher%"),
         ilike(staff.department, "%teaching%"),
         ilike(staff.department, "%academic%"),
+        ilike(staff.department, "%head%"),
         eq(staff.department, "Teacher"),
+        eq(staff.department, "Headteacher"),
+        eq(staff.department, "Teaching"),
         eq(staff.jobTitle, "Teacher"),
         ilike(staff.jobTitle, "%teacher%"),
       )!);

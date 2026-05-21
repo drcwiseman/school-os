@@ -29,8 +29,9 @@ export async function seedDemoDataForTenant(tenantId: string): Promise<{ message
   }
 
   const demoStaff = [
-    { employeeNo: "EMP-D01", firstName: "Demo", lastName: "Headteacher", department: "Administration" },
-    { employeeNo: "EMP-D02", firstName: "Demo", lastName: "Teacher", department: "Teaching" },
+    { employeeNo: "EMP-D01", firstName: "Sarah", lastName: "Nabukenya", department: "Headteacher", email: "headteacher@demo.local" },
+    { employeeNo: "EMP-D02", firstName: "John", lastName: "Okello", department: "Teacher", email: "john.teacher@demo.local" },
+    { employeeNo: "EMP-D03", firstName: "Peter", lastName: "Mukasa", department: "Teacher", email: "peter.teacher@demo.local" },
   ];
   for (const e of demoStaff) {
     const [ex] = await db.select().from(staff).where(and(eq(staff.tenantId, tenantId), eq(staff.employeeNo, e.employeeNo))).limit(1);
