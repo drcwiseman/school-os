@@ -320,6 +320,27 @@ html:not([data-theme="light"]) .dashboard-akkhor .dash-panel-title {
 .dashboard-akkhor .dash-cal-day {
   @apply flex h-7 w-full items-center justify-center rounded-md text-[11px] text-slate-700;
 }
+.dashboard-akkhor .dash-cal-header {
+  @apply text-slate-800;
+}
+.dashboard-akkhor .dash-cal-weekdays {
+  @apply text-slate-500;
+}
+.dashboard-akkhor .dash-metric-label {
+  @apply text-slate-500;
+}
+.dashboard-akkhor .dash-metric-value {
+  @apply text-slate-900;
+}
+.dashboard-akkhor .dash-subtitle {
+  @apply text-slate-500;
+}
+.dashboard-akkhor .dash-chart-label {
+  fill: #64748b;
+}
+.dashboard-akkhor .dash-chart-grid {
+  stroke: #e2e8f0;
+}
 .dashboard-akkhor .dash-cal-muted { @apply invisible; }
 .dashboard-akkhor .dash-cal-today {
   @apply bg-amber-100 font-semibold text-amber-900;
@@ -338,4 +359,93 @@ html:not([data-theme="light"]) .dashboard-akkhor .dash-quick-link {
 }
 html:not([data-theme="light"]) .dashboard-akkhor .dash-alert {
   @apply border-amber-500/40 bg-amber-500/10 text-amber-100;
+}
+
+/* Dashboard body copy — readable on light cards and dark panels */
+.dashboard-akkhor .dash-text-muted {
+  @apply text-slate-600;
+}
+.dashboard-akkhor .dash-text-subtle {
+  @apply text-slate-500;
+}
+.dashboard-akkhor .dash-text-body {
+  @apply text-slate-800;
+}
+.dashboard-akkhor .dash-text-strong {
+  @apply font-semibold text-slate-900;
+}
+.dashboard-akkhor .dash-text-link {
+  @apply text-blue-600 hover:underline;
+}
+.dashboard-akkhor .dash-border-divider {
+  @apply border-slate-100;
+}
+.dashboard-akkhor .dash-bar-track {
+  @apply bg-slate-100;
+}
+.dashboard-akkhor .dash-donut-hole {
+  @apply bg-white text-slate-800;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-breadcrumb {
+  @apply text-slate-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-breadcrumb a {
+  @apply text-slate-300 hover:text-blue-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-subtitle {
+  @apply text-slate-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-menu-btn {
+  @apply text-slate-400 hover:bg-slate-800 hover:text-slate-200;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-text-muted {
+  @apply text-slate-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-text-subtle {
+  @apply text-slate-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-text-body {
+  @apply text-slate-200;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-text-strong {
+  @apply text-white;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-text-link {
+  @apply text-blue-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-border-divider {
+  @apply border-slate-700/60;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-bar-track {
+  @apply bg-slate-700/80;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-donut-hole {
+  @apply bg-slate-800 text-white;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-cal-day {
+  @apply text-slate-300;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-cal-today {
+  @apply bg-amber-500/25 text-amber-200;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-cal-event {
+  @apply text-pink-400 decoration-pink-500/60;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-cal-header {
+  @apply text-slate-200;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-cal-weekdays {
+  @apply text-slate-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-metric-label {
+  @apply text-slate-400;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-metric-value {
+  @apply text-white;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-chart-label {
+  fill: #94a3b8;
+}
+html:not([data-theme="light"]) .dashboard-akkhor .dash-chart-grid {
+  stroke: #334155;
 }

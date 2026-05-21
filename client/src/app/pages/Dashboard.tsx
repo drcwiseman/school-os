@@ -108,10 +108,10 @@ export const Dashboard: React.FC = () => {
         <p className="dash-breadcrumb">
           <Link to={base}>Home</Link>
           <span className="mx-1.5 text-slate-400">›</span>
-          <span className="text-slate-700">Dashboard</span>
+          <span className="dash-text-body">Dashboard</span>
         </p>
         <h1 className="dash-page-title">Admin Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm dash-subtitle">
           Welcome back, {user?.firstName} · {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
           {" · "}
           {COUNTRY_OPTIONS.find((c) => c.code === country)?.name ?? country} ({currency})
@@ -192,7 +192,7 @@ export const Dashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowMore((v) => !v)}
-            className="text-sm font-medium text-blue-600 hover:underline"
+            className="text-sm font-medium dash-text-link hover:underline"
           >
             {showMore ? "Hide" : "Show"} more metrics
           </button>
@@ -200,28 +200,28 @@ export const Dashboard: React.FC = () => {
           {showMore && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="dash-panel">
-                <p className="text-xs text-slate-500">Attendance today</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">
+                <p className="text-xs dash-metric-label">Attendance today</p>
+                <p className="text-xl font-bold dash-metric-value mt-1">
                   {a.attendanceRateToday != null ? `${a.attendanceRateToday}%` : "—"}
                 </p>
               </div>
               <div className="dash-panel">
-                <p className="text-xs text-slate-500">Active classes</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">{a.activeClasses}</p>
+                <p className="text-xs dash-metric-label">Active classes</p>
+                <p className="text-xl font-bold dash-metric-value mt-1">{a.activeClasses}</p>
               </div>
               <div className="dash-panel">
-                <p className="text-xs text-slate-500">Outstanding fees</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">{formatMoney(f.outstandingBalanceMinor)}</p>
+                <p className="text-xs dash-metric-label">Outstanding fees</p>
+                <p className="text-xl font-bold dash-metric-value mt-1">{formatMoney(f.outstandingBalanceMinor)}</p>
               </div>
               <div className="dash-panel">
-                <p className="text-xs text-slate-500">Expenses (month)</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">{formatMoney(f.expensesMonthMinor)}</p>
+                <p className="text-xs dash-metric-label">Expenses (month)</p>
+                <p className="text-xl font-bold dash-metric-value mt-1">{formatMoney(f.expensesMonthMinor)}</p>
               </div>
               {a.atRiskStudents > 0 && (
                 <div className="dash-panel sm:col-span-2">
-                  <p className="text-xs text-slate-500">Students flagged at-risk</p>
-                  <p className="text-xl font-bold text-amber-700 mt-1">{a.atRiskStudents}</p>
-                  <Link to={`${base}/students`} className="text-xs text-blue-600 mt-2 inline-block hover:underline">Review students →</Link>
+                  <p className="text-xs dash-metric-label">Students flagged at-risk</p>
+                  <p className="text-xl font-bold text-amber-500 mt-1">{a.atRiskStudents}</p>
+                  <Link to={`${base}/students`} className="text-xs dash-text-link mt-2 inline-block hover:underline">Review students →</Link>
                 </div>
               )}
             </div>
@@ -234,17 +234,17 @@ export const Dashboard: React.FC = () => {
           <h3 className="dash-panel-title mb-3">Recent activity</h3>
           <ul className="space-y-2 max-h-48 overflow-y-auto">
             {stats!.recentActivity!.slice(0, 8).map((ev) => (
-              <li key={ev.id} className="text-sm text-slate-600 flex justify-between gap-2 border-l-2 border-blue-200 pl-2">
+              <li key={ev.id} className="text-sm dash-text-muted flex justify-between gap-2 border-l-2 border-blue-400/50 pl-2">
                 <span>
-                  <span className="font-medium text-slate-800">{ev.action}</span>
-                  <span className="text-slate-500"> · {ev.entityType}</span>
+                  <span className="font-medium dash-text-body">{ev.action}</span>
+                  <span className="dash-text-subtle"> · {ev.entityType}</span>
                 </span>
-                <span className="text-xs text-slate-400 shrink-0">{new Date(ev.createdAt).toLocaleString()}</span>
+                <span className="text-xs dash-text-subtle shrink-0">{new Date(ev.createdAt).toLocaleString()}</span>
               </li>
             ))}
           </ul>
           {hasPermission("audit.view") && (
-            <Link to={`${base}/admin`} className="mt-3 inline-block text-sm text-blue-600 hover:underline">Full audit log →</Link>
+            <Link to={`${base}/admin`} className="mt-3 inline-block text-sm dash-text-link hover:underline">Full audit log →</Link>
           )}
         </div>
       )}

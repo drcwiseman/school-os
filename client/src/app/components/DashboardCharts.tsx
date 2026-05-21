@@ -10,7 +10,6 @@ export type WidgetData = {
   recentAnnouncements: Array<{ id: string; title: string; createdAt: string }>;
 };
 
-
 function Panel({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="dash-panel">
@@ -54,17 +53,17 @@ function AreaFeesChart({ data, collected, outstanding, formatMoney }: {
       <div className="flex flex-wrap gap-6 mb-4 text-sm">
         <div className="flex items-center gap-2">
           <span className="dash-dot dash-dot-blue" />
-          <span className="text-slate-600">Fees collected</span>
-          <span className="font-semibold text-slate-900">{formatMoney(collected)}</span>
+          <span className="dash-text-muted">Fees collected</span>
+          <span className="dash-text-strong">{formatMoney(collected)}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="dash-dot dash-dot-rose" />
-          <span className="text-slate-600">Outstanding</span>
-          <span className="font-semibold text-slate-900">{formatMoney(outstanding)}</span>
+          <span className="dash-text-muted">Outstanding</span>
+          <span className="dash-text-strong">{formatMoney(outstanding)}</span>
         </div>
       </div>
       {data.length === 0 ? (
-        <p className="text-sm text-slate-500 py-8 text-center">No payment history yet.</p>
+        <p className="text-sm dash-text-subtle py-8 text-center">No payment history yet.</p>
       ) : (
         <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" role="img" aria-label="Fees collected over time">
           {[0, 0.25, 0.5, 0.75, 1].map((t) => (
@@ -74,14 +73,14 @@ function AreaFeesChart({ data, collected, outstanding, formatMoney }: {
               x2={w - pad.r}
               y1={pad.t + innerH * (1 - t)}
               y2={pad.t + innerH * (1 - t)}
-              stroke="#e2e8f0"
+              className="dash-chart-grid"
               strokeWidth="1"
             />
           ))}
           <path d={area} fill="url(#feesGrad)" opacity="0.35" />
           <path d={line} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           {points.map((p) => (
-            <text key={p.label} x={p.x} y={h - 6} textAnchor="middle" className="fill-slate-500 text-[9px]">
+            <text key={p.label} x={p.x} y={h - 6} textAnchor="middle" className="dash-chart-label text-[9px]">
               {p.label}
             </text>
           ))}
@@ -103,16 +102,16 @@ function ExpensesBars({ data, formatMoney }: { data: Array<{ label: string; valu
     <div className="space-y-4">
       {data.map((d) => (
         <div key={d.label}>
-          <div className="flex justify-between text-xs text-slate-600 mb-1">
+          <div className="flex justify-between text-xs dash-text-muted mb-1">
             <span>{d.label}</span>
-            <span className="font-medium text-slate-800">{formatMoney(d.value)}</span>
+            <span className="dash-text-body font-medium">{formatMoney(d.value)}</span>
           </div>
-          <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-2.5 rounded-full dash-bar-track overflow-hidden">
             <div className={`h-full rounded-full ${d.color}`} style={{ width: `${Math.max(4, (d.value / max) * 100)}%` }} />
           </div>
         </div>
       ))}
-      {!data.length && <p className="text-sm text-slate-500">No expenses recorded.</p>}
+      {!data.length && <p className="text-sm dash-text-subtle">No expenses recorded.</p>}
     </div>
   );
 }
@@ -127,26 +126,26 @@ function GenderDonut({ male, female, other }: { male: number; female: number; ot
     <div className="flex flex-col items-center gap-6 py-2 sm:flex-row sm:items-center sm:justify-center">
       <div className="relative h-40 w-40 shrink-0">
         <div className="absolute inset-0 rounded-full" style={{ background: gradient }} />
-        <div className="absolute inset-[22%] rounded-full bg-white flex items-center justify-center">
-          <span className="text-2xl font-bold text-slate-800">{male + female + other}</span>
+        <div className="absolute inset-[22%] rounded-full dash-donut-hole flex items-center justify-center">
+          <span className="text-2xl font-bold">{male + female + other}</span>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm w-full max-w-xs">
         <div>
-          <div className="flex items-center gap-2 text-slate-600">
+          <div className="flex items-center gap-2 dash-text-muted">
             <span className="dash-dot dash-dot-blue" /> Female
           </div>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{female.toLocaleString()}</p>
+          <p className="mt-1 text-lg dash-text-strong">{female.toLocaleString()}</p>
         </div>
         <div>
-          <div className="flex items-center gap-2 text-slate-600">
+          <div className="flex items-center gap-2 dash-text-muted">
             <span className="dash-dot dash-dot-amber" /> Male
           </div>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{male.toLocaleString()}</p>
+          <p className="mt-1 text-lg dash-text-strong">{male.toLocaleString()}</p>
         </div>
         {other > 0 && (
           <div className="col-span-2">
-            <div className="flex items-center gap-2 text-slate-600">
+            <div className="flex items-center gap-2 dash-text-muted">
               <span className="dash-dot bg-slate-400" /> Other {other}
             </div>
           </div>
@@ -190,10 +189,10 @@ function MiniCalendar({ events }: { events: Array<{ at: string; title: string }>
 
   return (
     <div>
-      <p className="text-center text-sm font-semibold text-slate-800 mb-3">
+      <p className="text-center text-sm font-semibold dash-cal-header mb-3">
         {now.toLocaleString(undefined, { month: "long", year: "numeric" })}
       </p>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-slate-500 mb-1">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium dash-cal-weekdays mb-1">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <span key={d}>{d}</span>
         ))}
@@ -201,12 +200,12 @@ function MiniCalendar({ events }: { events: Array<{ at: string; title: string }>
       <div className="grid grid-cols-7 gap-1">{cells}</div>
       <ul className="mt-4 space-y-2 max-h-28 overflow-y-auto">
         {events.slice(0, 4).map((e, i) => (
-          <li key={i} className="text-xs text-slate-600 flex justify-between gap-2 border-l-2 border-pink-400 pl-2">
-            <span className="truncate text-slate-800">{e.title}</span>
-            <span className="shrink-0">{new Date(e.at).toLocaleDateString()}</span>
+          <li key={i} className="text-xs dash-text-muted flex justify-between gap-2 border-l-2 border-pink-400 pl-2">
+            <span className="truncate dash-text-body">{e.title}</span>
+            <span className="shrink-0 dash-text-subtle">{new Date(e.at).toLocaleDateString()}</span>
           </li>
         ))}
-        {!events.length && <li className="text-xs text-slate-500">No upcoming events.</li>}
+        {!events.length && <li className="text-xs dash-text-subtle">No upcoming events.</li>}
       </ul>
     </div>
   );
@@ -230,7 +229,7 @@ export const DashboardCharts: React.FC<{
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <Panel title="Fees collected" action={<span className="text-xs text-slate-500">Last 6 months</span>}>
+          <Panel title="Fees collected" action={<span className="text-xs dash-text-subtle">Last 6 months</span>}>
             <AreaFeesChart
               data={feeBars}
               collected={widgets.feesChart.collectedMinor}
@@ -253,16 +252,16 @@ export const DashboardCharts: React.FC<{
         </Panel>
         <Panel
           title="Announcements"
-          action={<Link to={messagingPath} className="text-xs font-medium text-blue-600 hover:underline">View all</Link>}
+          action={<Link to={messagingPath} className="text-xs dash-text-link font-medium">View all</Link>}
         >
           {widgets.recentAnnouncements.length === 0 ? (
-            <p className="text-sm text-slate-500">No published announcements.</p>
+            <p className="text-sm dash-text-subtle">No published announcements.</p>
           ) : (
             <ul className="space-y-3">
               {widgets.recentAnnouncements.map((a) => (
-                <li key={a.id} className="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                  <p className="text-sm font-medium text-slate-800">{a.title}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{new Date(a.createdAt).toLocaleString()}</p>
+                <li key={a.id} className="border-b dash-border-divider pb-3 last:border-0 last:pb-0">
+                  <p className="text-sm font-medium dash-text-body">{a.title}</p>
+                  <p className="text-xs dash-text-subtle mt-0.5">{new Date(a.createdAt).toLocaleString()}</p>
                 </li>
               ))}
             </ul>
