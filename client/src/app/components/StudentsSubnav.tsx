@@ -8,11 +8,12 @@ export const StudentsSubnav: React.FC = () => {
   const { moduleEnabled } = useAuth();
   const base = `/s/${schoolSlug}/students`;
   const tab = (isActive: boolean) =>
-    `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive ? "bg-primary-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"}`;
+    `px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 backdrop-blur-md ${isActive ? "bg-primary-600 text-white shadow-lg shadow-primary-500/30 font-semibold" : "text-slate-400 hover:text-slate-200 hover:bg-white/5 dark:hover:bg-slate-850/40"}`;
 
   return (
-    <nav className="flex flex-wrap gap-2 border-b border-slate-800 pb-4 mb-6">
+    <nav className="flex flex-wrap gap-2 border-b border-slate-700/40 pb-4 mb-6">
       <NavLink to={base} end className={({ isActive }) => tab(isActive)}>All Students</NavLink>
+      <NavLink to={`/s/${schoolSlug}/parents`} className={({ isActive }) => tab(isActive)}>Parents</NavLink>
       <NavLink to={`${base}/leaves`} className={({ isActive }) => tab(isActive)}>Leaves</NavLink>
       <NavLink to={`${base}/birthdays`} className={({ isActive }) => tab(isActive)}>Birthdays</NavLink>
       <NavLink to={`${base}/noticeboard`} className={({ isActive }) => tab(isActive)}>Noticeboard</NavLink>
