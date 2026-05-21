@@ -143,6 +143,15 @@ export const VPS_SCHEMA_PATCH_SQL: string[] = [
       ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "folder" text DEFAULT 'general';
     END IF;
   END $$`,
+  `CREATE TABLE IF NOT EXISTS "online_class_links" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "title" text NOT NULL,
+    "url" text NOT NULL,
+    "class_id" uuid REFERENCES "classes"("id") ON DELETE SET NULL,
+    "scheduled_at" timestamp,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
   `ALTER TABLE "online_class_links" ADD COLUMN IF NOT EXISTS "subject_id" uuid`,
   `ALTER TABLE "online_class_links" ADD COLUMN IF NOT EXISTS "attendance_session_id" uuid`,
   `ALTER TABLE "online_class_links" ADD COLUMN IF NOT EXISTS "duration_minutes" integer DEFAULT 60`,

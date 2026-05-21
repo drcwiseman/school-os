@@ -1,7 +1,110 @@
 import { db } from "../db";
-import { classes, studentMaterials, students, studentClassHistory, streams } from "../db/schema";
-import { and, eq, isNull, or } from "drizzle-orm";
+import {
+  classes, studentMaterials, students, studentClassHistory, streams,
+  onlineClassLinks, onlineClassAttendance,
+} from "../db/schema";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { getTableColumns, tableExists } from "./table-columns";
+
+export function onlineClassLinkSelectShape(cols: Set<string>) {
+  const shape: Record<string, unknown> = {
+    id: onlineClassLinks.id,
+    tenantId: onlineClassLinks.tenantId,
+    title: onlineClassLinks.title,
+    url: onlineClassLinks.url,
+    createdAt: onlineClassLinks.createdAt,
+  };
+  if (cols.has("class_id")) shape.classId = onlineClassLinks.classId;
+  if (cols.has("scheduled_at")) shape.scheduledAt = onlineClassLinks.scheduledAt;
+  if (cols.has("subject_id")) shape.subjectId = onlineClassLinks.subjectId;
+  if (cols.has("duration_minutes")) shape.durationMinutes = onlineClassLinks.durationMinutes;
+  if (cols.has("attendance_session_id")) shape.attendanceSessionId = onlineClassLinks.attendanceSessionId;
+  return shape;
+}
+
+export async function listOnlineClassesForTenant(tenantId: string) {
+  if (!(await tableExists("online_class_links"))) return [];
+  const cols = await getTableColumns("online_class_links");
+  const orderCol = cols.has("scheduled_at") ? onlineClassLinks.scheduledAt : onlineClassLinks.createdAt;
+  return db
+    .select(onlineClassLinkSelectShape(cols) as any)
+    .from(onlineClassLinks)
+    .where(eq(onlineClassLinks.tenantId, tenantId))
+    .orderBy(desc(orderCol));
+}
+
+export async function getOnlineClassById(tenantId: string, id: string) {
+  if (!(await tableExists("online_class_links"))) return null;
+  const cols = await getTableColumns("online_class_links");
+  const [row] = await db
+    .select(onlineClassLinkSelectShape(cols) as any)
+    .from(onlineClassLinks)
+    .where(and(eq(onlineClassLinks.id, id), eq(onlineClassLinks.tenantId, tenantId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function insertOnlineClass(
+  tenantId: string,
+  data: {
+    title: string;
+    url: string;
+    classId?: string | null;
+    subjectId?: string | null;
+    scheduledAt?: Date | null;
+    durationMinutes?: number;
+  },
+) {
+  if (!(await tableExists("online_class_links"))) {
+    throw new Error("online_class_links table is missing — run npm run db:repair --prefix server");
+  }
+  const cols = await getTableColumns("online_class_links");
+  const values: Record<string, unknown> = {
+    tenantId,
+    title: data.title,
+    url: data.url,
+  };
+  if (cols.has("class_id")) values.classId = data.classId ?? null;
+  if (cols.has("subject_id")) values.subjectId = data.subjectId ?? null;
+  if (cols.has("scheduled_at")) values.scheduledAt = data.scheduledAt ?? null;
+  if (cols.has("duration_minutes")) values.durationMinutes = data.durationMinutes ?? 60;
+  const [inserted] = await db.insert(onlineClassLinks).values(values as any).returning({ id: onlineClassLinks.id });
+  const row = await getOnlineClassById(tenantId, inserted.id);
+  return row ?? { id: inserted.id, tenantId, ...values };
+}
+
+export async function setOnlineClassAttendanceSessionId(linkId: string, sessionId: string) {
+  const cols = await getTableColumns("online_class_links");
+  if (!cols.has("attendance_session_id")) return;
+  await db.update(onlineClassLinks).set({ attendanceSessionId: sessionId }).where(eq(onlineClassLinks.id, linkId));
+}
+
+export async function listOnlineClassAttendance(onlineClassId: string, tenantId: string) {
+  if (!(await tableExists("online_class_attendance"))) return [];
+  const cols = await getTableColumns("online_class_attendance");
+  const shape: Record<string, unknown> = {
+    id: onlineClassAttendance.id,
+    studentId: onlineClassAttendance.studentId,
+    status: onlineClassAttendance.status,
+    firstName: students.firstName,
+    lastName: students.lastName,
+    admissionNumber: students.admissionNumber,
+  };
+  if (cols.has("joined_at")) shape.joinedAt = onlineClassAttendance.joinedAt;
+  if (cols.has("performance_score")) shape.performanceScore = onlineClassAttendance.performanceScore;
+  if (cols.has("notes")) shape.notes = onlineClassAttendance.notes;
+  if (cols.has("duration_minutes")) shape.durationMinutes = onlineClassAttendance.durationMinutes;
+  if (cols.has("marked_by")) shape.markedBy = onlineClassAttendance.markedBy;
+
+  return db
+    .select(shape as any)
+    .from(onlineClassAttendance)
+    .innerJoin(students, eq(students.id, onlineClassAttendance.studentId))
+    .where(and(
+      eq(onlineClassAttendance.onlineClassId, onlineClassId),
+      eq(onlineClassAttendance.tenantId, tenantId),
+    ));
+}
 
 export async function listClassesForTenant(tenantId: string, campusId?: string) {
   const cols = await getTableColumns("classes");

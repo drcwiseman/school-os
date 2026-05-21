@@ -134,17 +134,21 @@ export const OnlineClassesPanel: React.FC = () => {
   const { classes, subjects } = useAcademicsLookups();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
   const [attendance, setAttendance] = useState<any[]>([]);
   const [form, setForm] = useState({ title: "", url: "", scheduledAt: "", classId: "", subjectId: "", durationMinutes: "60" });
 
   const load = async () => {
     setLoading(true);
+    setApiError(null);
     try {
       const res = await api.get(`/s/${schoolSlug}/api/academics/online-classes`);
       setRows(res.data ?? []);
     } catch (e: any) {
-      toast(e.message, "error");
+      const msg = e.message ?? "Could not load live classes";
+      setApiError(msg);
+      toast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -228,6 +232,12 @@ export const OnlineClassesPanel: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {apiError && (
+        <div className="card p-4 border border-red-900/50 text-sm text-slate-300">
+          Live classes API error: <strong className="text-red-400">{apiError}</strong>. On the server run{" "}
+          <code className="text-xs bg-slate-800 px-1 rounded">npm run db:repair --prefix server</code> then restart.
+        </div>
+      )}
       <form onSubmit={submit} className="card p-5 grid md:grid-cols-2 gap-3">
         <h3 className="md:col-span-2 font-semibold text-white">Schedule live class</h3>
         <input className="input" placeholder="Session title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />

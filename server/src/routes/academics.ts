@@ -12,7 +12,16 @@ import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { writeTenantFile, resolveTenantFile } from "../lib/uploads";
 import { ConflictError } from "../middleware/error";
 import { getCampusId } from "../lib/campus-scope";
-import { listClassesForTenant, listStudentMaterialsForTenant, rosterForStream } from "../lib/academics-query";
+import {
+  getOnlineClassById,
+  insertOnlineClass,
+  listClassesForTenant,
+  listOnlineClassAttendance,
+  listOnlineClassesForTenant,
+  listStudentMaterialsForTenant,
+  rosterForStream,
+  setOnlineClassAttendanceSessionId,
+} from "../lib/academics-query";
 import { getTableColumns } from "../lib/table-columns";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
@@ -730,9 +739,7 @@ router.delete("/materials/:id", ...guard, requirePermission("academics.manage"),
 router.get("/online-classes", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(onlineClassLinks)
-      .where(eq(onlineClassLinks.tenantId, tenant.id))
-      .orderBy(desc(onlineClassLinks.scheduledAt));
+    const rows = await listOnlineClassesForTenant(tenant.id);
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
@@ -749,15 +756,14 @@ router.post("/online-classes", ...guard, requirePermission("academics.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const [row] = await db.insert(onlineClassLinks).values({
-        tenantId: tenant.id,
+      const row = await insertOnlineClass(tenant.id, {
         title: req.body.title,
         url: req.body.url,
         classId: req.body.classId ?? null,
         subjectId: req.body.subjectId ?? null,
         scheduledAt: req.body.scheduledAt ? new Date(req.body.scheduledAt) : null,
         durationMinutes: req.body.durationMinutes ?? 60,
-      }).returning();
+      });
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
   },
@@ -766,25 +772,9 @@ router.post("/online-classes", ...guard, requirePermission("academics.manage"),
 router.get("/online-classes/:id/attendance", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [link] = await db.select().from(onlineClassLinks).where(and(
-      eq(onlineClassLinks.id, req.params.id),
-      eq(onlineClassLinks.tenantId, tenant.id),
-    )).limit(1);
+    const link = await getOnlineClassById(tenant.id, req.params.id);
     if (!link) throw new NotFoundError("Live class not found");
-    const rows = await db.select({
-      id: onlineClassAttendance.id,
-      studentId: onlineClassAttendance.studentId,
-      status: onlineClassAttendance.status,
-      joinedAt: onlineClassAttendance.joinedAt,
-      performanceScore: onlineClassAttendance.performanceScore,
-      notes: onlineClassAttendance.notes,
-      firstName: students.firstName,
-      lastName: students.lastName,
-      admissionNumber: students.admissionNumber,
-    })
-      .from(onlineClassAttendance)
-      .innerJoin(students, eq(students.id, onlineClassAttendance.studentId))
-      .where(and(eq(onlineClassAttendance.onlineClassId, link.id), eq(onlineClassAttendance.tenantId, tenant.id)));
+    const rows = await listOnlineClassAttendance(link.id, tenant.id);
     res.json({ success: true, data: { link, attendance: rows } });
   } catch (e) { next(e); }
 });
@@ -804,10 +794,7 @@ router.post("/online-classes/:id/attendance", ...guard, requirePermission("acade
     try {
       const tenant = (req as any).tenant;
       const user = (req as any).user;
-      const [link] = await db.select().from(onlineClassLinks).where(and(
-        eq(onlineClassLinks.id, req.params.id),
-        eq(onlineClassLinks.tenantId, tenant.id),
-      )).limit(1);
+      const link = await getOnlineClassById(tenant.id, req.params.id);
       if (!link) throw new NotFoundError("Live class not found");
       const saved = [];
       for (const rec of req.body.records) {
@@ -846,10 +833,7 @@ router.post("/online-classes/:id/attendance", ...guard, requirePermission("acade
 router.post("/online-classes/:id/init-roster", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [link] = await db.select().from(onlineClassLinks).where(and(
-      eq(onlineClassLinks.id, req.params.id),
-      eq(onlineClassLinks.tenantId, tenant.id),
-    )).limit(1);
+    const link = await getOnlineClassById(tenant.id, req.params.id);
     if (!link?.classId) throw new NotFoundError("Live class needs a class to load roster");
     const studentCols = await getTableColumns("students");
     const rosterConds = [
@@ -886,13 +870,10 @@ router.post("/online-classes/:id/sync-attendance", ...guard, requirePermission("
   try {
     const tenant = (req as any).tenant;
     const user = (req as any).user;
-    const [link] = await db.select().from(onlineClassLinks).where(and(
-      eq(onlineClassLinks.id, req.params.id),
-      eq(onlineClassLinks.tenantId, tenant.id),
-    )).limit(1);
+    const link = await getOnlineClassById(tenant.id, req.params.id);
     if (!link?.classId) throw new NotFoundError("Class required to sync attendance");
     const sessionDate = link.scheduledAt ?? new Date();
-    let sessionId = link.attendanceSessionId;
+    let sessionId = (link as { attendanceSessionId?: string }).attendanceSessionId;
     if (!sessionId) {
       const [session] = await db.insert(attendanceSessions).values({
         tenantId: tenant.id,
@@ -902,7 +883,7 @@ router.post("/online-classes/:id/sync-attendance", ...guard, requirePermission("
         takenBy: user.id,
       }).returning();
       sessionId = session.id;
-      await db.update(onlineClassLinks).set({ attendanceSessionId: sessionId }).where(eq(onlineClassLinks.id, link.id));
+      await setOnlineClassAttendanceSessionId(link.id, sessionId);
     }
     const oca = await db.select().from(onlineClassAttendance).where(eq(onlineClassAttendance.onlineClassId, link.id));
     let synced = 0;

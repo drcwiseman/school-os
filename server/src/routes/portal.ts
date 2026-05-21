@@ -491,7 +491,9 @@ router.get("/student/materials", requirePortalAuth, async (req, res, next) => {
 router.get("/student/online-classes", requirePortalAuth, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(onlineClassLinks).where(eq(onlineClassLinks.tenantId, tenant.id)).limit(30) });
+    const { listOnlineClassesForTenant } = await import("../lib/academics-query");
+    const rows = await listOnlineClassesForTenant(tenant.id);
+    res.json({ success: true, data: rows.slice(0, 30) });
   } catch (e) { next(e); }
 });
 
@@ -501,10 +503,8 @@ router.post("/student/online-classes/:id/join", requirePortalAuth, async (req, r
     const principal = (req as any).portalPrincipal;
     if (principal.kind !== "student") throw new ForbiddenError("Students only");
     const studentId = principal.account.studentId;
-    const [link] = await db.select().from(onlineClassLinks).where(and(
-      eq(onlineClassLinks.id, req.params.id),
-      eq(onlineClassLinks.tenantId, tenant.id),
-    )).limit(1);
+    const { getOnlineClassById } = await import("../lib/academics-query");
+    const link = await getOnlineClassById(tenant.id, req.params.id);
     if (!link) throw new NotFoundError("Class not found");
     const [ex] = await db.select().from(onlineClassAttendance).where(and(
       eq(onlineClassAttendance.onlineClassId, link.id),
