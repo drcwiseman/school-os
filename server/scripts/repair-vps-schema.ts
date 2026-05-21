@@ -5,6 +5,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../src/db";
 import { splitMigrationSql } from "../src/db/sql-runner";
+import { applyVpsSchemaPatch } from "../src/db/vps-schema-patch";
 import fs from "fs";
 import path from "path";
 
@@ -43,6 +44,9 @@ async function runSqlFile(filename: string) {
 async function main() {
   console.log("Repairing schema (idempotent)…\n");
 
+  console.log("── VPS schema patch (0019–0025 columns) ──");
+  await applyVpsSchemaPatch(run);
+
   await run(
     `ALTER TABLE "platform_admins" ADD COLUMN IF NOT EXISTS "role" text NOT NULL DEFAULT 'super_admin'`,
   );
@@ -57,29 +61,14 @@ async function main() {
     }
   }
 
-  await run(`ALTER TABLE "announcements" ADD COLUMN IF NOT EXISTS "publish_at" timestamp`);
-
-  await runSqlFile("0004_architecture_hardening.sql");
-  await runSqlFile("0005_portal_split_and_account_status.sql");
-  await runSqlFile("0006_phase3_soft_delete_audit.sql");
-  await runSqlFile("0007_phase4_soft_delete_plans.sql");
-  await runSqlFile("0008_phase15_announcement_schedule.sql");
-  await runSqlFile("0009_platform_geo_currency.sql");
-  await runSqlFile("0010_saas_ecosystem.sql");
-  await runSqlFile("0011_feature_catalog_expansion.sql");
-  await runSqlFile("0012_subscription_billing_interval.sql");
-  await runSqlFile("0013_platform_payouts.sql");
-  await runSqlFile("0014_platform_support_tickets.sql");
-  await runSqlFile("0015_platform_media.sql");
-  await runSqlFile("0016_platform_email.sql");
-  await runSqlFile("0017_platform_backups.sql");
-  await runSqlFile("0018_platform_extras.sql");
+  const files = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
+  for (const file of files) {
+    if (file === "full_schema.sql") continue;
+    await runSqlFile(file);
+  }
 
   console.log("\n✅ Repair applied.");
-  console.log("Next:");
-  console.log("  npm run db:migrate");
-  console.log("  npm run db:seed");
-  console.log("  npm run build && pm2 restart school-os --update-env");
+  console.log("Next: npm run build && pm2 restart school-os --update-env");
   process.exit(0);
 }
 

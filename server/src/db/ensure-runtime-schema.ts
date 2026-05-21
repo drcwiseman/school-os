@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "./index";
 import { FEATURE_CATALOG } from "../lib/feature-catalog";
 import { splitMigrationSql } from "./sql-runner";
+import { applyVpsSchemaPatch } from "./vps-schema-patch";
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 
@@ -26,6 +27,14 @@ async function runMigrationFile(filename: string) {
  * Idempotent fixes for VPS DBs that lag behind code. Runs once at server boot.
  */
 export async function ensureRuntimeSchema() {
+  await applyVpsSchemaPatch(async (stmt) => {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (err) {
+      console.warn("[ensureRuntimeSchema] patch:", (err as Error).message?.slice(0, 120));
+    }
+  });
+
   const statements = [
     `ALTER TABLE "platform_backups" ADD COLUMN IF NOT EXISTS "offsite_key" text`,
     `ALTER TABLE "platform_backups" ADD COLUMN IF NOT EXISTS "offsite_status" text`,
