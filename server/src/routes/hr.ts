@@ -41,6 +41,8 @@ router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, ne
         ilike(staff.department, "%teaching%"),
         ilike(staff.department, "%academic%"),
         eq(staff.department, "Teacher"),
+        eq(staff.jobTitle, "Teacher"),
+        ilike(staff.jobTitle, "%teacher%"),
       )!);
     }
     res.json({ success: true, data: await db.select().from(staff).where(and(...conditions)).orderBy(desc(staff.createdAt)) });
@@ -84,8 +86,21 @@ router.post("/staff/import/csv", ...guard, requirePermission("hr.manage"),
   }
 );
 
+router.get("/staff/:id", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.select().from(staff).where(and(
+      eq(staff.id, req.params.id),
+      eq(staff.tenantId, tenant.id),
+      isNull(staff.deletedAt),
+    )).limit(1);
+    if (!row) throw new NotFoundError("Staff not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
 router.post("/staff", ...guard, requirePermission("hr.manage"),
-  validate({ body: z.object({ employeeNo: z.string(), firstName: z.string(), lastName: z.string(), email: z.string().optional(), department: z.string().optional() }) }),
+  validate({ body: z.object({ employeeNo: z.string(), firstName: z.string(), lastName: z.string(), email: z.string().optional(), department: z.string().optional(), jobTitle: z.string().optional() }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
@@ -93,6 +108,31 @@ router.post("/staff", ...guard, requirePermission("hr.manage"),
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
   }
+);
+
+router.patch("/staff/:id", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({
+    employeeNo: z.string().optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    email: z.string().optional(),
+    department: z.string().optional(),
+    jobTitle: z.string().optional(),
+    status: z.string().optional(),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [existing] = await db.select().from(staff).where(and(
+        eq(staff.id, req.params.id),
+        eq(staff.tenantId, tenant.id),
+        isNull(staff.deletedAt),
+      )).limit(1);
+      if (!existing) throw new NotFoundError("Staff not found");
+      const [row] = await db.update(staff).set(req.body).where(eq(staff.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
 );
 
 router.delete("/staff/:id", ...guard, requirePermission("hr.manage"), async (req, res, next) => {

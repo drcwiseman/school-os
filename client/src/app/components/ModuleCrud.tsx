@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "./Toast";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Pencil } from "lucide-react";
 import { ConfirmAction } from "./ConfirmAction";
 import { useAuth } from "../state/AuthContext";
 
@@ -22,26 +22,38 @@ export interface ColumnDef {
 interface ModuleCrudProps {
   title: string;
   apiPath: string;
+  listQuery?: string;
   columns: ColumnDef[];
   fields: FieldDef[];
   emptyMessage?: string;
   allowDelete?: boolean;
+  allowEdit?: boolean;
   deletePermission?: string;
+  editPermission?: string;
+  createPermission?: string;
 }
 
-export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns, fields, emptyMessage, allowDelete, deletePermission }) => {
+export const ModuleCrud: React.FC<ModuleCrudProps> = ({
+  title, apiPath, listQuery, columns, fields, emptyMessage, allowDelete, allowEdit,
+  deletePermission, editPermission, createPermission,
+}) => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const { hasPermission } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
+
+  const listUrl = listQuery
+    ? `/s/${schoolSlug}/api/${apiPath}?${listQuery}`
+    : `/s/${schoolSlug}/api/${apiPath}`;
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/s/${schoolSlug}/api/${apiPath}`);
+      const res = await api.get(listUrl);
       setRows(res.data ?? []);
     } catch (err: any) {
       toast(err.message, "error");
@@ -50,7 +62,24 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
     }
   };
 
-  useEffect(() => { load(); }, [schoolSlug, apiPath]);
+  useEffect(() => { load(); }, [schoolSlug, apiPath, listQuery]);
+
+  const openCreate = () => {
+    setEditId(null);
+    setForm({});
+    setShowForm(true);
+  };
+
+  const openEdit = (row: Record<string, unknown>) => {
+    setEditId(String(row.id));
+    const next: Record<string, string> = {};
+    fields.forEach((f) => {
+      const v = row[f.name];
+      next[f.name] = v != null ? String(v) : "";
+    });
+    setForm(next);
+    setShowForm(true);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,9 +90,15 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
       body[f.name] = f.type === "number" ? Number(v) : v;
     });
     try {
-      await api.post(`/s/${schoolSlug}/api/${apiPath}`, body);
-      toast("Saved", "success");
+      if (editId) {
+        await api.patch(`/s/${schoolSlug}/api/${apiPath}/${editId}`, body);
+        toast("Updated", "success");
+      } else {
+        await api.post(`/s/${schoolSlug}/api/${apiPath}`, body);
+        toast("Saved", "success");
+      }
       setShowForm(false);
+      setEditId(null);
       setForm({});
       load();
     } catch (err: any) {
@@ -71,6 +106,8 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
     }
   };
 
+  const canCreate = !createPermission || hasPermission(createPermission);
+  const canEdit = allowEdit && (!editPermission || hasPermission(editPermission));
   const canDelete = allowDelete && (!deletePermission || hasPermission(deletePermission));
 
   const removeRow = async (id: string) => {
@@ -85,7 +122,19 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
 
   return (
     <div className="space-y-4">
-      <CrudHeader title={title} showForm={showForm} onToggle={() => setShowForm(!showForm)} />
+      <CrudHeader
+        title={title}
+        showForm={showForm}
+        canAdd={canCreate}
+        onToggle={() => {
+          if (showForm) {
+            setShowForm(false);
+            setEditId(null);
+          } else {
+            openCreate();
+          }
+        }}
+      />
 
       {showForm && (
         <form onSubmit={submit} className="card p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -102,8 +151,8 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
             </div>
           ))}
           <div className="md:col-span-2 flex justify-end gap-2">
-            <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
-            <button type="submit" className="btn-primary">Save</button>
+            <button type="button" className="btn-ghost" onClick={() => { setShowForm(false); setEditId(null); }}>Cancel</button>
+            <button type="submit" className="btn-primary">{editId ? "Update" : "Save"}</button>
           </div>
         </form>
       )}
@@ -116,23 +165,30 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
         ) : (
           <table className="table">
             <thead>
-              <tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}{canDelete && <th>Actions</th>}</tr>
+              <tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}{(canEdit || canDelete) && <th>Actions</th>}</tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={columns.length + (canDelete ? 1 : 0)} className="text-center py-8 text-slate-400">{emptyMessage ?? "No records."}</td></tr>
+                <tr><td colSpan={columns.length + (canEdit || canDelete ? 1 : 0)} className="text-center py-8 text-slate-400">{emptyMessage ?? "No records."}</td></tr>
               ) : rows.map((row) => (
                 <tr key={row.id}>
                   {columns.map((c) => (
                     <td key={c.key}>{c.render ? c.render(row) : String(row[c.key] ?? "—")}</td>
                   ))}
-                  {canDelete && (
-                    <td>
-                      <ConfirmAction
-                        label="Remove"
-                        confirmMessage="Remove this record?"
-                        onConfirm={() => removeRow(row.id)}
-                      />
+                  {(canEdit || canDelete) && (
+                    <td className="space-x-2">
+                      {canEdit && (
+                        <button type="button" className="btn-ghost text-xs inline-flex items-center gap-1" onClick={() => openEdit(row)}>
+                          <Pencil className="w-3 h-3" /> Edit
+                        </button>
+                      )}
+                      {canDelete && (
+                        <ConfirmAction
+                          label="Remove"
+                          confirmMessage="Remove this record?"
+                          onConfirm={() => removeRow(row.id)}
+                        />
+                      )}
                     </td>
                   )}
                 </tr>
@@ -145,13 +201,15 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({ title, apiPath, columns,
   );
 };
 
-function CrudHeader({ title, showForm, onToggle }: { title: string; showForm: boolean; onToggle: () => void }) {
+function CrudHeader({ title, showForm, onToggle, canAdd }: { title: string; showForm: boolean; onToggle: () => void; canAdd?: boolean }) {
   return (
     <div className="flex justify-between items-center">
       <h2 className="text-lg font-semibold text-white">{title}</h2>
-      <button type="button" className="btn-primary" onClick={onToggle}>
-        <Plus className="w-4 h-4" /> {showForm ? "Close" : "Add"}
-      </button>
+      {canAdd !== false && (
+        <button type="button" className="btn-primary" onClick={onToggle}>
+          <Plus className="w-4 h-4" /> {showForm ? "Close" : "Add"}
+        </button>
+      )}
     </div>
   );
 }
