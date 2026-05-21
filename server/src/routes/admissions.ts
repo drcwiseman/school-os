@@ -59,6 +59,91 @@ const createApplicantSchema = z.object({
   customFields: z.record(z.any()).optional(),
 });
 
+const updateApplicantSchema = createApplicantSchema.partial().extend({
+  stage: z.string().min(1).optional(),
+  notes: z.string().optional(),
+});
+
+// GET /s/:schoolSlug/api/admissions/:id
+admissionsRouter.get("/:id", requirePermission("admissions.view"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = (req as any).tenant!.id;
+    const { id } = req.params;
+    const [row] = await db.select().from(applicants).where(and(eq(applicants.id, id), eq(applicants.tenantId, tenantId))).limit(1);
+    if (!row) throw new AppError("Applicant not found", 404);
+    res.json({ success: true, data: row });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /s/:schoolSlug/api/admissions/:id
+admissionsRouter.patch("/:id", requirePermission("admissions.edit"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = (req as any).tenant!.id;
+    const { id } = req.params;
+    const body = updateApplicantSchema.parse(req.body);
+    const [existing] = await db.select().from(applicants).where(and(eq(applicants.id, id), eq(applicants.tenantId, tenantId)));
+    if (!existing) throw new AppError("Applicant not found", 404);
+
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.firstName !== undefined) patch.firstName = body.firstName;
+    if (body.lastName !== undefined) patch.lastName = body.lastName;
+    if (body.email !== undefined) patch.email = body.email || null;
+    if (body.phone !== undefined) patch.phone = body.phone ?? null;
+    if (body.dob !== undefined) patch.dob = body.dob ? new Date(body.dob) : null;
+    if (body.gender !== undefined) patch.gender = body.gender;
+    if (body.formId !== undefined) patch.formId = body.formId;
+    if (body.customFields !== undefined) patch.customFields = body.customFields;
+    if (body.stage !== undefined) patch.stage = body.stage;
+    if (body.notes !== undefined) patch.notes = body.notes;
+
+    const [updated] = await db.update(applicants).set(patch).where(eq(applicants.id, id)).returning();
+
+    await createAuditLog({
+      tenantId,
+      actorUserId: (req as any).user!.id,
+      action: "UPDATE",
+      entityType: "applicant",
+      entityId: id,
+      before: existing,
+      after: updated,
+      ip: req.ip,
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /s/:schoolSlug/api/admissions/:id
+admissionsRouter.delete("/:id", requirePermission("admissions.edit"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = (req as any).tenant!.id;
+    const { id } = req.params;
+    const [existing] = await db.select().from(applicants).where(and(eq(applicants.id, id), eq(applicants.tenantId, tenantId)));
+    if (!existing) throw new AppError("Applicant not found", 404);
+    if (existing.convertedTo) throw new ConflictError("Cannot delete an enrolled applicant; remove the student record separately if needed");
+
+    await db.delete(applicants).where(eq(applicants.id, id));
+
+    await createAuditLog({
+      tenantId,
+      actorUserId: (req as any).user!.id,
+      action: "DELETE",
+      entityType: "applicant",
+      entityId: id,
+      before: existing,
+      ip: req.ip,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 admissionsRouter.post("/", requirePermission("admissions.create"), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenantId = (req as any).tenant!.id;
@@ -293,7 +378,7 @@ admissionsRouter.post("/:id/enroll", requirePermission("admissions.enroll"), asy
   }
 });
 
-admissionsRouter.patch("/:id/waiting-list", requirePermission("admissions.manage"),
+admissionsRouter.patch("/:id/waiting-list", requirePermission("admissions.edit"),
   validate({ body: z.object({ waitingList: z.boolean() }) }),
   async (req, res, next) => {
     try {
@@ -305,7 +390,7 @@ admissionsRouter.patch("/:id/waiting-list", requirePermission("admissions.manage
   },
 );
 
-admissionsRouter.patch("/:id/interview", requirePermission("admissions.manage"),
+admissionsRouter.patch("/:id/interview", requirePermission("admissions.edit"),
   validate({ body: z.object({ interviewAt: z.string(), notes: z.string().optional() }) }),
   async (req, res, next) => {
     try {
@@ -321,7 +406,7 @@ admissionsRouter.patch("/:id/interview", requirePermission("admissions.manage"),
   },
 );
 
-admissionsRouter.patch("/:id/fee-paid", requirePermission("admissions.manage"),
+admissionsRouter.patch("/:id/fee-paid", requirePermission("admissions.edit"),
   validate({ body: z.object({ paid: z.boolean() }) }),
   async (req, res, next) => {
     try {

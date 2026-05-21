@@ -3,10 +3,11 @@ import { useParams, Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../state/AuthContext";
-import {
+import { 
   Plus, CheckCircle, Clock, XCircle, FileText, UserPlus, LayoutTemplate,
-  Calendar, Loader2, ShieldCheck, ShieldAlert, Download, Search,
+  Calendar, Loader2, ShieldCheck, ShieldAlert, Download, Search, Pencil,
 } from "lucide-react";
+import { ConfirmAction } from "../components/ConfirmAction";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -17,6 +18,8 @@ interface Applicant {
   firstName: string;
   lastName: string;
   email: string;
+  phone?: string | null;
+  notes?: string | null;
   stage: string;
   createdAt: string;
   convertedTo: string | null;
@@ -45,7 +48,12 @@ export const Admissions: React.FC = () => {
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [newApplicant, setNewApplicant] = useState({ firstName: "", lastName: "", email: "" });
+  const [newApplicant, setNewApplicant] = useState({ firstName: "", lastName: "", email: "", phone: "" });
+  const [editTarget, setEditTarget] = useState<Applicant | null>(null);
+  const [editForm, setEditForm] = useState({ firstName: "", lastName: "", email: "", phone: "", notes: "" });
+  const [editFields, setEditFields] = useState<FormField[]>([]);
+  const [editCustomFields, setEditCustomFields] = useState<Record<string, any>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
   const [enrollTarget, setEnrollTarget] = useState<Applicant | null>(null);
   const [enrollAdmNo, setEnrollAdmNo] = useState("");
   const [enrolledStudentId, setEnrolledStudentId] = useState<string | null>(null);
@@ -112,9 +120,64 @@ export const Admissions: React.FC = () => {
       };
       await api.post(`/s/${schoolSlug}/api/admissions`, payload);
       setShowAdd(false);
-      setNewApplicant({ firstName: "", lastName: "", email: "" });
+      setNewApplicant({ firstName: "", lastName: "", email: "", phone: "" });
       setCustomFieldsData({});
       toast("Applicant added", "success");
+      fetchApplicants();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
+  const openEdit = async (app: Applicant) => {
+    setEditTarget(app);
+    setEditForm({
+      firstName: app.firstName,
+      lastName: app.lastName,
+      email: app.email ?? "",
+      phone: (app as any).phone ?? "",
+      notes: (app as any).notes ?? "",
+    });
+    setEditCustomFields(app.customFields ?? {});
+    if (app.formId) {
+      try {
+        const res = await api.get(`/s/${schoolSlug}/api/admission-forms/${app.formId}/fields`);
+        setEditFields(res.data ?? []);
+      } catch { setEditFields([]); }
+    } else {
+      setEditFields([]);
+    }
+  };
+
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    setSavingEdit(true);
+    try {
+      await api.patch(`/s/${schoolSlug}/api/admissions/${editTarget.id}`, {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        email: editForm.email || "",
+        phone: editForm.phone || undefined,
+        notes: editForm.notes || undefined,
+        customFields: editCustomFields,
+      });
+      toast("Applicant updated", "success");
+      setEditTarget(null);
+      fetchApplicants();
+    } catch (err: any) {
+      toast(err.message, "error");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteApplicant = async (app: Applicant) => {
+    try {
+      await api.delete(`/s/${schoolSlug}/api/admissions/${app.id}`);
+      toast("Applicant removed", "success");
+      if (timelineTarget?.id === app.id) setTimelineTarget(null);
+      if (editTarget?.id === app.id) setEditTarget(null);
       fetchApplicants();
     } catch (err: any) {
       toast(err.message, "error");
@@ -292,6 +355,7 @@ export const Admissions: React.FC = () => {
               <input required className="input bg-white dark:bg-slate-800" placeholder="First Name" value={newApplicant.firstName} onChange={(e) => setNewApplicant({ ...newApplicant, firstName: e.target.value })} />
               <input required className="input bg-white dark:bg-slate-800" placeholder="Last Name" value={newApplicant.lastName} onChange={(e) => setNewApplicant({ ...newApplicant, lastName: e.target.value })} />
               <input type="email" className="input bg-white dark:bg-slate-800" placeholder="Email (Optional)" value={newApplicant.email} onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })} />
+              <input className="input bg-white dark:bg-slate-800" placeholder="Phone (Optional)" value={newApplicant.phone} onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })} />
             </div>
             
             {fields.length > 0 && (
@@ -545,10 +609,23 @@ export const Admissions: React.FC = () => {
                   <td className="px-5 py-4 text-slate-500 dark:text-slate-400 font-medium">
                     {new Date(app.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                   </td>
-                  <td className="px-5 py-4 text-right space-x-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <td className="px-5 py-4 text-right space-x-2">
                     <button type="button" className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 shadow-sm transition-all" onClick={() => openTimeline(app)}>
                       File & Timeline
                     </button>
+                    {hasPermission("admissions.edit") && !app.convertedTo && (
+                      <>
+                        <button type="button" onClick={() => openEdit(app)} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 shadow-sm">
+                          <Pencil className="w-3.5 h-3.5 inline mr-1" /> Edit
+                        </button>
+                        <ConfirmAction
+                          label="Delete"
+                          confirmMessage={`Delete applicant ${app.firstName} ${app.lastName}?`}
+                          onConfirm={() => deleteApplicant(app)}
+                          className="px-3 py-1.5 rounded-lg text-xs inline"
+                        />
+                      </>
+                    )}
                     {!app.convertedTo && hasPermission("admissions.enroll") && (
                       <button type="button" onClick={() => openEnroll(app)} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/20 shadow-sm transition-all">
                         <UserPlus className="w-3.5 h-3.5 inline mr-1" /> Enroll
@@ -561,6 +638,42 @@ export const Admissions: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <form onSubmit={saveEdit} className="w-full max-w-lg rounded-2xl border border-blue-200/60 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit applicant</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input required className="input" placeholder="First name" value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} />
+              <input required className="input" placeholder="Last name" value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} />
+              <input type="email" className="input" placeholder="Email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+              <input className="input" placeholder="Phone" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+              <textarea className="input sm:col-span-2 min-h-[72px]" placeholder="Internal notes" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+            </div>
+            {editFields.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                {editFields.map((field) => (
+                  <div key={field.id}>
+                    <label className="block text-xs text-slate-500 mb-1">{field.fieldName}</label>
+                    <input
+                      type={field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text"}
+                      className="input text-sm"
+                      value={editCustomFields[field.fieldKey] ?? ""}
+                      onChange={(e) => setEditCustomFields({ ...editCustomFields, [field.fieldKey]: e.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" className="px-4 py-2 rounded-xl text-sm text-slate-500" onClick={() => setEditTarget(null)}>Cancel</button>
+              <button type="submit" disabled={savingEdit} className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
+                {savingEdit ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
