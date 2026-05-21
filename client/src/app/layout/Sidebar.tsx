@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import {
   LayoutDashboard, Users, UserCog, LogOut, Settings, GraduationCap, DollarSign, BookMarked, Building2, Shield, Sparkles,
-  CalendarCheck, BookOpen, ClipboardList, Briefcase, Wallet, Bus, Megaphone, FileBarChart, School,
+  CalendarCheck, BookOpen, ClipboardList, Briefcase, Wallet, Bus, Megaphone, FileBarChart, School, Warehouse,
   ShieldAlert, HeartPulse, Library, Package, Home, ExternalLink, HelpCircle, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { OPERATIONS_MODULES } from "../pages/operations-modules";
@@ -45,6 +45,7 @@ export const Sidebar: React.FC = () => {
     { name: "Finance", path: `/s/${schoolSlug}/finance`, icon: DollarSign, perm: "finance.view", feature: MODULE_FEATURE_CODES.finance },
     { name: "HR", path: `/s/${schoolSlug}/hr`, icon: Briefcase, perm: "hr.view", feature: MODULE_FEATURE_CODES.hr },
     { name: "Payroll", path: `/s/${schoolSlug}/payroll`, icon: Wallet, perm: "payroll.view", feature: MODULE_FEATURE_CODES.payroll },
+    { name: "Facilities", path: `/s/${schoolSlug}/facilities`, icon: Warehouse },
     ...OPERATIONS_MODULES.map((m) => ({
       name: m.label,
       path: `/s/${schoolSlug}/ops/${m.id}`,
@@ -56,7 +57,7 @@ export const Sidebar: React.FC = () => {
     { name: "Parent portal", path: `/s/${schoolSlug}/portal/login`, icon: ExternalLink, feature: MODULE_FEATURE_CODES.portal, external: true },
     { name: "Reports", path: `/s/${schoolSlug}/reports`, icon: FileBarChart, perm: "reports.view", feature: MODULE_FEATURE_CODES.reports },
     { name: "AI Admin", path: `/s/${schoolSlug}/ai-admin`, icon: Sparkles, perm: "settings.view", feature: "ai_homework" },
-    { name: "Users & Roles", path: `/s/${schoolSlug}/admin`, icon: Users, perm: "rbac.manage.roles" },
+    { name: "Administration", path: `/s/${schoolSlug}/admin`, icon: Shield, perm: "settings.view" },
     { name: "Campuses", path: `/s/${schoolSlug}/campuses`, icon: Building2, feature: "multi_campus" },
     { name: "Security", path: `/s/${schoolSlug}/security`, icon: Shield, perm: "settings.view" },
     { name: "Help", path: `/s/${schoolSlug}/help`, icon: HelpCircle },

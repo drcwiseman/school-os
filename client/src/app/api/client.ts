@@ -54,8 +54,8 @@ class ApiClient {
 
 export const api = new ApiClient();
 
-export async function downloadPdf(endpoint: string) {
-  const res = await fetch(`${API_BASE}${endpoint}`, { credentials: "include" });
+export async function downloadPdf(endpoint: string, init?: RequestInit) {
+  const res = await fetch(`${API_BASE}${endpoint}`, { credentials: "include", ...init });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     throw new Error(data?.message || `Download failed: ${res.status}`);

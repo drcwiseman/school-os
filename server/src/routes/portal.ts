@@ -7,7 +7,7 @@ import {
   portalMessages, routeAssignments, transportRoutes, transportStops, tenantSettings,
   curriculumFrameworks, curriculumUnits, cbtPapers, timetablePeriods, studentMaterials, onlineClassLinks,
   onlineClassAttendance, assignmentSubmissions, studentClassHistory, schoolEvents,
-  vehicleGpsPings,
+  vehicleGpsPings, studentLeaveRequests,
 } from "../db/schema";
 import { adminAssistantReply, studyRecommendations } from "../services/ai-admin";
 import { generateReportCardPdf, generateReceiptPdf, generateInvoicePdf } from "../services/pdf";
@@ -219,9 +219,20 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
         .where(and(eq(attendanceRecords.tenantId, tenant.id), eq(attendanceRecords.studentId, student.id)))
         .orderBy(desc(attendanceSessions.date))
         .limit(30);
+      await promoteScheduledAnnouncements(tenant.id);
+      const noticeboard = await db.select().from(announcements).where(and(
+        eq(announcements.tenantId, tenant.id),
+        eq(announcements.published, true),
+        inArray(announcements.audience, ["all", "students"]),
+      )).orderBy(desc(announcements.createdAt)).limit(15);
+      const myLeaves = await db.select().from(studentLeaveRequests).where(and(
+        eq(studentLeaveRequests.tenantId, tenant.id),
+        eq(studentLeaveRequests.studentId, student.id),
+      )).orderBy(desc(studentLeaveRequests.createdAt)).limit(10);
+
       res.json({
         success: true,
-        data: { student, assignments: classAssignments, submissions: mySubmissions, reportCard, attendance },
+        data: { student, assignments: classAssignments, submissions: mySubmissions, reportCard, attendance, noticeboard, leaves: myLeaves },
       });
     }
   } catch (e) { next(e); }
@@ -587,6 +598,68 @@ router.post("/student/tutor", requirePortalAuth,
       const reply = await adminAssistantReply(tenant.id, req.body.message);
       const plan = req.body.subject ? await studyRecommendations(tenant.id, req.body.subject) : [];
       res.json({ success: true, data: { reply, studyPlan: plan } });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/noticeboard", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    await promoteScheduledAnnouncements(tenant.id);
+    const audienceFilter = principal.kind === "student"
+      ? ["all", "students"]
+      : ["all", "parents", "students"];
+    const rows = await db.select().from(announcements).where(and(
+      eq(announcements.tenantId, tenant.id),
+      eq(announcements.published, true),
+      inArray(announcements.audience, audienceFilter as string[]),
+    )).orderBy(desc(announcements.createdAt)).limit(30);
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.get("/leaves", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    const studentIds = await getPortalAccessibleStudentIds(principal);
+    if (!studentIds.length) return res.json({ success: true, data: [] });
+    const rows = await db.select().from(studentLeaveRequests).where(and(
+      eq(studentLeaveRequests.tenantId, tenant.id),
+      inArray(studentLeaveRequests.studentId, studentIds),
+    )).orderBy(desc(studentLeaveRequests.createdAt));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/leaves", requirePortalAuth,
+  validate({ body: z.object({
+    studentId: z.string().uuid().optional(),
+    startDate: z.string(),
+    endDate: z.string(),
+    reason: z.string().min(1),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const principal = (req as any).portalPrincipal;
+      let studentId = req.body.studentId;
+      if (principal.kind === "student") {
+        studentId = principal.account.studentId;
+      } else if (!studentId) {
+        throw new BadRequestError("studentId is required for parent leave requests");
+      }
+      await assertPortalCanAccessStudent(principal, tenant.id, studentId!);
+      const [row] = await db.insert(studentLeaveRequests).values({
+        tenantId: tenant.id,
+        studentId: studentId!,
+        startDate: new Date(req.body.startDate),
+        endDate: new Date(req.body.endDate),
+        reason: req.body.reason,
+        status: "pending",
+      }).returning();
+      res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
   },
 );

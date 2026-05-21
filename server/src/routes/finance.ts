@@ -31,11 +31,13 @@ router.get("/fee-heads", ...guard, requirePermission("finance.view"), async (req
 });
 
 router.post("/fee-heads", ...guard, requirePermission("finance.invoice.create"),
-  validate({ body: z.object({ name: z.string().min(1), description: z.string().optional() }) }),
+  validate({ body: z.object({ name: z.string().min(1), feeType: z.string().optional(), description: z.string().optional() }) }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const tenant = (req as any).tenant;
-      const [row] = await db.insert(feeHeads).values({ tenantId: tenant.id, name: req.body.name, description: req.body.description }).returning();
+      const [row] = await db.insert(feeHeads).values({
+        tenantId: tenant.id, name: req.body.name, feeType: req.body.feeType ?? "other", description: req.body.description,
+      }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (err) { next(err); }
   }
@@ -239,6 +241,10 @@ router.post("/expenses", ...guard, requirePermission("finance.payment.create"),
       const tenant = (req as any).tenant;
       const user = (req as any).user;
       const [row] = await db.insert(expenses).values({ tenantId: tenant.id, description: req.body.description, amount: req.body.amount, category: req.body.category, createdBy: user.id }).returning();
+      if (req.body.category) {
+        const [bud] = await db.select().from(budgets).where(and(eq(budgets.tenantId, tenant.id), eq(budgets.category, req.body.category))).limit(1);
+        if (bud) await db.update(budgets).set({ spentMinor: bud.spentMinor + req.body.amount }).where(eq(budgets.id, bud.id));
+      }
       await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "expense.create", entityType: "expense", entityId: row.id, after: row, ip: req.ip });
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }

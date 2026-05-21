@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
-import { Search, Plus, Loader2, Download, Upload } from "lucide-react";
+import { Search, Plus, Loader2, Download, Upload, Cake } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const CSV_TEMPLATE = "admissionNumber,firstName,lastName,status,gender\n2026-001,Jane,Doe,active,female";
@@ -39,6 +39,7 @@ export const StudentsList: React.FC = () => {
   const [showImport, setShowImport] = useState(false);
   const [csvText, setCsvText] = useState(CSV_TEMPLATE);
   const [importing, setImporting] = useState(false);
+  const [birthdays, setBirthdays] = useState<any[]>([]);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -59,6 +60,7 @@ export const StudentsList: React.FC = () => {
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
   useEffect(() => {
     api.get(`/s/${schoolSlug}/api/academics/classes`).then((r) => setClasses(r.data ?? [])).catch(() => {});
+    api.get(`/s/${schoolSlug}/api/student-mgmt/birthdays/upcoming?days=14`).then((r) => setBirthdays((r.data ?? []).slice(0, 5))).catch(() => {});
   }, [schoolSlug]);
 
   const applyFilters = () => {
@@ -156,6 +158,19 @@ export const StudentsList: React.FC = () => {
           )}
         </div>
       </div>
+
+      {birthdays.length > 0 && (
+        <div className="card p-4 flex flex-wrap items-center gap-3">
+          <Cake className="w-5 h-5 text-pink-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-medium">Upcoming birthdays</p>
+            <p className="text-slate-400 text-xs truncate">
+              {birthdays.map((b: any) => `${b.firstName} (${b.daysUntil === 0 ? "today" : `${b.daysUntil}d`})`).join(" · ")}
+            </p>
+          </div>
+          <Link to={`/s/${schoolSlug}/students/birthdays`} className="btn-ghost text-xs shrink-0">View all</Link>
+        </div>
+      )}
 
       {showImport && hasPermission("students.create") && (
         <form onSubmit={importCsv} className="card p-6 space-y-3">

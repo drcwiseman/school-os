@@ -66,6 +66,14 @@ const PERMISSION_DEFS = [
   // boarding
   { code: "boarding.view",           module: "boarding",    description: "View boarding" },
   { code: "boarding.manage",         module: "boarding",    description: "Manage boarding" },
+  // gate pass
+  { code: "gate_pass.view",          module: "gate_pass",   description: "View gate passes and visitors" },
+  { code: "gate_pass.manage",        module: "gate_pass",   description: "Create and manage gate passes" },
+  // tickets & staff hostel
+  { code: "ticket.view",             module: "ticket",      description: "View facility support tickets" },
+  { code: "ticket.manage",           module: "ticket",      description: "Create and resolve support tickets" },
+  { code: "staff_hostel.view",       module: "staff_hostel", description: "View staff hostel housing" },
+  { code: "staff_hostel.manage",     module: "staff_hostel", description: "Manage staff hostel allocations" },
   // messaging
   { code: "messaging.view",          module: "messaging",   description: "View messages" },
   { code: "messaging.send",          module: "messaging",   description: "Send messages/campaigns" },

@@ -12,6 +12,7 @@ import { NotFoundError } from "../middleware/error";
 import { enqueueJob } from "../services/queue";
 import { requireTenantFeature } from "../middleware/require-feature";
 import { promoteScheduledAnnouncements } from "../services/announcements";
+import { broadcastAnnouncement } from "../services/tenant-messaging";
 
 const router = Router();
 
@@ -57,7 +58,8 @@ router.post("/announcements", ...guard, requirePermission("messaging.send"),
   validate({ body: z.object({
     title: z.string(),
     body: z.string(),
-    audience: z.enum(["all", "parents", "staff"]).default("all"),
+    audience: z.enum(["all", "parents", "staff", "students"]).default("all"),
+    notifyChannels: z.array(z.enum(["sms", "email", "in_app"])).optional(),
     published: z.boolean().optional(),
     publishAt: z.string().nullable().optional(),
   }) }),
@@ -73,8 +75,12 @@ router.post("/announcements", ...guard, requirePermission("messaging.send"),
         audience: req.body.audience,
         published: pub.published,
         publishAt: pub.publishAt,
+        notifyChannels: req.body.notifyChannels ?? [],
         createdBy: user.id,
       }).returning();
+      if (pub.published && req.body.notifyChannels?.length) {
+        await broadcastAnnouncement(tenant.id, row, req.body.notifyChannels);
+      }
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
   }
@@ -85,7 +91,7 @@ router.patch("/announcements/:id", ...guard, requirePermission("messaging.send")
     title: z.string().optional(),
     body: z.string().optional(),
     published: z.boolean().optional(),
-    audience: z.enum(["all", "parents", "staff"]).optional(),
+    audience: z.enum(["all", "parents", "staff", "students"]).optional(),
     publishAt: z.string().nullable().optional(),
   }) }),
   async (req, res, next) => {

@@ -68,6 +68,7 @@ router.get("/", ...guard, requirePermission("settings.view"), async (req, res, n
         sidebarOrderJson: [],
         admissionWorkflowJson: [],
         onboardingChecklistJson: [],
+        setupWizardJson: {},
         curriculumFramework: null,
         latePenaltyPercent: 0,
       } as typeof tenantSettings.$inferSelect : null;

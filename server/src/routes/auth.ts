@@ -89,6 +89,8 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       .where(eq(userRoles.userId, user.id));
     const modules = await getTenantModuleAccess(user.tenantId);
     const locale = await localeForTenant(user.tenantId);
+    const [settingsRow] = await db.select({ themeJson: tenantSettings.themeJson }).from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, user.tenantId)).limit(1);
     const session = (req as any).session;
     res.json({
       success: true,
@@ -98,6 +100,7 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       modules,
       country: locale.country,
       currency: locale.currency,
+      theme: settingsRow?.themeJson ?? { mode: "dark", accent: "#6366f1" },
       impersonation: isReadOnlyImpersonation(session) ? { readOnly: true } : null,
     });
   } catch (err) { next(err); }

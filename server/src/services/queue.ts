@@ -34,6 +34,9 @@ export async function tick() {
           const payload = job.payload as { campaignId?: string };
           if (!payload?.campaignId) throw new Error("Missing campaignId");
           result = await runPlatformEmailCampaignJob(payload.campaignId);
+        } else if (job.type === "finance.auto_invoices") {
+          const { runDueRecurringSchedules } = await import("./invoice-generation");
+          result = await runDueRecurringSchedules(job.tenantId!);
         }
         await db.update(jobs).set({ status: "done", result: result as object, updatedAt: new Date() }).where(eq(jobs.id, job.id));
       } catch (err: any) {

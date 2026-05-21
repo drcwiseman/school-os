@@ -5,6 +5,18 @@ import { useToast } from "../components/Toast";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
 import { DollarSign, Loader2, Receipt } from "lucide-react";
+import {
+  AccountsDashboardPanel,
+  AutoInvoicesPanel,
+  BudgetsPanel,
+  ConcessionsPanel,
+  DiscountsPanel,
+  DonationsPanel,
+  FEE_TYPES,
+  IncomeExpensePanel,
+  PaymentGatewaysPanel,
+  PaymentHistoryPanel,
+} from "../components/finance/FinanceEnhancementPanels";
 
 function StatCard({ label, value, icon: Icon }: { label: string; value: string; icon: React.ElementType }) {
   return (
@@ -24,7 +36,11 @@ export const Finance: React.FC = () => {
   const { hasPermission, formatMoney, currency, country } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [tab, setTab] = useState<"overview" | "billing" | "collect" | "payments" | "debtors" | "receipts" | "fees" | "aging" | "accounting" | "statements">("overview");
+  type FinanceTab =
+    | "overview" | "billing" | "collect" | "payments" | "debtors" | "receipts" | "fees"
+    | "aging" | "accounting" | "statements"
+    | "concessions" | "discounts" | "auto-invoices" | "donations" | "budgets" | "gateways" | "income";
+  const [tab, setTab] = useState<FinanceTab>("overview");
   const [aging, setAging] = useState<any>(null);
   const [ledger, setLedger] = useState<any[]>([]);
   const [statements, setStatements] = useState<any>(null);
@@ -40,8 +56,8 @@ export const Finance: React.FC = () => {
   const [studentList, setStudentList] = useState<{ id: string; firstName: string; lastName: string; admissionNumber: string }[]>([]);
   const [terms, setTerms] = useState<{ id: string; name: string }[]>([]);
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
-  const [feeHeads, setFeeHeads] = useState<{ id: string; name: string }[]>([]);
-  const [feeHeadForm, setFeeHeadForm] = useState({ name: "", description: "" });
+  const [feeHeads, setFeeHeads] = useState<{ id: string; name: string; feeType?: string }[]>([]);
+  const [feeHeadForm, setFeeHeadForm] = useState({ name: "", feeType: "tuition", description: "" });
   const [structureForm, setStructureForm] = useState({
     name: "",
     termId: "",
@@ -76,8 +92,10 @@ export const Finance: React.FC = () => {
         setFeeStructures(fs.data ?? []);
       } else if (tab === "collect") {
         setDebtors((await api.get(`/s/${schoolSlug}/api/finance/debtors`)).data ?? []);
-      } else if (tab === "payments") {
+      } else if (tab === "payments" && hasPermission("finance.refund.create")) {
         setPayments((await api.get(`/s/${schoolSlug}/api/finance/payments`)).data ?? []);
+      } else if (["concessions", "discounts", "auto-invoices", "donations", "budgets", "gateways", "income"].includes(tab)) {
+        /* panels load their own data */
       } else if (tab === "fees") {
         const [fs, fh, trm, cls] = await Promise.all([
           api.get(`/s/${schoolSlug}/api/finance/fee-structures`),
@@ -181,7 +199,7 @@ export const Finance: React.FC = () => {
     try {
       await api.post(`/s/${schoolSlug}/api/finance/fee-heads`, feeHeadForm);
       toast("Fee head added", "success");
-      setFeeHeadForm({ name: "", description: "" });
+      setFeeHeadForm({ name: "", feeType: "tuition", description: "" });
       load();
     } catch (err: any) {
       toast(err.message, "error");
@@ -245,7 +263,7 @@ export const Finance: React.FC = () => {
     );
   }
 
-  const tabBtn = (t: typeof tab) =>
+  const tabBtn = (t: FinanceTab) =>
     `px-4 py-2 rounded-lg text-sm capitalize ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"}`;
 
   return (
@@ -254,27 +272,35 @@ export const Finance: React.FC = () => {
         <div>
           <h1 className="page-title">Finance</h1>
           <p className="text-slate-400 mt-1 text-sm">All amounts in {currency} · {country === "UG" ? "Uganda" : country} region</p>
-          <p className="text-slate-400 mt-1">Invoices, payments, and collections</p>
+          <p className="text-slate-400 mt-1">Fee management, accounting, concessions, budgets, and collections</p>
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>overview</button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>dashboard</button>
         {hasPermission("finance.invoice.create") && (
           <button type="button" onClick={() => setTab("billing")} className={tabBtn("billing")}>billing</button>
         )}
         <button type="button" onClick={() => setTab("collect")} className={tabBtn("collect")}>collect</button>
-        <button type="button" onClick={() => setTab("payments")} className={tabBtn("payments")}>payments</button>
-        <button type="button" onClick={() => setTab("fees")} className={tabBtn("fees")}>fee structures</button>
+        <button type="button" onClick={() => setTab("payments")} className={tabBtn("payments")}>payment history</button>
+        <button type="button" onClick={() => setTab("fees")} className={tabBtn("fees")}>fee types</button>
+        <button type="button" onClick={() => setTab("auto-invoices")} className={tabBtn("auto-invoices")}>auto invoices</button>
+        <button type="button" onClick={() => setTab("concessions")} className={tabBtn("concessions")}>concessions</button>
+        <button type="button" onClick={() => setTab("discounts")} className={tabBtn("discounts")}>discounts</button>
+        <button type="button" onClick={() => setTab("donations")} className={tabBtn("donations")}>donations</button>
+        <button type="button" onClick={() => setTab("budgets")} className={tabBtn("budgets")}>budgets</button>
+        <button type="button" onClick={() => setTab("income")} className={tabBtn("income")}>income & expense</button>
+        <button type="button" onClick={() => setTab("gateways")} className={tabBtn("gateways")}>gateways</button>
         <button type="button" onClick={() => setTab("debtors")} className={tabBtn("debtors")}>debtors</button>
         <button type="button" onClick={() => setTab("receipts")} className={tabBtn("receipts")}>receipts</button>
-        <button type="button" onClick={() => setTab("aging")} className={tabBtn("aging")}>arrears aging</button>
+        <button type="button" onClick={() => setTab("aging")} className={tabBtn("aging")}>arrears</button>
         <button type="button" onClick={() => setTab("accounting")} className={tabBtn("accounting")}>accounting</button>
         <button type="button" onClick={() => setTab("statements")} className={tabBtn("statements")}>statements</button>
       </div>
 
-      {tab === "overview" && (
+      {tab === "overview" && schoolSlug && (
         <>
+          <AccountsDashboardPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <StatCard label="Total Invoiced" value={formatMoney(stats?.totalInvoiced)} icon={DollarSign} />
             <StatCard label="Total Collected" value={formatMoney(stats?.totalPaid)} icon={Receipt} />
@@ -414,16 +440,24 @@ export const Finance: React.FC = () => {
         </div>
       )}
 
-      {tab === "payments" && (
-        <div className="card overflow-hidden">
-          <PaymentsSection
-            payments={payments}
-            formatMoney={formatMoney}
-            canVoid={hasPermission("finance.refund.create")}
-            onVoid={voidPayment}
-          />
+      {tab === "payments" && schoolSlug && (
+        <div className="space-y-4">
+          <PaymentHistoryPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />
+          {hasPermission("finance.refund.create") && payments.length > 0 && (
+            <div className="card overflow-hidden">
+              <PaymentsSection payments={payments} formatMoney={formatMoney} canVoid onVoid={voidPayment} />
+            </div>
+          )}
         </div>
       )}
+
+      {tab === "concessions" && schoolSlug && <ConcessionsPanel schoolSlug={schoolSlug} />}
+      {tab === "discounts" && schoolSlug && <DiscountsPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />}
+      {tab === "auto-invoices" && schoolSlug && <AutoInvoicesPanel schoolSlug={schoolSlug} />}
+      {tab === "donations" && schoolSlug && <DonationsPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />}
+      {tab === "budgets" && schoolSlug && <BudgetsPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />}
+      {tab === "gateways" && schoolSlug && <PaymentGatewaysPanel schoolSlug={schoolSlug} />}
+      {tab === "income" && schoolSlug && <IncomeExpensePanel schoolSlug={schoolSlug} formatMoney={formatMoney} />}
 
       {tab === "fees" && (
         <div className="space-y-6">
@@ -432,6 +466,9 @@ export const Finance: React.FC = () => {
               <form onSubmit={createFeeHead} className="card p-6 space-y-3">
                 <h3 className="font-semibold text-white">Add fee head</h3>
                 <input className="input" required placeholder="Name (e.g. Tuition)" value={feeHeadForm.name} onChange={(e) => setFeeHeadForm({ ...feeHeadForm, name: e.target.value })} />
+                <select className="input" value={feeHeadForm.feeType} onChange={(e) => setFeeHeadForm({ ...feeHeadForm, feeType: e.target.value })}>
+                  {FEE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
                 <input className="input" placeholder="Description (optional)" value={feeHeadForm.description} onChange={(e) => setFeeHeadForm({ ...feeHeadForm, description: e.target.value })} />
                 <button type="submit" className="btn-primary w-full">Add fee head</button>
               </form>
@@ -477,7 +514,7 @@ export const Finance: React.FC = () => {
               <h4 className="text-sm font-medium text-slate-400 mb-2">Fee heads</h4>
               <div className="flex flex-wrap gap-2">
                 {feeHeads.map((h) => (
-                  <span key={h.id} className="badge-gray">{h.name}</span>
+                  <span key={h.id} className="badge-gray">{h.name}{h.feeType ? ` · ${h.feeType}` : ""}</span>
                 ))}
               </div>
             </div>

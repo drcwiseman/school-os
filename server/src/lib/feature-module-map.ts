@@ -14,6 +14,9 @@ export const API_ROUTE_FEATURES: Record<string, string> = {
   inventory: "inventory",
   transport: "transport",
   boarding: "hostel",
+  gatePasses: "students",
+  tickets: "students",
+  staffHostel: "hostel",
   messaging: "messaging_enabled",
   reports: "advanced_reporting",
 };

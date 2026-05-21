@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { payrollRuns, payrollItems, payslips, staff, staffContracts } from "../db/schema";
+import { payrollRuns, payrollItems, payslips, staff, staffContracts, payrollTaxRules } from "../db/schema";
+import { computePayrollDeductions } from "../services/payroll-compute";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { softDeletePayrollRun } from "../services/soft-delete";
 import { requireAuth } from "../middleware/auth";
@@ -65,14 +66,27 @@ router.post("/runs", ...guard, requirePermission("payroll.run"),
     try {
       const tenant = (req as any).tenant;
       const [run] = await db.insert(payrollRuns).values({ tenantId: tenant.id, period: req.body.period, status: "draft" }).returning();
-      const staffList = await db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.status, "active")));
+      const staffList = await db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.status, "active"), isNull(staff.deletedAt)));
+      const taxRules = await db.select().from(payrollTaxRules).where(eq(payrollTaxRules.tenantId, tenant.id));
       const items = [];
       for (const s of staffList) {
-        const [contract] = await db.select().from(staffContracts).where(and(eq(staffContracts.staffId, s.id), eq(staffContracts.tenantId, tenant.id))).orderBy(desc(staffContracts.startDate)).limit(1);
+        const [contract] = await db.select().from(staffContracts).where(and(
+          eq(staffContracts.staffId, s.id), eq(staffContracts.tenantId, tenant.id),
+        )).orderBy(desc(staffContracts.startDate)).limit(1);
         const gross = contract?.salary ?? 0;
-        const deductions = Math.round(gross * 0.1);
-        const net = gross - deductions;
-        const [item] = await db.insert(payrollItems).values({ tenantId: tenant.id, payrollRunId: run.id, staffId: s.id, grossPay: gross, deductions, netPay: net }).returning();
+        const { deductionsMinor, netPayMinor, breakdown } = computePayrollDeductions(
+          gross,
+          taxRules.map((r) => ({ name: r.name, ratePercent: r.ratePercent, thresholdMinor: r.thresholdMinor })),
+        );
+        const [item] = await db.insert(payrollItems).values({
+          tenantId: tenant.id,
+          payrollRunId: run.id,
+          staffId: s.id,
+          grossPay: gross,
+          deductions: deductionsMinor,
+          netPay: netPayMinor,
+          deductionsJson: { breakdown },
+        }).returning();
         items.push(item);
       }
       res.status(201).json({ success: true, data: { run, items } });
@@ -90,9 +104,17 @@ router.post("/runs/:id/approve", ...guard, requirePermission("payroll.approve"),
     const slips = [];
     for (const item of items) {
       const [s] = await db.select().from(staff).where(eq(staff.id, item.staffId)).limit(1);
+      const dj = (item.deductionsJson ?? {}) as { breakdown?: { name: string; amountMinor: number }[] };
       const [slip] = await db.insert(payslips).values({
         tenantId: tenant.id, payrollItemId: item.id, staffId: item.staffId,
-        dataJson: { period: run.period, gross: item.grossPay, deductions: item.deductions, net: item.netPay, employee: s?.employeeNo },
+        dataJson: {
+          period: run.period,
+          gross: item.grossPay,
+          deductions: item.deductions,
+          net: item.netPay,
+          employee: s?.employeeNo,
+          breakdown: dj.breakdown ?? [],
+        },
       }).returning();
       slips.push(slip);
     }
@@ -155,6 +177,44 @@ router.get("/payslips", ...guard, requirePermission("payroll.view"), async (req,
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
+
+router.patch("/runs/:runId/items/:itemId", ...guard, requirePermission("payroll.run"),
+  validate({ body: z.object({
+    grossPay: z.number().int().optional(),
+    extraDeductions: z.array(z.object({ name: z.string(), amountMinor: z.number().int() })).optional(),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [existing] = await db.select().from(payrollItems).where(and(
+        eq(payrollItems.id, req.params.itemId),
+        eq(payrollItems.payrollRunId, req.params.runId),
+        eq(payrollItems.tenantId, tenant.id),
+        isNull(payrollItems.deletedAt),
+      )).limit(1);
+      if (!existing) throw new NotFoundError("Payroll item not found");
+      const [run] = await db.select().from(payrollRuns).where(and(
+        eq(payrollRuns.id, req.params.runId), eq(payrollRuns.tenantId, tenant.id), eq(payrollRuns.status, "draft"),
+      )).limit(1);
+      if (!run) throw new BadRequestError("Can only edit items on draft payroll runs");
+
+      const gross = req.body.grossPay ?? existing.grossPay;
+      const taxRules = await db.select().from(payrollTaxRules).where(eq(payrollTaxRules.tenantId, tenant.id));
+      const { deductionsMinor, netPayMinor, breakdown } = computePayrollDeductions(
+        gross,
+        taxRules.map((r) => ({ name: r.name, ratePercent: r.ratePercent, thresholdMinor: r.thresholdMinor })),
+        req.body.extraDeductions ?? [],
+      );
+      const [row] = await db.update(payrollItems).set({
+        grossPay: gross,
+        deductions: deductionsMinor,
+        netPay: netPayMinor,
+        deductionsJson: { breakdown, extra: req.body.extraDeductions ?? [] },
+      }).where(eq(payrollItems.id, existing.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
 
 router.get("/payslips/:id/pdf", ...guard, requirePermission("payroll.view"), async (req, res, next) => {
   try {

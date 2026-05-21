@@ -1,11 +1,10 @@
 import { db } from "../db";
-import { campaigns, deliveryLogs, guardians, studentGuardians, students, studentClassHistory, users, messageTemplates } from "../db/schema";
+import { campaigns, guardians, studentGuardians, students, studentClassHistory, users, messageTemplates, studentAccounts } from "../db/schema";
 import { eq, and, isNull } from "drizzle-orm";
-import { getMessagingProvider } from "./messaging";
+import { sendTenantMessage } from "./tenant-messaging";
 import { incrementUsage, checkUsageAllowed } from "./usage-billing";
 
 export async function processCampaignJob(tenantId: string, payload: { campaignId: string }) {
-  const provider = getMessagingProvider();
   const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, payload.campaignId), eq(campaigns.tenantId, tenantId))).limit(1);
   if (!campaign) throw new Error("Campaign not found");
 
@@ -37,6 +36,11 @@ export async function processCampaignJob(tenantId: string, payload: { campaignId
       const to = l.phone || l.email;
       if (to) recipients.push({ to, name: l.name });
     }
+  } else if (campaign.audience === "students") {
+    const accs = await db.select({ email: studentAccounts.email }).from(studentAccounts).where(eq(studentAccounts.tenantId, tenantId));
+    for (const a of accs) {
+      if (a.email) recipients.push({ to: a.email, name: "Student" });
+    }
   } else if (campaign.audience === "staff") {
     const staffUsers = await db.select({ email: users.email, name: users.firstName }).from(users).where(eq(users.tenantId, tenantId));
     for (const u of staffUsers) {
@@ -63,20 +67,12 @@ export async function processCampaignJob(tenantId: string, payload: { campaignId
     const resolvedChannel = channel === "email" ? "email" : channel === "whatsapp" ? "whatsapp" : (r.to.includes("@") ? "email" : "sms");
     const gate = await checkUsageAllowed(tenantId, "sms_volume", 1);
     if (!gate.allowed) break;
-    const result = await provider.send({
+    const result = await sendTenantMessage(tenantId, {
       to: r.to,
       body,
       channel: resolvedChannel,
       subject: resolvedChannel === "email" ? subject : undefined,
-    });
-    await db.insert(deliveryLogs).values({
-      tenantId,
       campaignId: campaign.id,
-      recipient: r.to,
-      channel: resolvedChannel,
-      status: result.success ? "sent" : "failed",
-      providerRef: result.providerRef,
-      error: result.error,
     });
     if (result.success) {
       sent++;

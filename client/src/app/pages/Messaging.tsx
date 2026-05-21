@@ -8,7 +8,11 @@ export const Messaging: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"announcements" | "campaigns" | "templates" | "internal" | "whatsapp" | "logs">("announcements");
+  const [tab, setTab] = useState<"announcements" | "notifications" | "sms" | "email" | "campaigns" | "templates" | "internal" | "whatsapp" | "logs">("announcements");
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [smsForm, setSmsForm] = useState({ body: "", audience: "parents", classId: "", to: "" });
+  const [emailForm, setEmailForm] = useState({ subject: "", body: "", audience: "parents", classId: "", to: "" });
+  const [notifyOnPublish, setNotifyOnPublish] = useState<string[]>([]);
   const [internal, setInternal] = useState<any[]>([]);
   const [staffUsers, setStaffUsers] = useState<any[]>([]);
   const [internalForm, setInternalForm] = useState({ toUserId: "", body: "" });
@@ -21,7 +25,7 @@ export const Messaging: React.FC = () => {
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [announcementAudience, setAnnouncementAudience] = useState<"all" | "parents" | "staff">("all");
+  const [announcementAudience, setAnnouncementAudience] = useState<"all" | "parents" | "staff" | "students">("all");
   const [publishAt, setPublishAt] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: "", body: "", audience: "all" as "all" | "parents" | "staff" });
@@ -38,6 +42,8 @@ export const Messaging: React.FC = () => {
     try {
       if (tab === "announcements") {
         setAnnouncements((await api.get(`/s/${schoolSlug}/api/messaging/announcements`)).data ?? []);
+      } else if (tab === "notifications") {
+        setNotifications((await api.get(`/s/${schoolSlug}/api/messaging/notifications`)).data ?? []);
       } else if (tab === "campaigns") {
         const [c, t] = await Promise.all([
           api.get(`/s/${schoolSlug}/api/messaging/campaigns`),
@@ -77,6 +83,7 @@ export const Messaging: React.FC = () => {
     try {
       await api.post(`/s/${schoolSlug}/api/messaging/announcements`, {
         title, body, audience: announcementAudience, published: publish,
+        notifyChannels: publish ? notifyOnPublish : [],
       });
       toast(publish ? "Announcement published" : "Draft saved", "success");
       setTitle(""); setBody(""); setPublishAt("");
@@ -178,6 +185,9 @@ export const Messaging: React.FC = () => {
 
       <div className="flex gap-2">
         <button type="button" onClick={() => setTab("announcements")} className={tabBtn("announcements")}>announcements</button>
+        <button type="button" onClick={() => setTab("notifications")} className={tabBtn("notifications")}>notifications</button>
+        <button type="button" onClick={() => setTab("sms")} className={tabBtn("sms")}>SMS</button>
+        <button type="button" onClick={() => setTab("email")} className={tabBtn("email")}>Email</button>
         <button type="button" onClick={() => setTab("campaigns")} className={tabBtn("campaigns")}>campaigns</button>
         <button type="button" onClick={() => setTab("templates")} className={tabBtn("templates")}>templates</button>
         <button type="button" onClick={() => setTab("internal")} className={tabBtn("internal")}>staff chat</button>
@@ -197,11 +207,21 @@ export const Messaging: React.FC = () => {
                 <textarea className="input min-h-[100px]" placeholder="Body" value={body} onChange={(e) => setBody(e.target.value)} />
                 <div>
                   <label className="label">Audience</label>
-                  <select className="input" value={announcementAudience} onChange={(e) => setAnnouncementAudience(e.target.value as "all" | "parents" | "staff")}>
+                  <select className="input" value={announcementAudience} onChange={(e) => setAnnouncementAudience(e.target.value as "all" | "parents" | "staff" | "students")}>
                     <option value="all">Everyone (portal)</option>
                     <option value="parents">Parents</option>
+                    <option value="students">Students</option>
                     <option value="staff">Staff</option>
                   </select>
+                </div>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <span className="text-slate-500 w-full">Also send via:</span>
+                  {(["in_app", "sms", "email"] as const).map((ch) => (
+                    <label key={ch} className="flex items-center gap-2 text-slate-300 capitalize">
+                      <input type="checkbox" checked={notifyOnPublish.includes(ch)} onChange={(e) => setNotifyOnPublish(e.target.checked ? [...notifyOnPublish, ch] : notifyOnPublish.filter((x) => x !== ch))} />
+                      {ch.replace("_", " ")}
+                    </label>
+                  ))}
                 </div>
                 <div>
                   <label className="label">Schedule publish (optional)</label>
@@ -250,6 +270,12 @@ export const Messaging: React.FC = () => {
                           </button>
                         )}
                         {editingId !== a.id && (
+                          <button type="button" className="btn-ghost text-xs" onClick={async () => {
+                            const res = await api.post(`/s/${schoolSlug}/api/messaging/announcements/${a.id}/broadcast`, { channels: ["sms", "email", "in_app"] });
+                            toast(`Sent ${res.data?.sent ?? 0} messages`, "success");
+                          }}>Broadcast SMS/Email</button>
+                        )}
+                        {editingId !== a.id && (
                           <>
                             <button type="button" className="btn-ghost text-xs" onClick={() => startEdit(a)}>Edit</button>
                             <button type="button" className="btn-ghost text-xs text-red-400" onClick={() => deleteAnnouncement(a.id)}>Delete</button>
@@ -261,6 +287,93 @@ export const Messaging: React.FC = () => {
                 </ul>
               </div>
             </div>
+          )}
+          {tab === "notifications" && (
+            <div className="card p-5 space-y-3">
+              <div className="flex justify-between items-center">
+                <h3 className="font-semibold text-white">In-app notifications</h3>
+                <button type="button" className="btn-ghost text-xs" onClick={async () => {
+                  await api.patch(`/s/${schoolSlug}/api/messaging/notifications/read-all`, {});
+                  load();
+                }}>Mark all read</button>
+              </div>
+              <ul className="space-y-2 text-sm">
+                {notifications.map((n: any) => (
+                  <li key={n.id} className={`p-3 rounded-lg border ${n.readAt ? "border-slate-800 text-slate-500" : "border-primary-800/50 text-slate-200"}`}>
+                    <strong className="block">{n.title}</strong>
+                    <span className="text-slate-400">{n.body}</span>
+                    {!n.readAt && (
+                      <button type="button" className="btn-ghost text-xs mt-2" onClick={async () => {
+                        await api.patch(`/s/${schoolSlug}/api/messaging/notifications/${n.id}/read`, {});
+                        load();
+                      }}>Mark read</button>
+                    )}
+                  </li>
+                ))}
+                {!notifications.length && <p className="text-slate-500">No notifications.</p>}
+              </ul>
+            </div>
+          )}
+          {tab === "sms" && (
+            <form className="card p-5 space-y-3 max-w-xl" onSubmit={async (e) => {
+              e.preventDefault();
+              const res = await api.post(`/s/${schoolSlug}/api/messaging/sms/send`, {
+                body: smsForm.body,
+                audience: smsForm.to ? undefined : smsForm.audience,
+                classId: smsForm.classId || undefined,
+                to: smsForm.to || undefined,
+              });
+              toast(`SMS sent: ${res.data?.sent ?? 0}`, "success");
+            }}>
+              <h3 className="font-semibold text-white">Send SMS</h3>
+              <input className="input" placeholder="Single phone (optional)" value={smsForm.to} onChange={(e) => setSmsForm({ ...smsForm, to: e.target.value })} />
+              <select className="input" value={smsForm.audience} onChange={(e) => setSmsForm({ ...smsForm, audience: e.target.value })}>
+                <option value="parents">All parents</option>
+                <option value="parents_of_class">Parents of class</option>
+                <option value="staff">Staff</option>
+                <option value="students">Students</option>
+              </select>
+              {smsForm.audience === "parents_of_class" && (
+                <select className="input" value={smsForm.classId} onChange={(e) => setSmsForm({ ...smsForm, classId: e.target.value })}>
+                  <option value="">Class</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+              <textarea className="input min-h-[100px]" required value={smsForm.body} onChange={(e) => setSmsForm({ ...smsForm, body: e.target.value })} />
+              <button type="submit" className="btn-primary">Send SMS</button>
+            </form>
+          )}
+          {tab === "email" && (
+            <form className="card p-5 space-y-3 max-w-xl" onSubmit={async (e) => {
+              e.preventDefault();
+              const res = await api.post(`/s/${schoolSlug}/api/messaging/email/send`, {
+                subject: emailForm.subject,
+                body: emailForm.body,
+                audience: emailForm.to ? undefined : emailForm.audience,
+                classId: emailForm.classId || undefined,
+                to: emailForm.to || undefined,
+              });
+              toast(`Emails sent: ${res.data?.sent ?? 0}`, "success");
+            }}>
+              <h3 className="font-semibold text-white">Send email</h3>
+              <p className="text-xs text-slate-500">Uses school SMTP when enabled in Settings.</p>
+              <input className="input" type="email" placeholder="Single email (optional)" value={emailForm.to} onChange={(e) => setEmailForm({ ...emailForm, to: e.target.value })} />
+              <input className="input" placeholder="Subject" required value={emailForm.subject} onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })} />
+              <select className="input" value={emailForm.audience} onChange={(e) => setEmailForm({ ...emailForm, audience: e.target.value })}>
+                <option value="parents">All parents</option>
+                <option value="parents_of_class">Parents of class</option>
+                <option value="staff">Staff</option>
+                <option value="students">Students</option>
+              </select>
+              {emailForm.audience === "parents_of_class" && (
+                <select className="input" value={emailForm.classId} onChange={(e) => setEmailForm({ ...emailForm, classId: e.target.value })}>
+                  <option value="">Class</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+              <textarea className="input min-h-[100px]" required value={emailForm.body} onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })} />
+              <button type="submit" className="btn-primary">Send email</button>
+            </form>
           )}
           {tab === "campaigns" && (
             <div className="space-y-4">
@@ -290,6 +403,7 @@ export const Messaging: React.FC = () => {
                     <option value="parents">All parents</option>
                     <option value="parents_of_class">Parents of class</option>
                     <option value="staff">Staff users</option>
+                    <option value="students">Students</option>
                   </select>
                 </div>
                 {campaignForm.audience === "parents_of_class" && (

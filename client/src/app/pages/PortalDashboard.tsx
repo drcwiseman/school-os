@@ -27,13 +27,18 @@ export const PortalDashboard: React.FC = () => {
   const [timetable, setTimetable] = useState<any[]>([]);
   const [onlineClasses, setOnlineClasses] = useState<any[]>([]);
   const [schoolEvents, setSchoolEvents] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
 
   const load = async () => {
     try {
       const me = await api.get(`/s/${schoolSlug}/api/portal/me`);
       setAccount(me.account);
-      const dash = await api.get(`/s/${schoolSlug}/api/portal/dashboard`);
+      const [dash, sum] = await Promise.all([
+        api.get(`/s/${schoolSlug}/api/portal/dashboard`),
+        api.get(`/s/${schoolSlug}/api/portal/dashboard/summary`).catch(() => ({ data: null })),
+      ]);
       setData(dash.data);
+      setSummary(sum.data);
       const children = dash.data?.children ?? [];
       if (children.length && !activeChildId) setActiveChildId(children[0].id);
     } catch {
@@ -139,6 +144,26 @@ export const PortalDashboard: React.FC = () => {
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5 pb-12">
         <p className="text-slate-400 text-sm">{account?.email}</p>
+
+        {summary && (
+          <div className="grid grid-cols-2 gap-3">
+            {summary.type === "parent" ? (
+              <>
+                <PortalStat label="Children" value={String(summary.childCount ?? 0)} />
+                <PortalStat label="Fees due" value={formatMoney(summary.feeDueMinor, currency)} highlight={summary.feeDueMinor > 0} />
+                <PortalStat label="Unpaid invoices" value={String(summary.unpaidInvoices ?? 0)} />
+                <PortalStat label="Notices" value={String(summary.noticeboardCount ?? 0)} />
+              </>
+            ) : (
+              <>
+                <PortalStat label="Fees due" value={formatMoney(summary.feeDueMinor, currency)} highlight={summary.feeDueMinor > 0} />
+                <PortalStat label="Present days" value={String(summary.attendancePresent ?? 0)} />
+                <PortalStat label="Homework done" value={String(summary.submissionsCount ?? 0)} />
+                <PortalStat label="Pending leave" value={String(summary.pendingLeaves ?? 0)} />
+              </>
+            )}
+          </div>
+        )}
 
         {payMsg && (
           <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 rounded-lg px-4 py-3">
@@ -268,13 +293,35 @@ export const PortalDashboard: React.FC = () => {
               <AttendanceList rows={(data.attendance ?? []).filter((r: any) => r.studentId === activeChildId)} />
             </PortalCard>
 
-            <PortalCard title="Announcements">
+            <PortalCard title="Grades & feedback">
+              {(data.reportCards ?? []).filter((rc: any) => rc.studentId === activeChildId).length === 0 ? (
+                <p className="text-slate-500 text-sm">No published report cards yet.</p>
+              ) : (
+                <ul className="text-slate-300 text-sm space-y-2">
+                  {(data.reportCards ?? []).filter((rc: any) => rc.studentId === activeChildId).map((rc: any) => {
+                    const avg = (rc.dataJson as any)?.average;
+                    return (
+                      <li key={rc.id} className="flex justify-between gap-2">
+                        <span>Report card {avg != null ? `· avg ${avg}` : ""}</span>
+                        <button type="button" className="btn-ghost text-xs" onClick={() => downloadReportCard(rc.id)}>PDF</button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </PortalCard>
+
+            <PortalCard title="Noticeboard">
               <ul className="text-slate-300 text-sm space-y-3">
                 {(data.announcements ?? []).map((a: any) => (
                   <li key={a.id}><strong className="text-white block">{a.title}</strong>{a.body}</li>
                 ))}
               </ul>
             </PortalCard>
+
+            {activeChildId && (
+              <StudentLeavePortal schoolSlug={schoolSlug!} studentId={activeChildId} onRefresh={() => window.location.reload()} />
+            )}
           </>
         )}
 
@@ -299,6 +346,15 @@ export const PortalDashboard: React.FC = () => {
             <PortalCard title="Attendance">
               <AttendanceList rows={data.attendance ?? []} />
             </PortalCard>
+            <PortalCard title="Noticeboard">
+              <ul className="text-slate-300 text-sm space-y-3">
+                {(data.noticeboard ?? []).map((a: any) => (
+                  <li key={a.id}><strong className="text-white block">{a.title}</strong><span className="text-slate-500 text-xs block">{a.body?.slice(0, 200)}{a.body?.length > 200 ? "…" : ""}</span></li>
+                ))}
+                {!(data.noticeboard ?? []).length && <p className="text-slate-500 text-sm">No announcements.</p>}
+              </ul>
+            </PortalCard>
+            <StudentLeavePortal schoolSlug={schoolSlug!} leaves={data.leaves ?? []} studentId={data.student?.id} onRefresh={() => window.location.reload()} />
             <PortalCard title="CBT exams" icon={BookOpen}>
               <Link to={`/s/${schoolSlug}/exam`} className="btn-primary text-sm">Open exam player</Link>
             </PortalCard>
@@ -428,6 +484,49 @@ function HomeworkPortalList({
         );
       })}
     </ul>
+  );
+}
+
+function StudentLeavePortal({
+  schoolSlug, leaves: initialLeaves, studentId, onRefresh,
+}: { schoolSlug: string; leaves?: any[]; studentId?: string; onRefresh: () => void }) {
+  const [form, setForm] = useState({ startDate: "", endDate: "", reason: "" });
+  const [leaves, setLeaves] = useState<any[]>(initialLeaves ?? []);
+  useEffect(() => {
+    api.get(`/s/${schoolSlug}/api/portal/leaves`).then((r) => {
+      const all = r.data ?? [];
+      setLeaves(studentId ? all.filter((l: any) => l.studentId === studentId) : all);
+    }).catch(() => {});
+  }, [schoolSlug, studentId]);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await api.post(`/s/${schoolSlug}/api/portal/leaves`, { ...form, studentId });
+    setForm({ startDate: "", endDate: "", reason: "" });
+    onRefresh();
+  };
+  return (
+    <PortalCard title="Leave requests">
+      <form onSubmit={submit} className="space-y-2 mb-4">
+        <input type="date" className="input text-sm" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+        <input type="date" className="input text-sm" required value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+        <input className="input text-sm" required placeholder="Reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+        <button type="submit" className="btn-primary text-xs">Submit leave request</button>
+      </form>
+      <ul className="text-slate-300 text-sm space-y-1">
+        {leaves.map((l: any) => (
+          <li key={l.id}>{new Date(l.startDate).toLocaleDateString()} – {new Date(l.endDate).toLocaleDateString()} · <span className="capitalize">{l.status}</span></li>
+        ))}
+      </ul>
+    </PortalCard>
+  );
+}
+
+function PortalStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={`card p-3 ${highlight ? "border-amber-500/40" : ""}`}>
+      <p className="text-slate-500 text-xs">{label}</p>
+      <p className={`text-lg font-bold ${highlight ? "text-amber-400" : "text-white"}`}>{value}</p>
+    </div>
   );
 }
 

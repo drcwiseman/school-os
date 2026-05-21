@@ -8,6 +8,7 @@ import {
 import crypto from "crypto";
 import { eq, and, desc, inArray, isNull, sql } from "drizzle-orm";
 import { softDeleteMark, softDeleteAssessment } from "../services/soft-delete";
+import { percentToGrade, scoreToPercent, defaultRemarks } from "../services/exam-grading";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -27,14 +28,15 @@ router.get("/assessments", ...guard, requirePermission("exams.view"), async (req
 });
 
 router.post("/assessments", ...guard, requirePermission("exams.enter_marks"),
-  validate({ body: z.object({ classId: z.string().uuid(), subjectId: z.string().uuid(), name: z.string(), type: z.string().optional(), weight: z.number().optional(), maxScore: z.number().optional(), termId: z.string().uuid().optional(), deadline: z.string().optional() }) }),
+  validate({ body: z.object({ classId: z.string().uuid(), subjectId: z.string().uuid(), name: z.string(), type: z.string().optional(), weight: z.number().optional(), maxScore: z.number().optional(), termId: z.string().uuid().optional(), examGroupId: z.string().uuid().optional(), sessionLabel: z.string().optional(), deadline: z.string().optional() }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
       const [row] = await db.insert(assessments).values({
         tenantId: tenant.id, classId: req.body.classId, subjectId: req.body.subjectId,
         name: req.body.name, type: req.body.type ?? "exam", weight: req.body.weight ?? 100,
-        maxScore: req.body.maxScore ?? 100, termId: req.body.termId,
+        maxScore: req.body.maxScore ?? 100, termId: req.body.termId, examGroupId: req.body.examGroupId,
+        sessionLabel: req.body.sessionLabel,
         deadline: req.body.deadline ? new Date(req.body.deadline) : undefined,
       }).returning();
       res.status(201).json({ success: true, data: row });
@@ -66,7 +68,7 @@ router.get("/assessments/:id/roster", ...guard, requirePermission("exams.view"),
     const markByStudent = new Map(existingMarks.map((m) => [m.studentId, m]));
     const roster = enrolled.map((s) => {
       const m = markByStudent.get(s.studentId);
-      return { ...s, markId: m?.id, score: m?.score ?? null, status: m?.status ?? "draft" };
+      return { ...s, markId: m?.id, score: m?.score ?? null, grade: m?.grade ?? null, remarks: m?.remarks ?? null, status: m?.status ?? "draft" };
     });
     res.json({ success: true, data: { assessment: a, roster } });
   } catch (e) { next(e); }
@@ -83,7 +85,10 @@ router.get("/assessments/:id/marks", ...guard, requirePermission("exams.view"), 
 });
 
 router.put("/assessments/:id/marks", ...guard, requirePermission("exams.enter_marks"),
-  validate({ body: z.object({ entries: z.array(z.object({ studentId: z.string().uuid(), score: z.number().int().min(0).nullable() })) }) }),
+  validate({ body: z.object({ entries: z.array(z.object({
+    studentId: z.string().uuid(), score: z.number().int().min(0).nullable(),
+    grade: z.string().optional(), remarks: z.string().optional(),
+  })) }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
@@ -98,10 +103,13 @@ router.put("/assessments/:id/marks", ...guard, requirePermission("exams.enter_ma
         if (existing?.status === "submitted") {
           await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "mark.edit_after_submit", entityType: "mark", entityId: existing.id, before: existing, after: { score: entry.score }, ip: req.ip });
         }
+        const pct = entry.score != null ? scoreToPercent(entry.score, a.maxScore) : null;
+        const grade = entry.grade ?? (pct != null ? percentToGrade(pct) : null);
+        const remarks = entry.remarks ?? (grade ? defaultRemarks(grade) : null);
         if (existing) {
-          await db.update(marks).set({ score: entry.score, updatedAt: new Date(), enteredBy: user.id }).where(eq(marks.id, existing.id));
+          await db.update(marks).set({ score: entry.score, grade, remarks, updatedAt: new Date(), enteredBy: user.id }).where(eq(marks.id, existing.id));
         } else {
-          await db.insert(marks).values({ tenantId: tenant.id, assessmentId: a.id, studentId: entry.studentId, score: entry.score, enteredBy: user.id });
+          await db.insert(marks).values({ tenantId: tenant.id, assessmentId: a.id, studentId: entry.studentId, score: entry.score, grade, remarks, enteredBy: user.id });
         }
       }
       res.json({ success: true });
@@ -146,14 +154,35 @@ router.post("/report-cards/generate", ...guard, requirePermission("exams.publish
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const classStudents = await db.select().from(students).where(and(eq(students.tenantId, tenant.id), eq(students.status, "active")));
+      const enrolled = await db.select({ studentId: students.id })
+        .from(studentClassHistory)
+        .innerJoin(students, eq(students.id, studentClassHistory.studentId))
+        .where(and(
+          eq(studentClassHistory.tenantId, tenant.id),
+          eq(studentClassHistory.classId, req.body.classId),
+          isNull(studentClassHistory.toDate),
+          isNull(students.deletedAt),
+        ));
+      const classStudents = enrolled.map((e) => ({ id: e.studentId }));
       const classAssessments = await db.select().from(assessments).where(and(eq(assessments.tenantId, tenant.id), eq(assessments.classId, req.body.classId), eq(assessments.termId, req.body.termId)));
       const created = [];
       for (const stu of classStudents) {
-        const stuMarks = await db.select().from(marks).where(and(eq(marks.studentId, stu.id), inArray(marks.assessmentId, classAssessments.map(a => a.id))));
-        const total = stuMarks.reduce((s, m) => s + (m.score ?? 0), 0);
-        const avg = classAssessments.length ? total / classAssessments.length : 0;
-        const dataJson = { average: avg, marks: stuMarks, generatedAt: new Date().toISOString() };
+        const stuMarks = await db.select({
+          mark: marks, assessmentName: assessments.name, maxScore: assessments.maxScore,
+        }).from(marks)
+          .innerJoin(assessments, eq(marks.assessmentId, assessments.id))
+          .where(and(eq(marks.studentId, stu.id), inArray(marks.assessmentId, classAssessments.map((a) => a.id))));
+        const pcts = stuMarks
+          .map((r) => scoreToPercent(r.mark.score, r.maxScore))
+          .filter((p): p is number => p != null);
+        const avgPct = pcts.length ? pcts.reduce((s, p) => s + p, 0) / pcts.length : 0;
+        const dataJson = {
+          average: Math.round(avgPct * 10) / 10,
+          marks: stuMarks.map((r) => ({ ...r.mark, assessmentName: r.assessmentName, maxScore: r.maxScore })),
+          grade: percentToGrade(avgPct),
+          remarks: defaultRemarks(percentToGrade(avgPct)),
+          generatedAt: new Date().toISOString(),
+        };
         const [existing] = await db.select().from(reportCards).where(and(eq(reportCards.studentId, stu.id), eq(reportCards.termId, req.body.termId))).limit(1);
         const rc = existing
           ? (await db.update(reportCards).set({ dataJson }).where(eq(reportCards.id, existing.id)).returning())[0]

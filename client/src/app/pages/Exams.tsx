@@ -6,12 +6,19 @@ import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
 import { downloadPdf } from "../api/client";
 import { Loader2 } from "lucide-react";
+import {
+  ExamGroupsPanel, ExamTimetablePanel, ExamResultsPanel, ExamPrintingPanel, ExamMultiGroupsPanel,
+} from "../components/exams/ExamEnhancementPanels";
 
 export const Exams: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const { hasPermission } = useAuth();
-  const [tab, setTab] = useState<"assessments" | "marks" | "moderation" | "reports" | "cbt" | "banks" | "rankings" | "analytics">("assessments");
+  const [tab, setTab] = useState<
+    "assessments" | "groups" | "timetable" | "marks" | "results" | "printing" | "multi-groups"
+    | "moderation" | "reports" | "cbt" | "banks" | "rankings" | "analytics"
+  >("assessments");
+  const [examGroups, setExamGroups] = useState<any[]>([]);
   const [cbtPapers, setCbtPapers] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
   const [rankings, setRankings] = useState<any[]>([]);
@@ -22,11 +29,11 @@ export const Exams: React.FC = () => {
   const [moderation, setModeration] = useState<any[]>([]);
   const [reportCards, setReportCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", classId: "", subjectId: "" });
+  const [form, setForm] = useState({ name: "", classId: "", subjectId: "", termId: "", examGroupId: "", sessionLabel: "" });
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [subjects, setSubjects] = useState<{ id: string; name: string; code?: string }[]>([]);
   const [marksAssessmentId, setMarksAssessmentId] = useState("");
-  const [marksRows, setMarksRows] = useState<{ id?: string; studentId: string; score: string; status?: string; label?: string }[]>([]);
+  const [marksRows, setMarksRows] = useState<{ id?: string; studentId: string; score: string; grade?: string; remarks?: string; status?: string; label?: string }[]>([]);
   const [marksLoading, setMarksLoading] = useState(false);
   const [terms, setTerms] = useState<{ id: string; name: string }[]>([]);
   const [genForm, setGenForm] = useState({ termId: "", classId: "" });
@@ -68,10 +75,12 @@ export const Exams: React.FC = () => {
       api.get(`/s/${schoolSlug}/api/academics/classes`),
       api.get(`/s/${schoolSlug}/api/academics/subjects`),
       api.get(`/s/${schoolSlug}/api/academics/terms`),
-    ]).then(([c, s, t]) => {
+      api.get(`/s/${schoolSlug}/api/exams/groups`),
+    ]).then(([c, s, t, g]) => {
       setClasses(c.data ?? []);
       setSubjects(s.data ?? []);
       setTerms(t.data ?? []);
+      setExamGroups(g.data ?? []);
     }).catch(() => {});
   }, [schoolSlug]);
 
@@ -86,7 +95,7 @@ export const Exams: React.FC = () => {
     e.preventDefault();
     try {
       await api.post(`/s/${schoolSlug}/api/exams/assessments`, form);
-      setForm({ name: "", classId: "", subjectId: "" });
+      setForm({ name: "", classId: "", subjectId: "", termId: "", examGroupId: "", sessionLabel: "" });
       load();
       toast("Assessment created", "success");
     } catch (e: any) {
@@ -123,6 +132,8 @@ export const Exams: React.FC = () => {
         id: r.markId,
         studentId: r.studentId,
         score: r.score != null ? String(r.score) : "",
+        grade: r.grade ?? "",
+        remarks: r.remarks ?? "",
         status: r.status,
         label: `${r.firstName} ${r.lastName}`,
       })));
@@ -140,6 +151,8 @@ export const Exams: React.FC = () => {
         entries: marksRows.map((r) => ({
           studentId: r.studentId,
           score: r.score === "" ? null : Number(r.score),
+          grade: r.grade || undefined,
+          remarks: r.remarks || undefined,
         })),
       });
       toast("Marks saved", "success");
@@ -211,7 +224,7 @@ export const Exams: React.FC = () => {
       </div>
 
       <div className="flex gap-2">
-        {(["assessments", "marks", "moderation", "reports", "cbt", "banks", "rankings", "analytics"] as const).map((t) => (
+        {(["assessments", "groups", "timetable", "marks", "results", "printing", "multi-groups", "moderation", "reports", "cbt", "banks", "rankings", "analytics"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm capitalize ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"}`}>
             {t}
           </button>
@@ -220,17 +233,25 @@ export const Exams: React.FC = () => {
 
       {tab === "assessments" && (
         <>
-          <form onSubmit={createAssessment} className="card p-4 grid md:grid-cols-4 gap-3">
-            <input className="input" placeholder="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <form onSubmit={createAssessment} className="card p-4 grid md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <input className="input" placeholder="Exam name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <select className="input" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}>
-              <option value="">Select class…</option>
+              <option value="">Class</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select className="input" required value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })}>
-              <option value="">Select subject…</option>
-              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>)}
+              <option value="">Subject</option>
+              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <button type="submit" className="btn-primary">Add Assessment</button>
+            <select className="input" value={form.termId} onChange={(e) => setForm({ ...form, termId: e.target.value })}>
+              <option value="">Term</option>
+              {terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <select className="input" value={form.examGroupId} onChange={(e) => setForm({ ...form, examGroupId: e.target.value })}>
+              <option value="">Exam group</option>
+              {examGroups.map((g: any) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <button type="submit" className="btn-primary">Add exam</button>
           </form>
           <DataTable loading={loading} rows={assessments} cols={[
             { k: "name", l: "Name" },
@@ -251,6 +272,12 @@ export const Exams: React.FC = () => {
           )} />
         </>
       )}
+
+      {tab === "groups" && schoolSlug && <ExamGroupsPanel schoolSlug={schoolSlug} />}
+      {tab === "timetable" && schoolSlug && <ExamTimetablePanel schoolSlug={schoolSlug} />}
+      {tab === "results" && schoolSlug && <ExamResultsPanel schoolSlug={schoolSlug} />}
+      {tab === "printing" && schoolSlug && <ExamPrintingPanel schoolSlug={schoolSlug} />}
+      {tab === "multi-groups" && schoolSlug && <ExamMultiGroupsPanel schoolSlug={schoolSlug} />}
 
       {tab === "marks" && (
         <div className="card p-4 space-y-4">
@@ -277,10 +304,10 @@ export const Exams: React.FC = () => {
             <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary-500" /></div>
           ) : (
             <table className="table">
-              <thead><tr><th>Student</th><th>Score</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Student</th><th>Score</th><th>Grade</th><th>Remarks</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 {marksRows.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-slate-400">No marks — select assessment or add rows.</td></tr>
+                  <tr><td colSpan={6} className="text-center py-6 text-slate-400">No marks — select assessment or add rows.</td></tr>
                 ) : marksRows.map((r, i) => (
                   <tr key={r.id ?? i}>
                     <td>{r.label ?? <span className="font-mono text-xs">{r.studentId.slice(0, 12)}…</span>}</td>
@@ -298,6 +325,8 @@ export const Exams: React.FC = () => {
                         }}
                       />
                     </td>
+                    <td><input className="input w-16 text-sm" value={r.grade ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, grade: e.target.value }; setMarksRows(next); }} /></td>
+                    <td><input className="input w-28 text-sm" value={r.remarks ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, remarks: e.target.value }; setMarksRows(next); }} /></td>
                     <td className="capitalize text-sm">{r.status ?? "draft"}</td>
                     <td>
                       {r.id && hasPermission("exams.moderate") && (
@@ -342,6 +371,13 @@ export const Exams: React.FC = () => {
               <button type="submit" className="btn-primary" disabled={generating}>
                 {generating ? "Generating…" : "Generate report cards"}
               </button>
+              {genForm.termId && genForm.classId && (
+                <button type="button" className="btn-ghost" onClick={async () => {
+                  await api.post(`/s/${schoolSlug}/api/exams/report-cards/bulk-publish`, genForm);
+                  toast("All report cards published", "success");
+                  load();
+                }}>Bulk publish</button>
+              )}
             </form>
           )}
           <DataTable loading={loading} rows={reportCards} cols={[
@@ -352,7 +388,7 @@ export const Exams: React.FC = () => {
             {!row.published && hasPermission("exams.publish") && (
               <button type="button" className="btn-ghost text-xs" onClick={() => publishReport(row.id)}>Publish</button>
             )}
-            <button type="button" className="btn-ghost text-xs" onClick={() => downloadPdf(`/s/${schoolSlug}/api/reports/pdf/report-card/${row.id}`)}>PDF</button>
+            <button type="button" className="btn-ghost text-xs" onClick={() => downloadPdf(`/s/${schoolSlug}/api/reports/pdf/report-card/${row.id}`)}>Result PDF</button>
           </div>
         )} />
         </>

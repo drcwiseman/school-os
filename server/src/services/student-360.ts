@@ -2,7 +2,8 @@ import { db } from "../db";
 import {
   students, invoices, payments, disciplineIncidents, boardingAllocations, boardingRooms, boardingHouses,
   routeAssignments, transportRoutes, studentClassHistory, classes, marks, assessments,
-  healthFlags, sickbayVisits,
+  healthFlags, sickbayVisits, attendanceRecords, attendanceSessions,
+  studentLeaveRequests, studentTransfers, studentCertificates, studentDocuments,
 } from "../db/schema";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 
@@ -71,6 +72,38 @@ export async function getStudent360(tenantId: string, studentId: string) {
     eq(sickbayVisits.studentId, studentId), eq(sickbayVisits.tenantId, tenantId),
   )).orderBy(desc(sickbayVisits.visitDate)).limit(5);
 
+  const attendance = await db.select({
+    status: attendanceRecords.status,
+    date: attendanceSessions.date,
+    note: attendanceRecords.note,
+  }).from(attendanceRecords)
+    .innerJoin(attendanceSessions, eq(attendanceRecords.sessionId, attendanceSessions.id))
+    .where(and(eq(attendanceRecords.studentId, studentId), eq(attendanceRecords.tenantId, tenantId)))
+    .orderBy(desc(attendanceSessions.date))
+    .limit(30);
+
+  const leaves = await db.select().from(studentLeaveRequests).where(and(
+    eq(studentLeaveRequests.studentId, studentId), eq(studentLeaveRequests.tenantId, tenantId),
+  )).orderBy(desc(studentLeaveRequests.createdAt)).limit(10);
+
+  const transfers = await db.select().from(studentTransfers).where(and(
+    eq(studentTransfers.studentId, studentId), eq(studentTransfers.tenantId, tenantId),
+  )).orderBy(desc(studentTransfers.createdAt)).limit(5);
+
+  const certificates = await db.select().from(studentCertificates).where(and(
+    eq(studentCertificates.studentId, studentId), eq(studentCertificates.tenantId, tenantId),
+  )).orderBy(desc(studentCertificates.issuedAt)).limit(10);
+
+  const documents = await db.select().from(studentDocuments).where(and(
+    eq(studentDocuments.studentId, studentId), eq(studentDocuments.tenantId, tenantId),
+  )).orderBy(desc(studentDocuments.uploadedAt)).limit(20);
+
+  const feeSummary = {
+    totalBilled: feeHistory.reduce((s, i) => s + i.totalAmount, 0),
+    totalPaid: feeHistory.reduce((s, i) => s + i.paidAmount, 0),
+    outstanding: feeHistory.reduce((s, i) => s + (i.totalAmount - i.paidAmount), 0),
+  };
+
   return {
     student,
     medical: (student as any).medicalJson ?? {},
@@ -84,6 +117,12 @@ export async function getStudent360(tenantId: string, studentId: string) {
     analytics: { averagePercent: avgScore, gradeCount: gradeRows.length, grades: gradeRows },
     health,
     clinicVisits,
+    attendance,
+    leaves,
+    transfers,
+    certificates,
+    documents,
+    feeSummary,
   };
 }
 

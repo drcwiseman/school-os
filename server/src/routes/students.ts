@@ -426,6 +426,11 @@ router.post("/batch-promote", ...guard, requirePermission("students.edit"),
       const tenant = (req as any).tenant;
       let promoted = 0;
       for (const sid of req.body.studentIds) {
+        const [exists] = await db.select().from(students).where(and(eq(students.id, sid), eq(students.tenantId, tenant.id))).limit(1);
+        if (!exists) continue;
+        await db.update(studentClassHistory).set({ toDate: new Date() }).where(and(
+          eq(studentClassHistory.studentId, sid), eq(studentClassHistory.tenantId, tenant.id), isNull(studentClassHistory.toDate),
+        ));
         await db.insert(studentClassHistory).values({
           tenantId: tenant.id, studentId: sid, classId: req.body.classId, termId: req.body.termId,
         });

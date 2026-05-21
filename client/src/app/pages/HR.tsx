@@ -5,6 +5,8 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../state/AuthContext";
 import { ModuleCrud } from "../components/ModuleCrud";
 import { Download, Upload } from "lucide-react";
+import { HRDashboardStrip, StaffAttendancePanel, StaffIdCardsPanel } from "../components/hr/HREnhancementPanels";
+import { PayrollPanel } from "../components/hr/PayrollPanel";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const STAFF_CSV_TEMPLATE = "employeeNo,firstName,lastName,email,department\nE001,Jane,Nabukenya,jane@school.com,Headteacher\nE002,John,Okello,john@school.com,Teacher\nE003,Mary,Auma,mary@school.com,Secretary";
@@ -13,7 +15,9 @@ export const HR: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const { hasPermission } = useAuth();
-  const [tab, setTab] = useState<"staff" | "leave">("staff");
+  const canPayroll = hasPermission("payroll.view");
+  type HRTab = "staff" | "attendance" | "leave" | "id-cards" | "payroll";
+  const [tab, setTab] = useState<HRTab>("staff");
   const [showImport, setShowImport] = useState(false);
   const [csvText, setCsvText] = useState(STAFF_CSV_TEMPLATE);
   const [importing, setImporting] = useState(false);
@@ -56,7 +60,8 @@ export const HR: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <HRHeader />
-      <HRTabs tab={tab} setTab={setTab} tabCls={tabCls} />
+      <HRDashboardStrip schoolSlug={schoolSlug!} />
+      <HRTabs tab={tab} setTab={setTab} tabCls={tabCls} showPayroll={canPayroll} />
       {tab === "staff" ? (
         <>
           <div className="flex flex-wrap gap-2">
@@ -91,9 +96,15 @@ export const HR: React.FC = () => {
             ]} />
           <StaffContractsPanel schoolSlug={schoolSlug!} hasPermission={hasPermission} toast={toast} />
         </>
-      ) : (
+      ) : tab === "attendance" ? (
+        <StaffAttendancePanel schoolSlug={schoolSlug!} />
+      ) : tab === "leave" ? (
         <LeaveRequestsPanel schoolSlug={schoolSlug!} hasPermission={hasPermission} toast={toast} />
-      )}
+      ) : tab === "id-cards" ? (
+        <StaffIdCardsPanel schoolSlug={schoolSlug!} />
+      ) : tab === "payroll" && canPayroll ? (
+        <PayrollPanel schoolSlug={schoolSlug!} />
+      ) : null}
     </div>
   );
 };
@@ -103,17 +114,27 @@ function HRHeader() {
     <div className="page-header">
       <div>
         <h1 className="page-title">Human Resources</h1>
-        <p className="text-slate-400 mt-1">Employees — headteachers, teachers, secretaries (separate from ERP login accounts)</p>
+        <p className="text-slate-400 mt-1">Staff directory, attendance, leave, ID cards, and payroll</p>
       </div>
     </div>
   );
 }
 
-function HRTabs({ tab, setTab, tabCls }: { tab: string; setTab: (t: "staff" | "leave") => void; tabCls: (a: boolean) => string }) {
+function HRTabs({ tab, setTab, tabCls, showPayroll }: {
+  tab: string;
+  setTab: (t: "staff" | "attendance" | "leave" | "id-cards" | "payroll") => void;
+  tabCls: (a: boolean) => string;
+  showPayroll: boolean;
+}) {
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <button type="button" onClick={() => setTab("staff")} className={tabCls(tab === "staff")}>Employees</button>
+      <button type="button" onClick={() => setTab("attendance")} className={tabCls(tab === "attendance")}>Attendance</button>
       <button type="button" onClick={() => setTab("leave")} className={tabCls(tab === "leave")}>Leave</button>
+      <button type="button" onClick={() => setTab("id-cards")} className={tabCls(tab === "id-cards")}>ID cards</button>
+      {showPayroll && (
+        <button type="button" onClick={() => setTab("payroll")} className={tabCls(tab === "payroll")}>Payroll</button>
+      )}
     </div>
   );
 }

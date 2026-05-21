@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { DEFAULT_COUNTRY, DEFAULT_CURRENCY, formatMoneyMinor } from "../../lib/currencies";
+import { applyTenantAppearance } from "../utils/theme";
 
 interface User {
   id: string;
@@ -88,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCountry(res.country ?? DEFAULT_COUNTRY);
           setCurrency(res.currency ?? DEFAULT_CURRENCY);
           setImpersonationReadOnly(Boolean(res.impersonation?.readOnly));
+          if (res.theme) applyTenantAppearance(res.theme as { mode?: "light" | "dark"; accent?: string });
         } else {
           setUser(null);
           setImpersonationReadOnly(false);

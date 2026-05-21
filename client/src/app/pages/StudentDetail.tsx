@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
 import { Loader2, ArrowLeft } from "lucide-react";
-import { Student360Tabs } from "../components/Student360Tabs";
+import { Student360Tabs, DOC_TYPES } from "../components/Student360Tabs";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -364,7 +364,10 @@ export const StudentDetail: React.FC = () => {
         )}
         {hasPermission("students.edit") && (
           <form onSubmit={uploadDocument} className="grid md:grid-cols-3 gap-3 pt-2 border-t border-slate-700/50">
-            <input className="input" required placeholder="Document type" value={docForm.documentType} onChange={(e) => setDocForm({ ...docForm, documentType: e.target.value })} />
+            <select className="input" required value={docForm.documentType} onChange={(e) => setDocForm({ ...docForm, documentType: e.target.value })}>
+              <option value="">Document type</option>
+              {DOC_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+            </select>
             <input className="input" type="file" required onChange={(e) => setDocForm({ ...docForm, file: e.target.files?.[0] ?? null })} />
             <button type="submit" className="btn-primary">Upload</button>
           </form>

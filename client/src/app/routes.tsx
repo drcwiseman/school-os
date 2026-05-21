@@ -16,6 +16,10 @@ import { StudentsList } from "./pages/StudentsList";
 import { StudentDetail } from "./pages/StudentDetail";
 import { StudentAdmission } from "./pages/StudentAdmission";
 import { StudentPromotion } from "./pages/StudentPromotion";
+import { StudentLeavesPage } from "./pages/students/StudentLeavesPage";
+import { StudentBirthdaysPage } from "./pages/students/StudentBirthdaysPage";
+import { StudentTransfersPage } from "./pages/students/StudentTransfersPage";
+import { StudentNoticeboardPage } from "./pages/students/StudentNoticeboardPage";
 import { Parents } from "./pages/Parents";
 import { Teachers } from "./pages/Teachers";
 import { Admissions } from "./pages/Admissions";
@@ -27,9 +31,7 @@ import { Exams } from "./pages/Exams";
 import { HR } from "./pages/HR";
 import { Payroll } from "./pages/Payroll";
 import { OperationModulePage } from "./pages/OperationModulePage";
-import { LibraryOps } from "./pages/LibraryOps";
-import { TransportOps } from "./pages/TransportOps";
-import { BoardingOps } from "./pages/BoardingOps";
+import { Facilities } from "./pages/Facilities";
 import { Campuses } from "./pages/Campuses";
 import { Security } from "./pages/Security";
 import { Messaging } from "./pages/Messaging";
@@ -128,6 +130,10 @@ export const AppRoutes = () => {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="students" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><StudentsLayout /></FeatureRoute>}>
           <Route index element={<StudentsList />} />
+          <Route path="leaves" element={<StudentLeavesPage />} />
+          <Route path="birthdays" element={<StudentBirthdaysPage />} />
+          <Route path="noticeboard" element={<StudentNoticeboardPage />} />
+          <Route path="transfers" element={<StudentTransfersPage />} />
           <Route path="new" element={<StudentAdmission />} />
           <Route path="promote" element={<StudentPromotion />} />
         </Route>
@@ -146,10 +152,11 @@ export const AppRoutes = () => {
         <Route path="payroll" element={<FeatureRoute feature={MODULE_FEATURE_CODES.payroll}><Payroll /></FeatureRoute>} />
         <Route path="ops/discipline" element={<FeatureRoute feature={MODULE_FEATURE_CODES.discipline}><OperationModulePage moduleId="discipline" /></FeatureRoute>} />
         <Route path="ops/health" element={<FeatureRoute feature={MODULE_FEATURE_CODES.health}><OperationModulePage moduleId="health" /></FeatureRoute>} />
-        <Route path="ops/library" element={<FeatureRoute feature={MODULE_FEATURE_CODES.library}><LibraryOps /></FeatureRoute>} />
+        <Route path="facilities" element={<Facilities />} />
+        <Route path="ops/library" element={<Navigate to="../facilities?tab=library" replace />} />
         <Route path="ops/inventory" element={<FeatureRoute feature={MODULE_FEATURE_CODES.inventory}><OperationModulePage moduleId="inventory" /></FeatureRoute>} />
-        <Route path="ops/transport" element={<FeatureRoute feature={MODULE_FEATURE_CODES.transport}><TransportOps /></FeatureRoute>} />
-        <Route path="ops/boarding" element={<FeatureRoute feature={MODULE_FEATURE_CODES.boarding}><BoardingOps /></FeatureRoute>} />
+        <Route path="ops/transport" element={<Navigate to="../facilities?tab=transport" replace />} />
+        <Route path="ops/boarding" element={<Navigate to="../facilities?tab=hostel" replace />} />
         <Route path="campuses" element={<Campuses />} />
         <Route path="security" element={<Security />} />
         <Route path="operations" element={<Navigate to="ops/discipline" replace />} />
