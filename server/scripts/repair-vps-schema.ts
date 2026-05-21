@@ -16,8 +16,13 @@ async function run(statement: string) {
     await db.execute(sql.raw(trimmed));
   } catch (err: unknown) {
     const e = err as { code?: string; message?: string };
-    if (e.code === "42710" || e.message?.includes("already exists")) {
-      console.log(`  · already exists, skipping`);
+    if (
+      e.code === "42710" ||
+      e.code === "42P01" ||
+      e.message?.includes("already exists") ||
+      e.message?.includes("does not exist")
+    ) {
+      console.log(`  · skip (${e.code ?? "exists"})`);
       return;
     }
     throw err;

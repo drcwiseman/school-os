@@ -3,6 +3,25 @@
  * Used at boot (ensureRuntimeSchema) and via `npm run db:repair`.
  */
 export const VPS_SCHEMA_PATCH_SQL: string[] = [
+  `CREATE TABLE IF NOT EXISTS "staff" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+    "user_id" uuid REFERENCES "users"("id"),
+    "employee_no" text NOT NULL,
+    "first_name" text NOT NULL,
+    "last_name" text NOT NULL,
+    "email" text,
+    "department" text,
+    "status" text DEFAULT 'active' NOT NULL,
+    "hired_at" timestamp,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `ALTER TABLE "staff" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp`,
+  `ALTER TABLE "staff" ADD COLUMN IF NOT EXISTS "deleted_by" uuid REFERENCES "users"("id") ON DELETE SET NULL`,
+  `ALTER TABLE "staff" ADD COLUMN IF NOT EXISTS "job_title" text`,
+  `ALTER TABLE "staff" ADD COLUMN IF NOT EXISTS "photo_url" text`,
+  `ALTER TABLE "staff" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'active'`,
+  `CREATE INDEX IF NOT EXISTS "staff_tenant_idx" ON "staff" ("tenant_id")`,
   `ALTER TABLE "announcements" ADD COLUMN IF NOT EXISTS "publish_at" timestamp`,
   `ALTER TABLE "sessions" ADD COLUMN IF NOT EXISTS "metadata" jsonb NOT NULL DEFAULT '{}'`,
   `ALTER TABLE "sessions" ADD COLUMN IF NOT EXISTS "revoked_at" timestamp`,
@@ -96,11 +115,15 @@ export const VPS_SCHEMA_PATCH_SQL: string[] = [
   `ALTER TABLE "assignment_submissions" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'submitted'`,
   `ALTER TABLE "assignment_submissions" ADD COLUMN IF NOT EXISTS "graded_at" timestamp`,
   `ALTER TABLE "assignment_submissions" ADD COLUMN IF NOT EXISTS "graded_by" uuid`,
-  `ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "subject_id" uuid`,
-  `ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "file_path" text`,
-  `ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "file_name" text`,
-  `ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "mime_type" text`,
-  `ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "folder" text DEFAULT 'general'`,
+  `DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'student_materials') THEN
+      ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "subject_id" uuid;
+      ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "file_path" text;
+      ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "file_name" text;
+      ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "mime_type" text;
+      ALTER TABLE "student_materials" ADD COLUMN IF NOT EXISTS "folder" text DEFAULT 'general';
+    END IF;
+  END $$`,
   `ALTER TABLE "online_class_links" ADD COLUMN IF NOT EXISTS "subject_id" uuid`,
   `ALTER TABLE "online_class_links" ADD COLUMN IF NOT EXISTS "attendance_session_id" uuid`,
   `ALTER TABLE "online_class_links" ADD COLUMN IF NOT EXISTS "duration_minutes" integer DEFAULT 60`,

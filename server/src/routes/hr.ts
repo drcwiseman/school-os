@@ -13,6 +13,7 @@ import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { NotFoundError, BadRequestError } from "../middleware/error";
+import { getStaffById, listStaffForTenant } from "../lib/staff-query";
 
 async function findOverlappingLeave(tenantId: string, staffId: string, start: Date, end: Date, excludeId?: string) {
   const conditions = [
@@ -34,21 +35,8 @@ router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, ne
   try {
     const tenant = (req as any).tenant;
     const teachingOnly = req.query.teachingOnly === "1" || req.query.teachingOnly === "true";
-    const conditions = [eq(staff.tenantId, tenant.id), isNull(staff.deletedAt)];
-    if (teachingOnly) {
-      conditions.push(or(
-        ilike(staff.department, "%teacher%"),
-        ilike(staff.department, "%teaching%"),
-        ilike(staff.department, "%academic%"),
-        ilike(staff.department, "%head%"),
-        eq(staff.department, "Teacher"),
-        eq(staff.department, "Headteacher"),
-        eq(staff.department, "Teaching"),
-        eq(staff.jobTitle, "Teacher"),
-        ilike(staff.jobTitle, "%teacher%"),
-      )!);
-    }
-    res.json({ success: true, data: await db.select().from(staff).where(and(...conditions)).orderBy(desc(staff.createdAt)) });
+    const data = await listStaffForTenant(tenant.id, { teachingOnly });
+    res.json({ success: true, data });
   } catch (e) { next(e); }
 });
 
@@ -92,11 +80,7 @@ router.post("/staff/import/csv", ...guard, requirePermission("hr.manage"),
 router.get("/staff/:id", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [row] = await db.select().from(staff).where(and(
-      eq(staff.id, req.params.id),
-      eq(staff.tenantId, tenant.id),
-      isNull(staff.deletedAt),
-    )).limit(1);
+    const row = await getStaffById(tenant.id, req.params.id);
     if (!row) throw new NotFoundError("Staff not found");
     res.json({ success: true, data: row });
   } catch (e) { next(e); }
