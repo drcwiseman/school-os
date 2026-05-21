@@ -95,7 +95,11 @@ export const RosterPanel: React.FC = () => {
         <option value="">Stream…</option>
         {streams.map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
       </select>
-      <ul className="text-sm text-slate-300">{roster.map((s) => <li key={s.id}>{s.firstName} {s.lastName} ({s.admissionNumber})</li>)}</ul>
+      <ul className="text-sm text-slate-300">
+        {roster.length === 0 ? <li className="text-slate-500">No students in this stream — enroll via Students or demo data.</li> : roster.map((s) => (
+          <li key={s.id}>{s.firstName} {s.lastName} ({s.admissionNumber})</li>
+        ))}
+      </ul>
     </div>
   );
 };
@@ -104,14 +108,37 @@ export const TimetableBuilderPanel: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
   const [timetables, setTimetables] = useState<any[]>([]);
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [selected, setSelected] = useState("");
   const [periods, setPeriods] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [periodForm, setPeriodForm] = useState({ dayOfWeek: "1", periodNo: "1", subjectId: "", teacherUserId: "", roomId: "" });
+  const [newTt, setNewTt] = useState({ name: "", classId: "" });
 
   useEffect(() => {
-    api.get(`/s/${schoolSlug}/api/academics/timetables`).then((r) => setTimetables(r.data ?? []));
+    Promise.all([
+      api.get(`/s/${schoolSlug}/api/academics/timetables`),
+      api.get(`/s/${schoolSlug}/api/academics/classes`),
+    ]).then(([t, c]) => {
+      setTimetables(t.data ?? []);
+      setClasses(c.data ?? []);
+    }).catch(() => {});
   }, [schoolSlug]);
+
+  const createTimetable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTt.classId || !newTt.name) return;
+    try {
+      const res = await api.post(`/s/${schoolSlug}/api/academics/timetables`, newTt);
+      toast("Timetable created", "success");
+      setNewTt({ name: "", classId: "" });
+      const list = await api.get(`/s/${schoolSlug}/api/academics/timetables`);
+      setTimetables(list.data ?? []);
+      if (res.data?.id) loadPeriods(res.data.id);
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
 
   const loadPeriods = async (id: string) => {
     setSelected(id);
@@ -138,6 +165,20 @@ export const TimetableBuilderPanel: React.FC = () => {
     <div className="grid lg:grid-cols-2 gap-6">
       <div className="card p-5 space-y-3">
         <h3 className="font-semibold text-white">Timetable builder</h3>
+        <form onSubmit={createTimetable} className="flex flex-wrap gap-2 items-end border-b border-slate-700 pb-3">
+          <div className="flex-1 min-w-[120px]">
+            <label className="label text-xs">New timetable name</label>
+            <input className="input" value={newTt.name} onChange={(e) => setNewTt({ ...newTt, name: e.target.value })} required />
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className="label text-xs">Class</label>
+            <select className="input" value={newTt.classId} onChange={(e) => setNewTt({ ...newTt, classId: e.target.value })} required>
+              <option value="">Class…</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <button type="submit" className="btn-primary text-sm">Create</button>
+        </form>
         <select className="input" value={selected} onChange={(e) => e.target.value && loadPeriods(e.target.value)}>
           <option value="">Select timetable…</option>
           {timetables.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}

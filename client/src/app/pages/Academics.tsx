@@ -6,6 +6,9 @@ import { AcademicsHub } from "../components/academics/AcademicsHub";
 import { OnlineClassesPanel, StudyMaterialsPanel } from "../components/academics/LearningResourcesPanels";
 import { EventsPanel } from "../components/academics/EventsPanel";
 import { HomeworkGradingPanel } from "../components/academics/HomeworkGradingPanel";
+import { AcademicsSetupBanner } from "../components/academics/AcademicsSetupBanner";
+import { HomeworkAssignmentsPanel } from "../components/academics/HomeworkAssignmentsPanel";
+import { TermsCrudPanel } from "../components/academics/TermsCrudPanel";
 import { useParams } from "react-router-dom";
 
 const TABS = ["overview", "live", "materials", "homework", "grading", "events", "years", "terms", "classes", "streams", "teachers", "roster", "seating", "timetable", "lessons", "devices", "subjects", "rooms"] as const;
@@ -25,6 +28,8 @@ export const Academics: React.FC = () => {
 
       <TabBar tab={tab} setTab={setTab} />
 
+      {schoolSlug && <AcademicsSetupBanner schoolSlug={schoolSlug} />}
+
       {tab === "overview" && schoolSlug && (
         <AcademicsHub schoolSlug={schoolSlug} onOpenTab={(t) => setTab(t as (typeof TABS)[number])} />
       )}
@@ -35,6 +40,7 @@ export const Academics: React.FC = () => {
 
       {tab === "years" && (
         <ModuleCrud title="Academic years" apiPath="academics/years"
+          allowEdit allowDelete editPermission="academics.manage" deletePermission="academics.manage" createPermission="academics.manage"
           columns={[
             { key: "name", label: "Year" },
             { key: "isCurrent", label: "Current", render: (r) => (r.isCurrent ? "Yes" : "—") },
@@ -44,30 +50,18 @@ export const Academics: React.FC = () => {
             { name: "name", label: "Name", required: true },
             { name: "startDate", label: "Start date", type: "date", required: true },
             { name: "endDate", label: "End date", type: "date", required: true },
-            { name: "isCurrent", label: "Current (true/false)" },
           ]} />
       )}
-      {tab === "terms" && (
-        <ModuleCrud title="Terms" apiPath="academics/terms"
-          columns={[
-            { key: "name", label: "Term" },
-            { key: "academicYearId", label: "Year ID" },
-            { key: "isCurrent", label: "Current", render: (r) => (r.isCurrent ? "Yes" : "—") },
-          ]}
-          fields={[
-            { name: "academicYearId", label: "Academic year UUID", required: true },
-            { name: "name", label: "Name", required: true },
-            { name: "startDate", label: "Start", type: "date", required: true },
-            { name: "endDate", label: "End", type: "date", required: true },
-          ]} />
-      )}
+      {tab === "terms" && <TermsCrudPanel />}
       {tab === "classes" && (
         <ModuleCrud title="Classes" apiPath="academics/classes"
+          allowEdit allowDelete editPermission="academics.manage" deletePermission="academics.manage" createPermission="academics.manage"
           columns={[{ key: "name", label: "Class" }, { key: "level", label: "Level" }]}
           fields={[
             { name: "name", label: "Name", required: true },
             { name: "level", label: "Level", type: "number" },
-          ]} />
+          ]}
+          emptyMessage="No classes — add one or load demo data from Admin." />
       )}
       {tab === "streams" && <StreamsPanel />}
       {tab === "teachers" && <TeacherAssignPanel />}
@@ -78,25 +72,17 @@ export const Academics: React.FC = () => {
       {tab === "devices" && <SmartDevicesPanel />}
       {tab === "subjects" && (
         <ModuleCrud title="Subjects" apiPath="academics/subjects"
+          allowEdit allowDelete editPermission="academics.manage" deletePermission="academics.manage" createPermission="academics.manage"
           columns={[{ key: "code", label: "Code" }, { key: "name", label: "Name" }]}
           fields={[{ name: "code", label: "Code", required: true }, { name: "name", label: "Name", required: true }]} />
       )}
       {tab === "rooms" && (
         <ModuleCrud title="Rooms" apiPath="academics/rooms"
+          allowEdit allowDelete editPermission="academics.manage" deletePermission="academics.manage" createPermission="academics.manage"
           columns={[{ key: "name", label: "Room" }, { key: "capacity", label: "Capacity" }]}
           fields={[{ name: "name", label: "Name", required: true }, { name: "capacity", label: "Capacity", type: "number" }]} />
       )}
-      {tab === "homework" && (
-        <ModuleCrud title="Homework assignments" apiPath="academics/assignments"
-          columns={[{ key: "title", label: "Title" }, { key: "description", label: "Details", render: (r) => (r.description ?? "").slice(0, 40) }, { key: "dueDate", label: "Due", render: (r) => r.dueDate ? new Date(r.dueDate).toLocaleDateString() : "—" }]}
-          fields={[
-            { name: "title", label: "Title", required: true },
-            { name: "description", label: "Description" },
-            { name: "classId", label: "Class UUID", required: true },
-            { name: "subjectId", label: "Subject UUID", required: true },
-            { name: "dueDate", label: "Due date", type: "date" },
-          ]} />
-      )}
+      {tab === "homework" && <HomeworkAssignmentsPanel />}
     </div>
   );
 };

@@ -11,7 +11,9 @@ import {
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { writeTenantFile, resolveTenantFile } from "../lib/uploads";
 import { ConflictError } from "../middleware/error";
-import { pushCampusFilter } from "../lib/campus-scope";
+import { getCampusId } from "../lib/campus-scope";
+import { listClassesForTenant, listStudentMaterialsForTenant, rosterForStream } from "../lib/academics-query";
+import { getTableColumns } from "../lib/table-columns";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -20,6 +22,33 @@ import { NotFoundError } from "../middleware/error";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
+
+router.get("/context", ...guard, requirePermission("academics.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [years, termsRows, classesList, subjectsList] = await Promise.all([
+      db.select().from(academicYears).where(eq(academicYears.tenantId, tenant.id)).orderBy(desc(academicYears.startDate)),
+      db.select().from(terms).where(eq(terms.tenantId, tenant.id)),
+      listClassesForTenant(tenant.id, getCampusId(req)),
+      db.select().from(subjects).where(eq(subjects.tenantId, tenant.id)),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        years,
+        terms: termsRows,
+        classes: classesList,
+        subjects: subjectsList,
+        counts: {
+          years: years.length,
+          terms: termsRows.length,
+          classes: classesList.length,
+          subjects: subjectsList.length,
+        },
+      },
+    });
+  } catch (e) { next(e); }
+});
 
 router.get("/years", ...guard, requirePermission("academics.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -45,6 +74,41 @@ router.post("/years", ...guard, requirePermission("academics.manage"),
     } catch (err) { next(err); }
   }
 );
+
+router.patch("/years/:id", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({
+    name: z.string().min(1).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    isCurrent: z.boolean().optional(),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const patch: Record<string, unknown> = {};
+      if (req.body.name != null) patch.name = req.body.name;
+      if (req.body.startDate != null) patch.startDate = new Date(req.body.startDate);
+      if (req.body.endDate != null) patch.endDate = new Date(req.body.endDate);
+      if (req.body.isCurrent != null) patch.isCurrent = req.body.isCurrent;
+      const [row] = await db.update(academicYears).set(patch)
+        .where(and(eq(academicYears.id, req.params.id), eq(academicYears.tenantId, tenant.id)))
+        .returning();
+      if (!row) throw new NotFoundError("Academic year not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/years/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(academicYears)
+      .where(and(eq(academicYears.id, req.params.id), eq(academicYears.tenantId, tenant.id)))
+      .returning();
+    if (!row) throw new NotFoundError("Academic year not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
 
 router.get("/terms", ...guard, requirePermission("academics.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -72,12 +136,47 @@ router.post("/terms", ...guard, requirePermission("academics.manage"),
   }
 );
 
+router.patch("/terms/:id", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({
+    academicYearId: z.string().uuid().optional(),
+    name: z.string().min(1).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    isCurrent: z.boolean().optional(),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const patch: Record<string, unknown> = {};
+      if (req.body.academicYearId != null) patch.academicYearId = req.body.academicYearId;
+      if (req.body.name != null) patch.name = req.body.name;
+      if (req.body.startDate != null) patch.startDate = new Date(req.body.startDate);
+      if (req.body.endDate != null) patch.endDate = new Date(req.body.endDate);
+      if (req.body.isCurrent != null) patch.isCurrent = req.body.isCurrent;
+      const [row] = await db.update(terms).set(patch)
+        .where(and(eq(terms.id, req.params.id), eq(terms.tenantId, tenant.id)))
+        .returning();
+      if (!row) throw new NotFoundError("Term not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/terms/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(terms)
+      .where(and(eq(terms.id, req.params.id), eq(terms.tenantId, tenant.id)))
+      .returning();
+    if (!row) throw new NotFoundError("Term not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
 router.get("/classes", ...guard, requirePermission("academics.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenant = (req as any).tenant;
-    const conditions = [eq(classes.tenantId, tenant.id)];
-    pushCampusFilter(conditions, classes, req);
-    const rows = await db.select().from(classes).where(and(...conditions)).orderBy(classes.level);
+    const rows = await listClassesForTenant(tenant.id, getCampusId(req));
     res.json({ success: true, data: rows });
   } catch (err) { next(err); }
 });
@@ -96,6 +195,34 @@ router.post("/classes", ...guard, requirePermission("academics.manage"),
     } catch (err) { next(err); }
   }
 );
+
+router.patch("/classes/:id", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ name: z.string().min(1).optional(), level: z.number().int().min(1).optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const patch: Record<string, unknown> = {};
+      if (req.body.name != null) patch.name = req.body.name;
+      if (req.body.level != null) patch.level = req.body.level;
+      const [row] = await db.update(classes).set(patch)
+        .where(and(eq(classes.id, req.params.id), eq(classes.tenantId, tenant.id)))
+        .returning();
+      if (!row) throw new NotFoundError("Class not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/classes/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(classes)
+      .where(and(eq(classes.id, req.params.id), eq(classes.tenantId, tenant.id)))
+      .returning();
+    if (!row) throw new NotFoundError("Class not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
 
 router.get("/classes/:classId/streams", ...guard, requirePermission("academics.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -139,6 +266,31 @@ router.post("/subjects", ...guard, requirePermission("academics.manage"),
   }
 );
 
+router.patch("/subjects/:id", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ code: z.string().optional(), name: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.update(subjects).set(req.body)
+        .where(and(eq(subjects.id, req.params.id), eq(subjects.tenantId, tenant.id)))
+        .returning();
+      if (!row) throw new NotFoundError("Subject not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/subjects/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(subjects)
+      .where(and(eq(subjects.id, req.params.id), eq(subjects.tenantId, tenant.id)))
+      .returning();
+    if (!row) throw new NotFoundError("Subject not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
 router.get("/rooms", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -156,6 +308,31 @@ router.post("/rooms", ...guard, requirePermission("academics.manage"),
     } catch (e) { next(e); }
   }
 );
+
+router.patch("/rooms/:id", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ name: z.string().optional(), capacity: z.number().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.update(rooms).set(req.body)
+        .where(and(eq(rooms.id, req.params.id), eq(rooms.tenantId, tenant.id)))
+        .returning();
+      if (!row) throw new NotFoundError("Room not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/rooms/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(rooms)
+      .where(and(eq(rooms.id, req.params.id), eq(rooms.tenantId, tenant.id)))
+      .returning();
+    if (!row) throw new NotFoundError("Room not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
 
 router.get("/timetables", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
@@ -216,6 +393,39 @@ router.post("/assignments", ...guard, requirePermission("academics.manage"),
     } catch (e) { next(e); }
   }
 );
+
+router.patch("/assignments/:id", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({
+    classId: z.string().uuid().optional(),
+    subjectId: z.string().uuid().optional(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    dueDate: z.string().optional(),
+  }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const patch: Record<string, unknown> = { ...req.body };
+      if (req.body.dueDate != null) patch.dueDate = new Date(req.body.dueDate);
+      const [row] = await db.update(assignments).set(patch)
+        .where(and(eq(assignments.id, req.params.id), eq(assignments.tenantId, tenant.id)))
+        .returning();
+      if (!row) throw new NotFoundError("Assignment not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/assignments/:id", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(assignments)
+      .where(and(eq(assignments.id, req.params.id), eq(assignments.tenantId, tenant.id)))
+      .returning();
+    if (!row) throw new NotFoundError("Assignment not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
 
 router.post("/assignments/:id/submit", ...guard, requirePermission("academics.view"),
   validate({ body: z.object({ studentId: z.string().uuid(), content: z.string().optional() }) }),
@@ -332,23 +542,9 @@ router.post("/teacher-assignments", ...guard, requirePermission("academics.manag
 router.get("/streams/:streamId/roster", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [stream] = await db.select().from(streams).where(and(eq(streams.id, req.params.streamId), eq(streams.tenantId, tenant.id))).limit(1);
-    if (!stream) throw new NotFoundError("Stream not found");
-    const roster = await db.select({
-      id: students.id,
-      firstName: students.firstName,
-      lastName: students.lastName,
-      admissionNumber: students.admissionNumber,
-    })
-      .from(studentClassHistory)
-      .innerJoin(students, eq(students.id, studentClassHistory.studentId))
-      .where(and(
-        eq(studentClassHistory.tenantId, tenant.id),
-        eq(studentClassHistory.classId, stream.classId),
-        isNull(studentClassHistory.toDate),
-        isNull(students.deletedAt),
-      ));
-    res.json({ success: true, data: { stream, roster } });
+    const result = await rosterForStream(tenant.id, req.params.streamId);
+    if (!result) throw new NotFoundError("Stream not found");
+    res.json({ success: true, data: result });
   } catch (e) { next(e); }
 });
 
@@ -462,9 +658,7 @@ router.get("/timetables/:id/conflicts", ...guard, requirePermission("academics.v
 router.get("/materials", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(studentMaterials)
-      .where(eq(studentMaterials.tenantId, tenant.id))
-      .orderBy(desc(studentMaterials.createdAt));
+    const rows = await listStudentMaterialsForTenant(tenant.id);
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
@@ -657,15 +851,17 @@ router.post("/online-classes/:id/init-roster", ...guard, requirePermission("acad
       eq(onlineClassLinks.tenantId, tenant.id),
     )).limit(1);
     if (!link?.classId) throw new NotFoundError("Live class needs a class to load roster");
+    const studentCols = await getTableColumns("students");
+    const rosterConds = [
+      eq(studentClassHistory.tenantId, tenant.id),
+      eq(studentClassHistory.classId, link.classId),
+      isNull(studentClassHistory.toDate),
+    ];
+    if (studentCols.has("deleted_at")) rosterConds.push(isNull(students.deletedAt));
     const classStudents = await db.select({ id: students.id })
       .from(studentClassHistory)
       .innerJoin(students, eq(students.id, studentClassHistory.studentId))
-      .where(and(
-        eq(studentClassHistory.tenantId, tenant.id),
-        eq(studentClassHistory.classId, link.classId),
-        isNull(studentClassHistory.toDate),
-        isNull(students.deletedAt),
-      ));
+      .where(and(...rosterConds));
     const created = [];
     for (const s of classStudents) {
       const [ex] = await db.select().from(onlineClassAttendance).where(and(

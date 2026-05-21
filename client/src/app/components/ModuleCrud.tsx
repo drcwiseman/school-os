@@ -9,8 +9,9 @@ import { useAuth } from "../state/AuthContext";
 export interface FieldDef {
   name: string;
   label: string;
-  type?: "text" | "number" | "date";
+  type?: "text" | "number" | "date" | "select";
   required?: boolean;
+  options?: { value: string; label: string }[];
 }
 
 export interface ColumnDef {
@@ -141,13 +142,27 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({
           {fields.map((f) => (
             <div key={f.name}>
               <label className="label">{f.label}</label>
-              <input
-                className="input"
-                type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                required={f.required}
-                value={form[f.name] ?? ""}
-                onChange={(e) => setForm({ ...form, [f.name]: e.target.value })}
-              />
+              {f.type === "select" ? (
+                <select
+                  className="input"
+                  required={f.required}
+                  value={form[f.name] ?? ""}
+                  onChange={(e) => setForm({ ...form, [f.name]: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="input"
+                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  required={f.required}
+                  value={form[f.name] ?? ""}
+                  onChange={(e) => setForm({ ...form, [f.name]: e.target.value })}
+                />
+              )}
             </div>
           ))}
           <div className="md:col-span-2 flex justify-end gap-2">
