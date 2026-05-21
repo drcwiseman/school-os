@@ -17,6 +17,7 @@ import { NotFoundError, ConflictError } from "../middleware/error";
 import { paginationSchema, paginate, paginatedResponse } from "../utils/pagination";
 import { getCampusId, campusCondition } from "../lib/campus-scope";
 import { getStudent360 } from "../services/student-360";
+import { listStudentsEnriched } from "../services/student-list";
 import { z } from "zod";
 
 const router = Router();
@@ -31,6 +32,20 @@ const studentCreateSchema = z.object({
   gender:          z.enum(["male","female","other"]).optional(),
   nationality:     z.string().optional(),
   religion:        z.string().optional(),
+  bloodGroup:      z.string().optional(),
+  phone:           z.string().optional(),
+  email:           z.string().optional(),
+  address:         z.string().optional(),
+  shortBio:        z.string().optional(),
+  photoUrl:        z.string().optional(),
+  classId:         z.string().uuid().optional(),
+  streamId:        z.string().uuid().optional(),
+  termId:          z.string().uuid().optional(),
+  parentFirstName: z.string().optional(),
+  parentLastName:  z.string().optional(),
+  parentPhone:     z.string().optional(),
+  parentEmail:     z.string().optional(),
+  parentRelationship: z.string().optional(),
 });
 
 const studentUpdateSchema = studentCreateSchema.partial();
@@ -39,8 +54,30 @@ const studentUpdateSchema = studentCreateSchema.partial();
 router.get("/", ...guard, requirePermission("students.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenant = (req as any).tenant;
-    const q      = await paginationSchema.merge(z.object({ search: z.string().optional(), status: z.string().optional() })).parseAsync(req.query);
+    const q = await paginationSchema.merge(z.object({
+      search: z.string().optional(),
+      status: z.string().optional(),
+      roll: z.string().optional(),
+      name: z.string().optional(),
+      classId: z.string().uuid().optional(),
+      enriched: z.coerce.boolean().optional(),
+    })).parseAsync(req.query);
     const { limit, offset } = paginate(q.page, q.limit);
+
+    if (q.enriched !== false) {
+      const { rows, total } = await listStudentsEnriched({
+        tenantId: tenant.id,
+        campusId: getCampusId(req),
+        search: q.search,
+        roll: q.roll,
+        name: q.name,
+        classId: q.classId,
+        status: q.status,
+        limit,
+        offset,
+      });
+      return res.json(paginatedResponse(rows, total, q.page, q.limit));
+    }
 
     const conditions = [eq(students.tenantId, tenant.id), isNull(students.deletedAt)];
     const c = campusCondition(students, getCampusId(req));
@@ -115,7 +152,34 @@ router.post("/", ...guard, requirePermission("students.create"), validate({ body
     const user   = (req as any).user;
     const [existing] = await db.select().from(students).where(and(eq(students.tenantId, tenant.id), eq(students.admissionNumber, req.body.admissionNumber))).limit(1);
     if (existing) throw new ConflictError("Admission number already exists");
-    const [student] = await db.insert(students).values({ ...req.body, tenantId: tenant.id, dob: req.body.dob ? new Date(req.body.dob) : undefined }).returning();
+    const {
+      classId, streamId, termId,
+      parentFirstName, parentLastName, parentPhone, parentEmail, parentRelationship,
+      email, ...studentFields
+    } = req.body;
+    const [student] = await db.insert(students).values({
+      ...studentFields,
+      tenantId: tenant.id,
+      dob: studentFields.dob ? new Date(studentFields.dob) : undefined,
+      email: email || undefined,
+    }).returning();
+    if (classId) {
+      await db.insert(studentClassHistory).values({
+        tenantId: tenant.id, studentId: student.id, classId, streamId, termId,
+      });
+    }
+    if (parentFirstName && parentLastName) {
+      const [guardian] = await db.insert(guardians).values({
+        tenantId: tenant.id,
+        firstName: parentFirstName,
+        lastName: parentLastName,
+        relationship: parentRelationship || "parent",
+        phone: parentPhone,
+        email: parentEmail,
+        address: studentFields.address,
+      }).returning();
+      await db.insert(studentGuardians).values({ studentId: student.id, guardianId: guardian.id, isPrimary: true });
+    }
     await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "student.create", entityType: "student", entityId: student.id, after: student, ip: req.ip });
     res.status(201).json({ success: true, data: student });
   } catch (err) { next(err); }

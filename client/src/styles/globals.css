@@ -211,3 +211,39 @@
   .animate-fade-in { animation: fadeIn 0.2s ease-out; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 }
+
+/* Akkhor-inspired light admin preset (toggle in header) */
+html[data-theme="light"] body:not(.marketing-active):not(.platform-active) {
+  background-color: #eef1f6;
+  color: #1e293b;
+}
+html[data-theme="light"] body:not(.marketing-active) .bg-surface {
+  background-color: #ffffff;
+}
+html[data-theme="light"] .card {
+  @apply bg-white border-slate-200 shadow-sm;
+}
+html[data-theme="light"] .page-title {
+  @apply text-slate-900;
+}
+html[data-theme="light"] .input {
+  @apply bg-white border-slate-300 text-slate-900 placeholder-slate-400;
+}
+html[data-theme="light"] .table th {
+  @apply bg-slate-50 text-slate-600 border-slate-200;
+}
+html[data-theme="light"] .table td {
+  @apply text-slate-700 border-slate-100;
+}
+html[data-theme="light"] .nav-item {
+  @apply text-slate-600 hover:text-slate-900 hover:bg-slate-100;
+}
+html[data-theme="light"] .nav-item.active {
+  @apply bg-blue-50 text-blue-700 border-blue-200;
+}
+html[data-theme="light"] aside.bg-surface {
+  @apply bg-white border-slate-200;
+}
+html[data-theme="light"] .btn-ghost {
+  @apply border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900;
+}

@@ -11,8 +11,13 @@ import { PlatformMarketing } from "./platform/PlatformMarketing";
 import { PlatformGeneralSettings } from "./platform/PlatformGeneralSettings";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
+import { StudentsLayout } from "./layout/StudentsLayout";
 import { StudentsList } from "./pages/StudentsList";
 import { StudentDetail } from "./pages/StudentDetail";
+import { StudentAdmission } from "./pages/StudentAdmission";
+import { StudentPromotion } from "./pages/StudentPromotion";
+import { Parents } from "./pages/Parents";
+import { Teachers } from "./pages/Teachers";
 import { Admissions } from "./pages/Admissions";
 import { Attendance } from "./pages/Attendance";
 import { Admin } from "./pages/Admin";
@@ -121,8 +126,14 @@ export const AppRoutes = () => {
 
       <Route path="/s/:schoolSlug/*" element={<DashboardLayout />}>
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="students" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><StudentsList /></FeatureRoute>} />
+        <Route path="students" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><StudentsLayout /></FeatureRoute>}>
+          <Route index element={<StudentsList />} />
+          <Route path="new" element={<StudentAdmission />} />
+          <Route path="promote" element={<StudentPromotion />} />
+        </Route>
         <Route path="students/:studentId" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><StudentDetail /></FeatureRoute>} />
+        <Route path="parents" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><Parents /></FeatureRoute>} />
+        <Route path="teachers" element={<FeatureRoute feature={MODULE_FEATURE_CODES.hr}><Teachers /></FeatureRoute>} />
         <Route path="admissions" element={<FeatureRoute feature={MODULE_FEATURE_CODES.admissions}><Admissions /></FeatureRoute>} />
         <Route path="attendance" element={<FeatureRoute feature={MODULE_FEATURE_CODES.attendance}><Attendance /></FeatureRoute>} />
         <Route path="academics" element={<FeatureRoute feature={MODULE_FEATURE_CODES.academics}><Academics /></FeatureRoute>} />

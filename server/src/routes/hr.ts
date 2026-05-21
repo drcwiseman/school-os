@@ -5,7 +5,7 @@ import {
   staff, staffContracts, leaveRequests, staffAttendance, payrollTaxRules, jobPosts, jobApplicants,
   staffDisciplinary, staffDocuments, staffBenefits, performanceReviews,
 } from "../db/schema";
-import { eq, and, desc, isNull, inArray, sql, ne } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, sql, ne, or, ilike } from "drizzle-orm";
 import { softDeleteStaffMember } from "../services/soft-delete";
 import { createAuditLog } from "../services/audit";
 import { requireAuth } from "../middleware/auth";
@@ -33,7 +33,17 @@ const guard = [requireAuth, requireTenantMatch];
 router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), isNull(staff.deletedAt))).orderBy(desc(staff.createdAt)) });
+    const teachingOnly = req.query.teachingOnly === "1" || req.query.teachingOnly === "true";
+    const conditions = [eq(staff.tenantId, tenant.id), isNull(staff.deletedAt)];
+    if (teachingOnly) {
+      conditions.push(or(
+        ilike(staff.department, "%teacher%"),
+        ilike(staff.department, "%teaching%"),
+        ilike(staff.department, "%academic%"),
+        eq(staff.department, "Teacher"),
+      )!);
+    }
+    res.json({ success: true, data: await db.select().from(staff).where(and(...conditions)).orderBy(desc(staff.createdAt)) });
   } catch (e) { next(e); }
 });
 

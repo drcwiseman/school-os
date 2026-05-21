@@ -1480,10 +1480,8 @@ router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPe
         platformAdminId: admin.id,
         readOnly,
       });
-      await createPlatformAuditLog({
-        platformAdminId: admin.id,
+      await logPlatformAction(admin.id, "tenant.impersonate", {
         tenantId: tenant.id,
-        action: "tenant.impersonate",
         entityType: "user",
         entityId: target.id,
         ip: req.ip,

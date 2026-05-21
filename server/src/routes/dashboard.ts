@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { getUserPermissions } from "../middleware/rbac";
 import { buildCommandCenterKpis, type CommandCenterKpis } from "../services/command-center";
+import { buildDashboardWidgets, getHeaderNotificationCounts } from "../services/dashboard-widgets";
 import { getCampusId } from "../lib/campus-scope";
 
 const router = Router();
@@ -59,6 +60,22 @@ router.get("/", ...guard, async (req, res, next) => {
       data.recentActivity = [];
     }
 
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
+
+router.get("/widgets", ...guard, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const data = await buildDashboardWidgets(tenant.id, getCampusId(req));
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
+
+router.get("/notifications", ...guard, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const data = await getHeaderNotificationCounts(tenant.id);
     res.json({ success: true, data });
   } catch (e) { next(e); }
 });

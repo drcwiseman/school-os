@@ -35,6 +35,8 @@ export const Sidebar: React.FC = () => {
     { name: "Dashboard", path: `/s/${schoolSlug}/dashboard`, icon: LayoutDashboard },
     { name: "Admissions", path: `/s/${schoolSlug}/admissions`, icon: UserCog, perm: "admissions.view", feature: MODULE_FEATURE_CODES.admissions },
     { name: "Students", path: `/s/${schoolSlug}/students`, icon: GraduationCap, perm: "students.view", feature: MODULE_FEATURE_CODES.students },
+    { name: "Parents", path: `/s/${schoolSlug}/parents`, icon: Users, perm: "students.view", feature: MODULE_FEATURE_CODES.students },
+    { name: "Teachers", path: `/s/${schoolSlug}/teachers`, icon: School, perm: "hr.view", feature: MODULE_FEATURE_CODES.hr },
     { name: "Attendance", path: `/s/${schoolSlug}/attendance`, icon: CalendarCheck, perm: "attendance.view", feature: MODULE_FEATURE_CODES.attendance },
     { name: "Academics", path: `/s/${schoolSlug}/academics`, icon: BookOpen, perm: "academics.view", feature: MODULE_FEATURE_CODES.academics },
     { name: "Curriculum", path: `/s/${schoolSlug}/curriculum`, icon: BookMarked, perm: "academics.view", feature: MODULE_FEATURE_CODES.academics },

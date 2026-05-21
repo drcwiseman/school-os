@@ -7,6 +7,7 @@ import {
   Calendar, AlertTriangle, DollarSign, Wallet, Bus, Home, Library,
   Package, Megaphone, Sparkles, Loader2, TrendingUp, ArrowUpRight,
 } from "lucide-react";
+import { DashboardCharts, type WidgetData } from "../components/DashboardCharts";
 
 type KpiData = {
   academic?: {
@@ -118,12 +119,19 @@ export const Dashboard: React.FC = () => {
   const { user, schoolSlug, hasPermission, moduleEnabled } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<KpiData | null>(null);
+  const [widgets, setWidgets] = useState<WidgetData | null>(null);
   const base = `/s/${schoolSlug}`;
 
   useEffect(() => {
     if (!schoolSlug) return;
-    api.get(`/s/${schoolSlug}/api/dashboard`)
-      .then((res) => setStats(res.data))
+    Promise.all([
+      api.get(`/s/${schoolSlug}/api/dashboard`),
+      api.get(`/s/${schoolSlug}/api/dashboard/widgets`).catch(() => null),
+    ])
+      .then(([dash, w]) => {
+        setStats(dash.data);
+        setWidgets(w?.data ?? null);
+      })
       .catch(() => setStats(null))
       .finally(() => setLoading(false));
   }, [schoolSlug]);
@@ -162,6 +170,10 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {widgets && hasPermission("students.view") && (
+        <DashboardCharts widgets={widgets} messagingPath={`${base}/messaging`} />
+      )}
 
       {a && f && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

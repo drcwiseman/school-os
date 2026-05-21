@@ -6,6 +6,7 @@ import { GlobalSearch } from "../components/GlobalSearch";
 import { CampusSelector } from "../components/CampusSelector";
 import { PwaInstallBanner } from "../components/PwaInstallBanner";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { HeaderNotifications } from "../components/HeaderNotifications";
 import { Loader2 } from "lucide-react";
 
 export const DashboardLayout: React.FC = () => {
@@ -37,7 +38,8 @@ export const DashboardLayout: React.FC = () => {
             </div>
           )}
           <PwaInstallBanner />
-          <div className="flex items-center justify-end gap-2 mb-4">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <HeaderNotifications />
             <ThemeToggle />
           </div>
           <CampusSelector />

@@ -31,6 +31,37 @@ export async function ensureRuntimeSchema() {
     `ALTER TABLE "platform_backups" ADD COLUMN IF NOT EXISTS "offsite_status" text`,
     `ALTER TABLE "platform_admins" ADD COLUMN IF NOT EXISTS "role" text NOT NULL DEFAULT 'super_admin'`,
     `ALTER TABLE "announcements" ADD COLUMN IF NOT EXISTS "publish_at" timestamp`,
+    `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "blood_group" text`,
+    `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "phone" text`,
+    `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "email" text`,
+    `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "address" text`,
+    `ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "short_bio" text`,
+    `ALTER TABLE "sessions" ADD COLUMN IF NOT EXISTS "metadata" jsonb NOT NULL DEFAULT '{}'`,
+    `CREATE TABLE IF NOT EXISTS "platform_audit_logs" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "platform_admin_id" uuid REFERENCES "platform_admins"("id") ON DELETE set null,
+      "tenant_id" uuid REFERENCES "tenants"("id") ON DELETE set null,
+      "action" text NOT NULL,
+      "entity_type" text NOT NULL,
+      "entity_id" text,
+      "before_json" jsonb,
+      "after_json" jsonb,
+      "ip" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "platform_audit_logs_created_idx" ON "platform_audit_logs" ("created_at")`,
+    `CREATE TABLE IF NOT EXISTS "platform_impersonation_tokens" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "token" text NOT NULL,
+      "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE cascade,
+      "target_user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "platform_admin_id" uuid NOT NULL REFERENCES "platform_admins"("id") ON DELETE cascade,
+      "read_only" boolean NOT NULL DEFAULT true,
+      "expires_at" timestamp NOT NULL,
+      "used_at" timestamp,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      CONSTRAINT "platform_impersonation_tokens_token_unique" UNIQUE("token")
+    )`,
     `CREATE TABLE IF NOT EXISTS "features" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "code" text NOT NULL,
@@ -234,6 +265,7 @@ export async function ensureRuntimeSchema() {
   }
 
   for (const file of [
+    "0010_saas_ecosystem.sql",
     "0014_platform_support_tickets.sql",
     "0016_platform_email.sql",
     "0017_platform_backups.sql",
@@ -244,6 +276,7 @@ export async function ensureRuntimeSchema() {
     "0022_phase_d.sql",
     "0023_post_d.sql",
     "0024_remaining.sql",
+    "0025_akkhor_admin.sql",
   ]) {
     await runMigrationFile(file);
   }

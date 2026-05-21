@@ -5,6 +5,8 @@ const KEY = "schoolos_theme";
 
 export function applyTheme(mode: "light" | "dark") {
   document.documentElement.dataset.theme = mode;
+  document.documentElement.classList.toggle("dark", mode === "dark");
+  document.documentElement.classList.toggle("light", mode === "light");
   localStorage.setItem(KEY, mode);
 }
 
