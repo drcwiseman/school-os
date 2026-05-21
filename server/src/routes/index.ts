@@ -10,6 +10,7 @@ import studentMgmtRoutes from "./student-mgmt";
 import parentsRoutes from "./parents";
 import platformRoutes from "./platform";
 import { admissionsRouter } from "./admissions";
+import { admissionFormsRouter } from "./admissionForms";
 import { attendanceRouter } from "./attendance";
 import { attendanceEnhancementsRouter } from "./attendance-enhancements";
 import messagingEnhancementsRoutes from "./messaging-enhancements";
@@ -91,6 +92,7 @@ router.use("/s/:schoolSlug/api/students",   ...schoolApi, ...featureGuard("stude
 router.use("/s/:schoolSlug/api/student-mgmt", ...schoolApi, ...featureGuard("students"), studentMgmtRoutes);
 router.use("/s/:schoolSlug/api/parents",   ...schoolApi, ...featureGuard("students"), parentsRoutes);
 router.use("/s/:schoolSlug/api/admissions", ...schoolApi, ...featureGuard("admissions"), admissionsRouter);
+router.use("/s/:schoolSlug/api/admission-forms", ...schoolApi, ...featureGuard("admissions"), admissionFormsRouter);
 router.use("/s/:schoolSlug/api/attendance", ...schoolApi, ...featureGuard("attendance"), attendanceRouter, attendanceEnhancementsRouter);
 router.use("/s/:schoolSlug/api/academics",   ...schoolApi, ...featureGuard("academics"), academicsRoutes);
 router.use("/s/:schoolSlug/api/teacher",     ...schoolApi, ...featureGuard("academics"), teacherRoutes);

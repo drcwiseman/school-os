@@ -480,6 +480,27 @@ export const jobs = pgTable("jobs", {
 
 // ─── Admissions ───────────────────────────────────────────────────────────────
 
+export const admissionForms = pgTable("admission_forms", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:        text("name").notNull(), // e.g. "O-Level Admission", "Primary Admission"
+  description: text("description"),
+  isActive:    boolean("is_active").notNull().default(true),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({ tenantIdx: index("admission_forms_tenant_idx").on(t.tenantId) }));
+
+export const admissionFormFields = pgTable("admission_form_fields", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  formId:      uuid("form_id").notNull().references(() => admissionForms.id, { onDelete: "cascade" }),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  fieldName:   text("field_name").notNull(), // e.g. "PLE Index Number", "Former School", "NIN"
+  fieldKey:    text("field_key").notNull(), // e.g. "ple_index_number", snake_case version
+  fieldType:   text("field_type").notNull().default("text"), // text, email, phone, number, date, select
+  optionsJson: jsonb("options_json").$type<string[]>(), // Array of strings if fieldType is select
+  isRequired:  boolean("is_required").notNull().default(false),
+  orderIdx:    integer("order_idx").notNull().default(0),
+}, (t) => ({ formIdx: index("admission_form_fields_form_idx").on(t.formId) }));
+
 export const applicants = pgTable("applicants", {
   id:          uuid("id").primaryKey().defaultRandom(),
   tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
@@ -494,12 +515,15 @@ export const applicants = pgTable("applicants", {
   waitingList: boolean("waiting_list").notNull().default(false),
   applicationFeePaid: boolean("application_fee_paid").notNull().default(false),
   interviewAt: timestamp("interview_at"),
+  formId:      uuid("form_id").references(() => admissionForms.id),
+  customFields:jsonb("custom_fields").$type<Record<string, any>>().default({}),
   convertedTo: uuid("converted_to").references(() => students.id),
   createdAt:   timestamp("created_at").notNull().defaultNow(),
   updatedAt:   timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
   tenantIdx: index("applicants_tenant_idx").on(t.tenantId),
   stageIdx:  index("applicants_stage_idx").on(t.tenantId, t.stage),
+  formIdx:   index("applicants_form_idx").on(t.formId),
 }));
 
 export const applicantDocuments = pgTable("applicant_documents", {

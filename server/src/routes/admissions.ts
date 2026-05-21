@@ -31,6 +31,8 @@ admissionsRouter.get("/", requirePermission("admissions.view"), async (req: Requ
         phone: applicants.phone,
         stage: applicants.stage,
         notes: applicants.notes,
+        formId: applicants.formId,
+        customFields: applicants.customFields,
         convertedTo: applicants.convertedTo,
         createdAt: applicants.createdAt,
         updatedAt: applicants.updatedAt,
@@ -53,6 +55,8 @@ const createApplicantSchema = z.object({
   phone: z.string().optional(),
   dob: z.string().optional(), // ISO date string
   gender: z.enum(["male", "female", "other"]).optional(),
+  formId: z.string().uuid().optional().nullable(),
+  customFields: z.record(z.any()).optional(),
 });
 
 admissionsRouter.post("/", requirePermission("admissions.create"), async (req: Request, res: Response, next: NextFunction) => {
@@ -69,6 +73,8 @@ admissionsRouter.post("/", requirePermission("admissions.create"), async (req: R
       dob: body.dob ? new Date(body.dob) : null,
       gender: body.gender,
       stage: "inquiry",
+      formId: body.formId || null,
+      customFields: body.customFields || {},
     }).returning();
 
     await createAuditLog({

@@ -23,6 +23,7 @@ import { StudentNoticeboardPage } from "./pages/students/StudentNoticeboardPage"
 import { Parents } from "./pages/Parents";
 import { Teachers } from "./pages/Teachers";
 import { Admissions } from "./pages/Admissions";
+import { AdmissionSettings } from "./pages/AdmissionSettings";
 import { Attendance } from "./pages/Attendance";
 import { Admin } from "./pages/Admin";
 import { Finance } from "./pages/Finance";
@@ -141,6 +142,7 @@ export const AppRoutes = () => {
         <Route path="parents" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><Parents /></FeatureRoute>} />
         <Route path="teachers" element={<FeatureRoute feature={MODULE_FEATURE_CODES.hr}><Teachers /></FeatureRoute>} />
         <Route path="admissions" element={<FeatureRoute feature={MODULE_FEATURE_CODES.admissions}><Admissions /></FeatureRoute>} />
+        <Route path="admissions/settings" element={<FeatureRoute feature={MODULE_FEATURE_CODES.admissions}><AdmissionSettings /></FeatureRoute>} />
         <Route path="attendance" element={<FeatureRoute feature={MODULE_FEATURE_CODES.attendance}><Attendance /></FeatureRoute>} />
         <Route path="academics" element={<FeatureRoute feature={MODULE_FEATURE_CODES.academics}><Academics /></FeatureRoute>} />
         <Route path="curriculum" element={<FeatureRoute feature={MODULE_FEATURE_CODES.academics}><Curriculum /></FeatureRoute>} />
