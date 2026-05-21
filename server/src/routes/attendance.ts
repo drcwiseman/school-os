@@ -1,17 +1,31 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { attendanceSessions, attendanceRecords, students, studentClassHistory } from "../db/schema";
+import { attendanceSessions, attendanceRecords, classes } from "../db/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
-import { AppError } from "../middleware/error";
+import { AppError, NotFoundError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
+import { parseAttendanceDate, rosterStudentIdsForClass } from "../lib/attendance-roster";
 
 export const attendanceRouter = Router();
 
 attendanceRouter.use(requireAuth, requireTenantMatch);
+
+attendanceRouter.get("/classes", requirePermission("attendance.view"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = (req as any).tenant!.id;
+    const rows = await db.select({ id: classes.id, name: classes.name, level: classes.level })
+      .from(classes)
+      .where(eq(classes.tenantId, tenantId))
+      .orderBy(classes.level);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Fetch recent attendance sessions
 attendanceRouter.get("/", requirePermission("attendance.view"), async (req: Request, res: Response, next: NextFunction) => {
@@ -41,26 +55,22 @@ attendanceRouter.post("/session", requirePermission("attendance.take"), async (r
   try {
     const tenantId = (req as any).tenant!.id;
     const body = sessionSchema.parse(req.body);
-    const targetDate = new Date(body.date);
-    
+    const targetDate = parseAttendanceDate(body.date);
     const periodNo = body.periodNo ?? null;
+    const periodKey = periodNo ?? 0;
 
-    // Check if session already exists (same class, date, period)
     let [session] = await db.select()
       .from(attendanceSessions)
       .where(
         and(
           eq(attendanceSessions.tenantId, tenantId),
           eq(attendanceSessions.classId, body.classId),
-          eq(attendanceSessions.date, targetDate),
-          periodNo != null
-            ? eq(attendanceSessions.periodNo, periodNo)
-            : sql`${attendanceSessions.periodNo} IS NULL`
+          sql`${attendanceSessions.date}::date = ${body.date}::date`,
+          sql`COALESCE(${attendanceSessions.periodNo}, 0) = ${periodKey}`,
         )
       );
 
     if (!session) {
-      // Create new session
       [session] = await db.insert(attendanceSessions).values({
         tenantId,
         classId: body.classId,
@@ -70,26 +80,16 @@ attendanceRouter.post("/session", requirePermission("attendance.take"), async (r
         takenBy: (req as any).user!.id
       }).returning();
 
-      // Pre-fill records with 'present' for all active students in the class
-      const classStudents = await db.select({ id: students.id })
-        .from(studentClassHistory)
-        .innerJoin(students, eq(students.id, studentClassHistory.studentId))
-        .where(
-          and(
-            eq(studentClassHistory.tenantId, tenantId),
-            eq(studentClassHistory.classId, body.classId),
-            eq(students.status, "active")
-          )
+      const studentIds = await rosterStudentIdsForClass(tenantId, body.classId, body.streamId);
+      if (studentIds.length > 0) {
+        await db.insert(attendanceRecords).values(
+          studentIds.map((studentId) => ({
+            tenantId,
+            sessionId: session.id,
+            studentId,
+            status: "present" as const,
+          })),
         );
-
-      if (classStudents.length > 0) {
-        const recordsToInsert = classStudents.map(s => ({
-          tenantId,
-          sessionId: session.id,
-          studentId: s.id,
-          status: "present" as const,
-        }));
-        await db.insert(attendanceRecords).values(recordsToInsert);
       }
 
       await createAuditLog({
@@ -160,6 +160,30 @@ attendanceRouter.patch("/session/:sessionId", requirePermission("attendance.take
     });
 
     res.json({ success: true, message: "Attendance updated successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+attendanceRouter.delete("/session/:sessionId", requirePermission("attendance.edit"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = (req as any).tenant!.id;
+    const { sessionId } = req.params;
+    const [session] = await db.select().from(attendanceSessions)
+      .where(and(eq(attendanceSessions.id, sessionId), eq(attendanceSessions.tenantId, tenantId)))
+      .limit(1);
+    if (!session) throw new NotFoundError("Session not found");
+    await db.delete(attendanceSessions).where(eq(attendanceSessions.id, sessionId));
+    await createAuditLog({
+      tenantId,
+      actorUserId: (req as any).user!.id,
+      action: "DELETE",
+      entityType: "attendance_session",
+      entityId: sessionId,
+      before: session,
+      ip: req.ip,
+    });
+    res.json({ success: true, message: "Session deleted" });
   } catch (error) {
     next(error);
   }
