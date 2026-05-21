@@ -1,12 +1,18 @@
 {
-  "name": "SchoolOS Portal",
+  "name": "SchoolOS",
   "short_name": "SchoolOS",
-  "description": "Parent and student school portal",
+  "description": "School ERP — admin, teacher, parent, and student",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#6366f1",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Admin Command Center", "url": "/s/demo/dashboard", "description": "School admin dashboard (PWA)" },
+    { "name": "Parent portal", "url": "/s/demo/portal/login", "description": "Parent mobile portal" },
+    { "name": "Teacher workspace", "url": "/s/demo/teacher", "description": "Teacher app" },
+    { "name": "Student exam", "url": "/s/demo/exam", "description": "Student CBT" }
   ]
 }

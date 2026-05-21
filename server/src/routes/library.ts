@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { libraryBooks, libraryCopies, libraryLoans, libraryFines } from "../db/schema";
+import { libraryBooks, libraryCopies, libraryLoans, libraryFines, libraryEbooks, libraryReservations } from "../db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
@@ -106,6 +106,55 @@ router.get("/fines", ...guard, requirePermission("library.view"), async (req, re
   try {
     const tenant = (req as any).tenant;
     res.json({ success: true, data: await db.select().from(libraryFines).where(eq(libraryFines.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+router.get("/ebooks", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(libraryEbooks).where(eq(libraryEbooks.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/ebooks", ...guard, requirePermission("library.manage"),
+  validate({ body: z.object({ title: z.string(), author: z.string().optional(), url: z.string().url() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(libraryEbooks).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/reservations", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(libraryReservations).where(eq(libraryReservations.tenantId, tenant.id)).orderBy(desc(libraryReservations.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/reservations", ...guard, requirePermission("library.manage"),
+  validate({ body: z.object({ studentId: z.string().uuid(), bookId: z.string().uuid().optional(), ebookId: z.string().uuid().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(libraryReservations).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/analytics", ...guard, requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [stats] = await db.select({
+      books: sql<number>`(select count(*) from library_books where tenant_id = ${tenant.id})`,
+      activeLoans: sql<number>`count(*) filter (where ${libraryLoans.returnedAt} is null)`,
+      overdue: sql<number>`count(*) filter (where ${libraryLoans.returnedAt} is null and ${libraryLoans.dueAt} < now())`,
+      ebooks: sql<number>`(select count(*) from library_ebooks where tenant_id = ${tenant.id})`,
+    }).from(libraryLoans).where(eq(libraryLoans.tenantId, tenant.id));
+    res.json({ success: true, data: stats });
   } catch (e) { next(e); }
 });
 

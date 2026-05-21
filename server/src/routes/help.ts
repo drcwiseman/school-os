@@ -1,0 +1,48 @@
+import { Router } from "express";
+import { z } from "zod";
+import { db } from "../db";
+import { tenantHelpArticles } from "../db/schema";
+import { eq, asc } from "drizzle-orm";
+import { requireAuth } from "../middleware/auth";
+import { requireTenantMatch } from "../middleware/tenant";
+import { validate } from "../utils/validate";
+
+const router = Router();
+const guard = [requireAuth, requireTenantMatch];
+
+const DEFAULT_ARTICLES = [
+  { title: "Command Center overview", category: "getting-started", bodyMd: "Use the dashboard for KPIs, AI insights, and quick links to students, finance, and messaging." },
+  { title: "Campus filtering", category: "multi-campus", bodyMd: "Select a campus in the header to scope students, classes, and finance lists." },
+  { title: "Parent portal", category: "portal", bodyMd: "Parents log in at /s/your-school/portal/login to pay fees, view results, and message teachers." },
+];
+
+router.get("/", ...guard, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    let rows = await db.select().from(tenantHelpArticles).where(eq(tenantHelpArticles.tenantId, tenant.id)).orderBy(asc(tenantHelpArticles.sortOrder));
+    if (!rows.length) {
+      rows = await db.insert(tenantHelpArticles).values(
+        DEFAULT_ARTICLES.map((a, i) => ({ tenantId: tenant.id, ...a, sortOrder: i })),
+      ).returning();
+    }
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/", ...guard, validate({
+  body: z.object({ title: z.string(), category: z.string().optional(), bodyMd: z.string(), sortOrder: z.number().optional() }),
+}), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.insert(tenantHelpArticles).values({
+      tenantId: tenant.id,
+      title: req.body.title,
+      category: req.body.category ?? "general",
+      bodyMd: req.body.bodyMd,
+      sortOrder: req.body.sortOrder ?? 0,
+    }).returning();
+    res.status(201).json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+export default router;

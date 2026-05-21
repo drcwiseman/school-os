@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { api, downloadPdf } from "../api/client";
-import { Loader2, CreditCard, MessageSquare, Bus, Download, CheckCircle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Loader2, CreditCard, MessageSquare, Bus, Download, CheckCircle, Sparkles, BookOpen, Calendar } from "lucide-react";
 
 function formatMoney(cents: number | undefined, currency = "UGX") {
   if (cents == null) return "—";
@@ -20,6 +21,11 @@ export const PortalDashboard: React.FC = () => {
   const [msgBody, setMsgBody] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
   const [payMsg, setPayMsg] = useState(searchParams.get("paid") ? "Payment initiated — thank you!" : "");
+  const [tutorMsg, setTutorMsg] = useState("");
+  const [tutorReply, setTutorReply] = useState("");
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [timetable, setTimetable] = useState<any[]>([]);
+  const [onlineClasses, setOnlineClasses] = useState<any[]>([]);
 
   const load = async () => {
     try {
@@ -39,6 +45,19 @@ export const PortalDashboard: React.FC = () => {
   useEffect(() => { load(); }, [schoolSlug]);
 
   useEffect(() => {
+    if (!schoolSlug || account?.type !== "student") return;
+    Promise.all([
+      api.get(`/s/${schoolSlug}/api/portal/student/materials`).catch(() => ({ data: [] })),
+      api.get(`/s/${schoolSlug}/api/portal/student/timetable`).catch(() => ({ data: [] })),
+      api.get(`/s/${schoolSlug}/api/portal/student/online-classes`).catch(() => ({ data: [] })),
+    ]).then(([m, t, o]) => {
+      setMaterials(m.data ?? []);
+      setTimetable(t.data ?? []);
+      setOnlineClasses(o.data ?? []);
+    });
+  }, [schoolSlug, account?.type]);
+
+  useEffect(() => {
     if (!schoolSlug || !activeChildId || account?.type !== "parent") return;
     api.get(`/s/${schoolSlug}/api/portal/messages/${activeChildId}`)
       .then((res) => setMessages(res.data ?? []))
@@ -50,7 +69,7 @@ export const PortalDashboard: React.FC = () => {
   const childStatements = (data?.statements ?? []).filter((i: any) => i.studentId === activeChildId);
   const childTransport = (data?.transport ?? []).find((t: any) => t.studentId === activeChildId);
 
-  const payInvoice = async (invoiceId: string, provider: "flutterwave" | "mtn_momo") => {
+  const payInvoice = async (invoiceId: string, provider: "flutterwave" | "mtn_momo" | "stripe" | "paypal" | "airtel_money") => {
     setPayingId(invoiceId);
     try {
       const res = await api.post(`/s/${schoolSlug}/api/portal/payments/initiate`, {
@@ -178,14 +197,9 @@ export const PortalDashboard: React.FC = () => {
                             >
                               Pay with card
                             </button>
-                            <button
-                              type="button"
-                              className="btn-secondary text-xs"
-                              disabled={payingId === i.id}
-                              onClick={() => payInvoice(i.id, "mtn_momo")}
-                            >
-                              MTN MoMo
-                            </button>
+                            <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "mtn_momo")}>MTN MoMo</button>
+                            <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "stripe")}>Stripe</button>
+                            <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "paypal")}>PayPal</button>
                           </div>
                         )}
                         {unpaid && data.paymentGatewaysEnabled && payingId === i.id && (
@@ -281,6 +295,39 @@ export const PortalDashboard: React.FC = () => {
             </PortalCard>
             <PortalCard title="Attendance">
               <AttendanceList rows={data.attendance ?? []} />
+            </PortalCard>
+            <PortalCard title="CBT exams" icon={BookOpen}>
+              <Link to={`/s/${schoolSlug}/exam`} className="btn-primary text-sm">Open exam player</Link>
+            </PortalCard>
+            <PortalCard title="Timetable" icon={Calendar}>
+              <ul className="text-slate-300 text-sm space-y-1">
+                {timetable.slice(0, 12).map((p: any) => (
+                  <li key={p.id}>Period {p.periodNo ?? "—"} · {p.dayOfWeek ?? ""}</li>
+                ))}
+                {timetable.length === 0 && <p className="text-slate-500">No timetable published.</p>}
+              </ul>
+            </PortalCard>
+            <PortalCard title="Study materials">
+              <ul className="text-slate-300 text-sm space-y-1">
+                {materials.map((m: any) => (
+                  <li key={m.id}>{m.title}{m.url ? <> — <a href={m.url} className="text-primary-400" target="_blank" rel="noreferrer">open</a></> : null}</li>
+                ))}
+              </ul>
+            </PortalCard>
+            <PortalCard title="Online classes">
+              <ul className="text-slate-300 text-sm space-y-1">
+                {onlineClasses.map((c: any) => (
+                  <li key={c.id}><a href={c.url} className="text-primary-400" target="_blank" rel="noreferrer">{c.title}</a></li>
+                ))}
+              </ul>
+            </PortalCard>
+            <PortalCard title="AI tutor" icon={Sparkles}>
+              <textarea className="input min-h-[80px] text-sm" value={tutorMsg} onChange={(e) => setTutorMsg(e.target.value)} placeholder="Ask a study question…" />
+              <button type="button" className="btn-secondary text-sm mt-2" onClick={async () => {
+                const res = await api.post(`/s/${schoolSlug}/api/portal/student/tutor`, { message: tutorMsg, subject: "General" });
+                setTutorReply(res.data?.reply ?? "");
+              }}>Ask</button>
+              {tutorReply && <p className="text-slate-300 text-sm mt-2">{tutorReply}</p>}
             </PortalCard>
           </>
         )}

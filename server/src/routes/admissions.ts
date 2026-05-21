@@ -271,3 +271,43 @@ admissionsRouter.post("/:id/enroll", requirePermission("admissions.enroll"), asy
     next(error);
   }
 });
+
+admissionsRouter.patch("/:id/waiting-list", requirePermission("admissions.manage"),
+  validate({ body: z.object({ waitingList: z.boolean() }) }),
+  async (req, res, next) => {
+    try {
+      const tenantId = (req as any).tenant!.id;
+      const [row] = await db.update(applicants).set({ waitingList: req.body.waitingList, updatedAt: new Date() })
+        .where(and(eq(applicants.id, req.params.id), eq(applicants.tenantId, tenantId))).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+admissionsRouter.patch("/:id/interview", requirePermission("admissions.manage"),
+  validate({ body: z.object({ interviewAt: z.string(), notes: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenantId = (req as any).tenant!.id;
+      const [row] = await db.update(applicants).set({ interviewAt: new Date(req.body.interviewAt), updatedAt: new Date() })
+        .where(and(eq(applicants.id, req.params.id), eq(applicants.tenantId, tenantId))).returning();
+      await db.insert(applicantEvents).values({
+        tenantId, applicantId: req.params.id, eventType: "interview_scheduled",
+        notes: req.body.notes ?? "Interview scheduled", createdBy: (req as any).user!.id,
+      });
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+admissionsRouter.patch("/:id/fee-paid", requirePermission("admissions.manage"),
+  validate({ body: z.object({ paid: z.boolean() }) }),
+  async (req, res, next) => {
+    try {
+      const tenantId = (req as any).tenant!.id;
+      const [row] = await db.update(applicants).set({ applicationFeePaid: req.body.paid, updatedAt: new Date() })
+        .where(and(eq(applicants.id, req.params.id), eq(applicants.tenantId, tenantId))).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);

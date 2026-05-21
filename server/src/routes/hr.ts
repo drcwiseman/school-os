@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { staff, staffContracts, leaveRequests, staffAttendance } from "../db/schema";
+import {
+  staff, staffContracts, leaveRequests, staffAttendance, payrollTaxRules, jobPosts, jobApplicants,
+  staffDisciplinary, staffDocuments, staffBenefits, performanceReviews,
+} from "../db/schema";
 import { eq, and, desc, isNull, inArray, sql, ne } from "drizzle-orm";
 import { softDeleteStaffMember } from "../services/soft-delete";
 import { createAuditLog } from "../services/audit";
@@ -260,5 +263,152 @@ router.get("/staff-attendance/today", ...guard, requirePermission("hr.view"), as
     res.json({ success: true, data: await db.select().from(staffAttendance).where(and(eq(staffAttendance.tenantId, tenant.id), eq(staffAttendance.date, date))) });
   } catch (e) { next(e); }
 });
+
+router.get("/analytics", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [counts] = await db.select({
+      staff: sql<number>`count(*)`,
+      onLeave: sql<number>`count(*) filter (where ${leaveRequests.status} = 'approved')`,
+    }).from(staff).leftJoin(leaveRequests, eq(leaveRequests.staffId, staff.id))
+      .where(and(eq(staff.tenantId, tenant.id), isNull(staff.deletedAt)));
+    res.json({ success: true, data: counts });
+  } catch (e) { next(e); }
+});
+
+router.get("/tax-rules", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(payrollTaxRules).where(eq(payrollTaxRules.tenantId, tenant.id)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/tax-rules", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ name: z.string(), ratePercent: z.number().int(), thresholdMinor: z.number().int().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(payrollTaxRules).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/jobs", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(jobPosts).where(eq(jobPosts.tenantId, tenant.id)).orderBy(desc(jobPosts.createdAt)) });
+  } catch (e) { next(e); }
+});
+
+router.post("/jobs", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ title: z.string(), department: z.string().optional(), description: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(jobPosts).values({ tenantId: tenant.id, title: req.body.title, department: req.body.department, description: req.body.description ?? "" }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/jobs/:id/applicants", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(jobApplicants).where(and(eq(jobApplicants.jobPostId, req.params.id), eq(jobApplicants.tenantId, tenant.id))) });
+  } catch (e) { next(e); }
+});
+
+router.post("/jobs/:id/applicants", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ name: z.string(), email: z.string().optional(), phone: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(jobApplicants).values({ tenantId: tenant.id, jobPostId: req.params.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/org-chart", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select({ department: staff.department, count: sql<number>`count(*)` })
+      .from(staff).where(and(eq(staff.tenantId, tenant.id), isNull(staff.deletedAt))).groupBy(staff.department);
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.get("/staff/:id/disciplinary", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(staffDisciplinary).where(and(eq(staffDisciplinary.staffId, req.params.id), eq(staffDisciplinary.tenantId, tenant.id))) });
+  } catch (e) { next(e); }
+});
+
+router.post("/staff/:id/disciplinary", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ description: z.string(), action: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(staffDisciplinary).values({ tenantId: tenant.id, staffId: req.params.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/staff/:id/documents", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(staffDocuments).where(and(eq(staffDocuments.staffId, req.params.id), eq(staffDocuments.tenantId, tenant.id))) });
+  } catch (e) { next(e); }
+});
+
+router.post("/staff/:id/documents", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ documentType: z.string(), fileName: z.string() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(staffDocuments).values({ tenantId: tenant.id, staffId: req.params.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/staff/:id/benefits", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(staffBenefits).where(and(eq(staffBenefits.staffId, req.params.id), eq(staffBenefits.tenantId, tenant.id))) });
+  } catch (e) { next(e); }
+});
+
+router.post("/staff/:id/benefits", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ name: z.string(), amountMinor: z.number().int() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(staffBenefits).values({ tenantId: tenant.id, staffId: req.params.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/staff/:id/reviews", ...guard, requirePermission("hr.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(performanceReviews).where(and(eq(performanceReviews.staffId, req.params.id), eq(performanceReviews.tenantId, tenant.id))) });
+  } catch (e) { next(e); }
+});
+
+router.post("/staff/:id/reviews", ...guard, requirePermission("hr.manage"),
+  validate({ body: z.object({ period: z.string(), score: z.number().int().optional(), comments: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(performanceReviews).values({ tenantId: tenant.id, staffId: req.params.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
 
 export default router;

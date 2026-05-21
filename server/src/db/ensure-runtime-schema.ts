@@ -243,6 +243,7 @@ export async function ensureRuntimeSchema() {
     "0021_phase_c.sql",
     "0022_phase_d.sql",
     "0023_post_d.sql",
+    "0024_remaining.sql",
   ]) {
     await runMigrationFile(file);
   }

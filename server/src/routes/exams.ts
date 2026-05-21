@@ -3,8 +3,9 @@ import { z } from "zod";
 import { db } from "../db";
 import {
   assessments, marks, markSubmissions, moderationNotes, reportCards, students, classes, subjects,
-  studentClassHistory, questionBanks, questionBankItems, gradingRules,
+  studentClassHistory,   questionBanks, questionBankItems, gradingRules, examExternalTokens, cbtProctorEvents,
 } from "../db/schema";
+import crypto from "crypto";
 import { eq, and, desc, inArray, isNull, sql } from "drizzle-orm";
 import { softDeleteMark, softDeleteAssessment } from "../services/soft-delete";
 import { requireAuth } from "../middleware/auth";
@@ -379,6 +380,48 @@ router.get("/statutory-export", ...guard, requirePermission("exams.view"), async
       .innerJoin(assessments, eq(marks.assessmentId, assessments.id))
       .innerJoin(classes, eq(assessments.classId, classes.id))
       .where(and(eq(marks.tenantId, tenant.id), isNull(marks.deletedAt), termId ? eq(assessments.termId, termId) : sql`true`));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post("/assessments/:id/external-access", ...guard, requirePermission("exams.manage"),
+  validate({ body: z.object({ examinerEmail: z.string().email(), daysValid: z.number().int().min(1).max(30).optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const token = crypto.randomBytes(24).toString("hex");
+      const expires = new Date();
+      expires.setDate(expires.getDate() + (req.body.daysValid ?? 7));
+      const [row] = await db.insert(examExternalTokens).values({
+        tenantId: tenant.id,
+        assessmentId: req.params.id,
+        token,
+        examinerEmail: req.body.examinerEmail,
+        expiresAt: expires,
+      }).returning();
+      res.status(201).json({ success: true, data: { ...row, accessUrl: `/examiner/${token}` } });
+    } catch (e) { next(e); }
+  },
+);
+
+router.post("/proctor/event", ...guard, requirePermission("exams.view"),
+  validate({ body: z.object({ sessionId: z.string().uuid(), eventType: z.string(), detail: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.insert(cbtProctorEvents).values({ tenantId: tenant.id, ...req.body }).returning();
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/proctor/:sessionId", ...guard, requirePermission("exams.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select().from(cbtProctorEvents).where(and(
+      eq(cbtProctorEvents.tenantId, tenant.id),
+      eq(cbtProctorEvents.sessionId, req.params.sessionId),
+    )).orderBy(desc(cbtProctorEvents.createdAt));
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });

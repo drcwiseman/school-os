@@ -62,6 +62,10 @@ export const tenantSettings = pgTable("tenant_settings", {
   paymentProvidersJson: jsonb("payment_providers_json").$type<Record<string, unknown>>().default({}),
   securityJson: jsonb("security_json").$type<{ ipAllowlist?: string[]; mfaRequired?: boolean }>().default({}),
   brandingExtendedJson: jsonb("branding_extended_json").$type<Record<string, unknown>>().default({}),
+  themeJson:            jsonb("theme_json").$type<{ mode?: "light" | "dark"; accent?: string }>().default({}),
+  sidebarOrderJson:     jsonb("sidebar_order_json").$type<string[]>().default([]),
+  admissionWorkflowJson: jsonb("admission_workflow_json").$type<string[]>().default([]),
+  onboardingChecklistJson: jsonb("onboarding_checklist_json").$type<Array<{ label: string; done?: boolean }>>().default([]),
   updatedAt:        timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
   tenantIdx: uniqueIndex("tenant_settings_tenant_idx").on(t.tenantId),
@@ -201,6 +205,8 @@ export const students = pgTable("students", {
   nationality:     text("nationality"),
   religion:        text("religion"),
   photoUrl:        text("photo_url"),
+  biometricId:     text("biometric_id"),
+  medicalJson:     jsonb("medical_json").$type<{ allergies?: string; conditions?: string; emergencyContact?: string; emergencyPhone?: string }>().default({}),
   status:          studentStatusEnum("status").notNull().default("active"),
   deletedAt:       timestamp("deleted_at"),
   deletedBy:       uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
@@ -397,6 +403,9 @@ export const applicants = pgTable("applicants", {
   phone:       text("phone"),
   stage:       text("stage").notNull().default("inquiry"),
   notes:       text("notes"),
+  waitingList: boolean("waiting_list").notNull().default(false),
+  applicationFeePaid: boolean("application_fee_paid").notNull().default(false),
+  interviewAt: timestamp("interview_at"),
   convertedTo: uuid("converted_to").references(() => students.id),
   createdAt:   timestamp("created_at").notNull().defaultNow(),
   updatedAt:   timestamp("updated_at").notNull().defaultNow(),
@@ -1847,6 +1856,142 @@ export const aiUsageLog = pgTable("ai_usage_log", {
 }, (t) => ({
   tenantIdx: index("ai_usage_log_tenant_idx").on(t.tenantId),
 }));
+
+export const tenantHelpArticles = pgTable("tenant_help_articles", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  title:     text("title").notNull(),
+  category:  text("category").notNull().default("general"),
+  bodyMd:    text("body_md").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const payrollTaxRules = pgTable("payroll_tax_rules", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name:           text("name").notNull(),
+  ratePercent:    integer("rate_percent").notNull().default(0),
+  thresholdMinor: integer("threshold_minor").notNull().default(0),
+  createdAt:      timestamp("created_at").notNull().defaultNow(),
+});
+
+export const jobPosts = pgTable("job_posts", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  title:       text("title").notNull(),
+  department:  text("department"),
+  description: text("description").notNull().default(""),
+  status:      text("status").notNull().default("open"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const jobApplicants = pgTable("job_applicants", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  jobPostId:  uuid("job_post_id").notNull().references(() => jobPosts.id, { onDelete: "cascade" }),
+  name:       text("name").notNull(),
+  email:      text("email"),
+  phone:      text("phone"),
+  status:     text("status").notNull().default("applied"),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+});
+
+export const libraryEbooks = pgTable("library_ebooks", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  title:     text("title").notNull(),
+  author:    text("author"),
+  url:       text("url").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const libraryReservations = pgTable("library_reservations", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  studentId: uuid("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+  bookId:    uuid("book_id").references(() => libraryBooks.id, { onDelete: "set null" }),
+  ebookId:   uuid("ebook_id").references(() => libraryEbooks.id, { onDelete: "set null" }),
+  status:    text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const studentMaterials = pgTable("student_materials", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  title:     text("title").notNull(),
+  subject:   text("subject"),
+  url:       text("url"),
+  classId:   uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const onlineClassLinks = pgTable("online_class_links", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  title:       text("title").notNull(),
+  url:         text("url").notNull(),
+  classId:     uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
+  scheduledAt: timestamp("scheduled_at"),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const examExternalTokens = pgTable("exam_external_tokens", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  assessmentId:  uuid("assessment_id").notNull(),
+  token:         text("token").notNull().unique(),
+  examinerEmail: text("examiner_email").notNull(),
+  expiresAt:     timestamp("expires_at").notNull(),
+  createdAt:     timestamp("created_at").notNull().defaultNow(),
+});
+
+export const cbtProctorEvents = pgTable("cbt_proctor_events", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  sessionId: uuid("session_id").notNull(),
+  eventType: text("event_type").notNull(),
+  detail:    text("detail"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const staffDisciplinary = pgTable("staff_disciplinary", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  staffId:      uuid("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  incidentDate: timestamp("incident_date").notNull().defaultNow(),
+  description:  text("description").notNull(),
+  action:       text("action"),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+});
+
+export const staffDocuments = pgTable("staff_documents", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  staffId:      uuid("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  documentType: text("document_type").notNull(),
+  fileName:     text("file_name").notNull(),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+});
+
+export const staffBenefits = pgTable("staff_benefits", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  staffId:     uuid("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  name:        text("name").notNull(),
+  amountMinor: integer("amount_minor").notNull().default(0),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+});
+
+export const performanceReviews = pgTable("performance_reviews", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  staffId:   uuid("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  period:    text("period").notNull(),
+  score:     integer("score"),
+  comments:  text("comments"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const platformImpersonationTokens = pgTable("platform_impersonation_tokens", {
   id:              uuid("id").primaryKey().defaultRandom(),

@@ -177,3 +177,30 @@ export async function initiateMtnMomoCollection(opts: {
   }
   return { ok: true, reference, message: "MoMo collection request sent — confirm on phone" };
 }
+
+/** Tenant-level Stripe/PayPal using paymentProvidersJson when platform integration is off */
+export async function initiateTenantGatewayPayment(opts: {
+  tenantId: string;
+  provider: "stripe" | "paypal";
+  invoiceId: string;
+  amount: number;
+  customerEmail: string;
+  redirectUrl: string;
+}): Promise<{ ok: boolean; reference: string; paymentLink?: string; message?: string }> {
+  const { db } = await import("../db");
+  const { tenantSettings } = await import("../db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, opts.tenantId)).limit(1);
+  const pay = (settings?.paymentProvidersJson ?? {}) as Record<string, string>;
+  const reference = buildPaymentReference(opts.tenantId, opts.invoiceId);
+
+  if (opts.provider === "stripe" && pay.stripePublicKey) {
+    const link = `${opts.redirectUrl}${opts.redirectUrl.includes("?") ? "&" : "?"}provider=stripe&ref=${reference}&amount=${opts.amount}`;
+    return { ok: true, reference, paymentLink: link, message: "Stripe checkout — configure secret key in platform integrations for live charges" };
+  }
+  if (opts.provider === "paypal" && pay.paypalClientId) {
+    const link = `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(pay.paypalClientId)}&amount=${opts.amount}&item_name=School+fees&invoice=${reference}&return=${encodeURIComponent(opts.redirectUrl)}`;
+    return { ok: true, reference, paymentLink: link };
+  }
+  return { ok: false, reference, message: `${opts.provider} keys not configured in school settings` };
+}

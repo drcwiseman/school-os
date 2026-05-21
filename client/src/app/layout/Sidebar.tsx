@@ -1,10 +1,10 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import {
   LayoutDashboard, Users, UserCog, LogOut, Settings, GraduationCap, DollarSign, BookMarked, Building2, Shield, Sparkles,
   CalendarCheck, BookOpen, ClipboardList, Briefcase, Wallet, Bus, Megaphone, FileBarChart, School,
-  ShieldAlert, HeartPulse, Library, Package, Home, ExternalLink,
+  ShieldAlert, HeartPulse, Library, Package, Home, ExternalLink, HelpCircle, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { OPERATIONS_MODULES } from "../pages/operations-modules";
 import { MODULE_FEATURE_CODES } from "../../lib/module-features";
@@ -57,13 +57,37 @@ export const Sidebar: React.FC = () => {
     { name: "Users & Roles", path: `/s/${schoolSlug}/admin`, icon: Users, perm: "rbac.manage.roles" },
     { name: "Campuses", path: `/s/${schoolSlug}/campuses`, icon: Building2, feature: "multi_campus" },
     { name: "Security", path: `/s/${schoolSlug}/security`, icon: Shield, perm: "settings.view" },
+    { name: "Help", path: `/s/${schoolSlug}/help`, icon: HelpCircle },
     { name: "Settings", path: `/s/${schoolSlug}/settings`, icon: Settings, perm: "settings.view" },
   ];
-  const links = allLinks.filter((l) => {
+  const filtered = allLinks.filter((l) => {
     if (l.perm && !hasPermission(l.perm)) return false;
     if (l.feature && !moduleEnabled(l.feature)) return false;
     return true;
   });
+  const orderKey = `schoolos_sidebar_${schoolSlug}`;
+  const [order, setOrder] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(orderKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const links = useMemo(() => {
+    if (!order.length) return filtered;
+    const byPath = new Map(filtered.map((l) => [l.path, l]));
+    const sorted = order.map((p) => byPath.get(p)).filter(Boolean) as typeof filtered;
+    for (const l of filtered) if (!sorted.includes(l)) sorted.push(l);
+    return sorted;
+  }, [filtered, order]);
+  const move = (path: string, dir: -1 | 1) => {
+    const paths = links.map((l) => l.path);
+    const i = paths.indexOf(path);
+    const j = i + dir;
+    if (j < 0 || j >= paths.length) return;
+    [paths[i], paths[j]] = [paths[j], paths[i]];
+    setOrder(paths);
+    localStorage.setItem(orderKey, JSON.stringify(paths));
+  };
 
   return (
     <aside className="w-64 border-r border-slate-800 bg-surface flex flex-col h-screen">
@@ -78,16 +102,21 @@ export const Sidebar: React.FC = () => {
           const Icon = item.icon;
           const external = item.external;
           return (
-            <Link
-              key={item.name}
-              to={item.path}
-              target={external ? "_blank" : undefined}
-              rel={external ? "noopener noreferrer" : undefined}
-              className={`nav-item ${active ? "active" : ""}`}
-            >
-              <Icon className="w-5 h-5" />
-              {item.name}
-            </Link>
+            <div key={item.path} className="flex items-center gap-0.5 group">
+              <Link
+                to={item.path}
+                target={external ? "_blank" : undefined}
+                rel={external ? "noopener noreferrer" : undefined}
+                className={`nav-item flex-1 ${active ? "active" : ""}`}
+              >
+                <Icon className="w-5 h-5" />
+                {item.name}
+              </Link>
+              <div className="flex flex-col opacity-0 group-hover:opacity-100">
+                <button type="button" className="p-0.5 text-slate-600 hover:text-slate-300" onClick={() => move(item.path, -1)} aria-label="Move up"><ChevronUp className="w-3 h-3" /></button>
+                <button type="button" className="p-0.5 text-slate-600 hover:text-slate-300" onClick={() => move(item.path, 1)} aria-label="Move down"><ChevronDown className="w-3 h-3" /></button>
+              </div>
+            </div>
           );
         })}
       </nav>

@@ -60,6 +60,8 @@ import { PlatformFeatureFlags } from "./platform/PlatformFeatureFlags";
 import { PlatformApiSettings } from "./platform/PlatformApiSettings";
 import { Settings } from "./pages/Settings";
 import { AiAdmin } from "./pages/AiAdmin";
+import { Help } from "./pages/Help";
+import { PublicApply } from "./pages/PublicApply";
 import { TeacherWorkspace } from "./pages/TeacherWorkspace";
 import { Curriculum } from "./pages/Curriculum";
 import { StudentCbtExam } from "./pages/StudentCbtExam";
@@ -80,6 +82,7 @@ export const AppRoutes = () => {
 
       <Route path="/s/:schoolSlug/login" element={<Login />} />
       <Route path="/s/:schoolSlug/impersonate" element={<ImpersonateExchange />} />
+      <Route path="/s/:schoolSlug/apply" element={<PublicApply />} />
       <Route path="/s/:schoolSlug/portal/login" element={<PortalLogin />} />
       <Route path="/s/:schoolSlug/portal/dashboard" element={<PortalDashboard />} />
       <Route path="/s/:schoolSlug/exam" element={<StudentCbtExam />} />
@@ -142,6 +145,7 @@ export const AppRoutes = () => {
         <Route path="messaging" element={<FeatureRoute feature={MODULE_FEATURE_CODES.messaging}><Messaging /></FeatureRoute>} />
         <Route path="reports" element={<FeatureRoute feature={MODULE_FEATURE_CODES.reports}><Reports /></FeatureRoute>} />
         <Route path="ai-admin" element={<AiAdmin />} />
+        <Route path="help" element={<Help />} />
         <Route path="admin" element={<Admin />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="dashboard" replace />} />

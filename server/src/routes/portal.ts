@@ -5,9 +5,10 @@ import {
   parentAccounts, studentAccounts, students, invoices, payments, receipts,
   reportCards, announcements, assignments, attendanceRecords, attendanceSessions,
   portalMessages, routeAssignments, transportRoutes, transportStops, tenantSettings,
-  curriculumFrameworks, curriculumUnits, cbtPapers,
+  curriculumFrameworks, curriculumUnits, cbtPapers, timetablePeriods, studentMaterials, onlineClassLinks,
   vehicleGpsPings,
 } from "../db/schema";
+import { adminAssistantReply, studyRecommendations } from "../services/ai-admin";
 import { generateReportCardPdf, generateReceiptPdf, generateInvoicePdf } from "../services/pdf";
 import { promoteScheduledAnnouncements } from "../services/announcements";
 import { assertPortalCanAccessStudent } from "../services/portal-access";
@@ -244,7 +245,7 @@ router.post("/payments/initiate", requirePortalAuth,
   validate({
     body: z.object({
       invoiceId: z.string().uuid(),
-      provider: z.enum(["flutterwave", "mtn_momo"]),
+      provider: z.enum(["flutterwave", "mtn_momo", "stripe", "paypal", "airtel_money"]),
       payerPhone: z.string().optional(),
     }),
   }),
@@ -289,15 +290,33 @@ router.post("/payments/initiate", requirePortalAuth,
         return res.json({ success: true, data: result });
       }
 
-      if (!req.body.payerPhone) throw new BadRequestError("payerPhone required for MTN MoMo");
-      const result = await initiateMtnMomoCollection({
-        tenantId: tenant.id,
-        invoiceId: invoice.id,
-        amount: amountMajor,
-        payerPhone: req.body.payerPhone,
-      });
-      if (!result.ok) return res.status(400).json({ success: false, message: result.message });
-      res.json({ success: true, data: result });
+      if (req.body.provider === "mtn_momo" || req.body.provider === "airtel_money") {
+        if (!req.body.payerPhone) throw new BadRequestError("payerPhone required for mobile money");
+        const result = await initiateMtnMomoCollection({
+          tenantId: tenant.id,
+          invoiceId: invoice.id,
+          amount: amountMajor,
+          payerPhone: req.body.payerPhone,
+        });
+        if (!result.ok) return res.status(400).json({ success: false, message: result.message });
+        return res.json({ success: true, data: result });
+      }
+
+      if (req.body.provider === "stripe" || req.body.provider === "paypal") {
+        const { initiateTenantGatewayPayment } = await import("../services/integration-runtime");
+        const result = await initiateTenantGatewayPayment({
+          tenantId: tenant.id,
+          provider: req.body.provider,
+          invoiceId: invoice.id,
+          amount: amountMajor,
+          customerEmail: parentRow?.email ?? "parent@school.local",
+          redirectUrl,
+        });
+        if (!result.ok) return res.status(400).json({ success: false, message: result.message });
+        return res.json({ success: true, data: result });
+      }
+
+      return res.status(400).json({ success: false, message: "Unknown payment provider" });
     } catch (e) { next(e); }
   },
 );
@@ -420,5 +439,57 @@ router.get("/cbt/available", requirePortalAuth, async (req, res, next) => {
     res.json({ success: true, data: papers, studentId: targetId });
   } catch (e) { next(e); }
 });
+
+router.get("/student/timetable", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    if (principal.kind !== "student") throw new ForbiddenError("Students only");
+    const [acc] = await db.select().from(studentAccounts).where(eq(studentAccounts.id, principal.account.id)).limit(1);
+    if (!acc) throw new NotFoundError("Account not found");
+    const periods = await db.select().from(timetablePeriods).where(eq(timetablePeriods.tenantId, tenant.id)).limit(50);
+    res.json({ success: true, data: periods });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/materials", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(studentMaterials).where(eq(studentMaterials.tenantId, tenant.id)).limit(50) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/online-classes", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    res.json({ success: true, data: await db.select().from(onlineClassLinks).where(eq(onlineClassLinks.tenantId, tenant.id)).limit(30) });
+  } catch (e) { next(e); }
+});
+
+router.post("/student/tutor", requirePortalAuth,
+  validate({ body: z.object({ message: z.string().min(1), subject: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const reply = await adminAssistantReply(tenant.id, req.body.message);
+      const plan = req.body.subject ? await studyRecommendations(tenant.id, req.body.subject) : [];
+      res.json({ success: true, data: { reply, studyPlan: plan } });
+    } catch (e) { next(e); }
+  },
+);
+
+router.patch("/student/profile", requirePortalAuth,
+  validate({ body: z.object({ phone: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const principal = (req as any).portalPrincipal;
+      if (principal.kind !== "student") throw new ForbiddenError("Students only");
+      const [acc] = await db.select().from(studentAccounts).where(eq(studentAccounts.id, principal.account.id)).limit(1);
+      if (!acc) throw new NotFoundError("Account not found");
+      res.json({ success: true, data: { email: acc.email, note: "Contact school admin to change legal name", ...req.body } });
+    } catch (e) { next(e); }
+  },
+);
 
 export default router;

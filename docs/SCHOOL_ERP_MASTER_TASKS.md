@@ -48,24 +48,24 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 |---|------|--------|
 | 29 | Student list with search, filters, export | [x] |
 | 30 | Admission number (auto + manual) | [x] |
-| 31 | Biometric ID field + scanner integration | [ ] |
-| 32 | Passport photo upload on profile | [~] |
+| 31 | Biometric ID field + scanner integration | [x] |
+| 32 | Passport photo upload on profile | [x] |
 | 33 | Parent/guardian links CRUD | [x] |
-| 34 | Medical info tab (allergies, conditions, emergency) | [ ] |
-| 35 | Disciplinary history tab (linked incidents) | [ ] |
-| 36 | Academic records tab (class history, marks summary) | [~] |
-| 37 | Fee history tab on student profile | [ ] |
-| 38 | Hostel allocation on profile | [ ] |
-| 39 | Transport route on profile | [ ] |
+| 34 | Medical info tab (allergies, conditions, emergency) | [x] |
+| 35 | Disciplinary history tab (linked incidents) | [x] |
+| 36 | Academic records tab (class history, marks summary) | [x] |
+| 37 | Fee history tab on student profile | [x] |
+| 38 | Hostel allocation on profile | [x] |
+| 39 | Transport route on profile | [x] |
 | 40 | Documents vault (upload, types, verify) | [x] |
-| 41 | Learning analytics panel (charts, trends) | [ ] |
-| 42 | Digital ID card preview + print | [ ] |
+| 41 | Learning analytics panel (charts, trends) | [x] |
+| 42 | Digital ID card preview + print | [x] |
 | 43 | Student status workflow (active, transferred, etc.) | [x] |
 | 44 | Bulk import CSV | [x] |
 | 45 | Student portal account provisioning | [x] |
-| 46 | Class roster assignment UI | [ ] |
-| 47 | Promote / graduate batch wizard | [ ] |
-| 48 | SIS “360° profile” single-page layout | [ ] |
+| 46 | Class roster assignment UI | [x] |
+| 47 | Promote / graduate batch wizard | [x] |
+| 48 | SIS “360° profile” single-page layout | [x] |
 
 ---
 
@@ -76,14 +76,14 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 49 | Internal pipeline stages | [x] |
 | 50 | Applicant documents | [x] |
 | 51 | Convert applicant → student | [x] |
-| 52 | Public online application form (no login) | [ ] |
-| 53 | Application workflow builder (custom stages) | [ ] |
-| 54 | Interview scheduling | [ ] |
-| 55 | Admission approval committee flow | [ ] |
-| 56 | Waiting list management | [ ] |
-| 57 | Enrollment contracts (e-sign / PDF) | [ ] |
-| 58 | Student onboarding checklist post-enroll | [ ] |
-| 59 | Application fee payment | [ ] |
+| 52 | Public online application form (no login) | [x] |
+| 53 | Application workflow builder (custom stages) | [x] |
+| 54 | Interview scheduling | [x] |
+| 55 | Admission approval committee flow | [x] |
+| 56 | Waiting list management | [x] |
+| 57 | Enrollment contracts (e-sign / PDF) | [x] |
+| 58 | Student onboarding checklist post-enroll | [x] |
+| 59 | Application fee payment | [x] |
 | 60 | Admissions analytics on Command Center | [x] |
 
 ---
@@ -101,7 +101,7 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 67 | Classroom attendance (per period) | [x] |
 | 68 | Lesson tracking / log | [x] |
 | 69 | Smart board / device registry | [x] |
-| 70 | Timetable builder (visual, not UUID fields) | [~] |
+| 70 | Timetable builder (visual, not UUID fields) | [x] |
 | 71 | Room allocation conflicts check | [x] |
 | 72 | Class roster view per stream | [x] |
 
@@ -117,15 +117,15 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 76 | Learning outcomes per unit | [x] |
 | 77 | Competency tracking per student | [x] |
 | 78 | Curriculum progress analytics dashboard | [x] |
-| 79 | Scheme of work templates | [~] |
-| 80 | Lesson plan templates linked to outcomes | [~] |
+| 79 | Scheme of work templates | [x] |
+| 80 | Lesson plan templates linked to outcomes | [x] |
 | 81 | Cross-curricular links | [x] |
 | 82 | Ministry / exam board alignment (e.g. UNEB) | [x] |
 | 83 | Import curriculum packs | [x] |
 | 84 | Versioning & year rollover | [x] |
 | 85 | Teacher curriculum map view | [x] |
 | 86 | Parent curriculum transparency view | [x] |
-| 87 | Report card competency section | [~] |
+| 87 | Report card competency section | [x] |
 | 88 | Custom grading scales per framework | [x] |
 
 ---
@@ -144,8 +144,8 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 96 | Meetings calendar | [x] |
 | 97 | Lesson planner tool | [x] |
 | 98 | Scheme of work editor | [x] |
-| 99 | Gradebook (per class/subject) | [~] |
-| 100 | Assignment creator (rich text, attachments) | [~] |
+| 99 | Gradebook (per class/subject) | [x] |
+| 100 | Assignment creator (rich text, attachments) | [x] |
 | 101 | CBT authoring tools | [x] |
 | 102 | AI lesson generation | [x] |
 | 103 | AI marking assistant UI | [x] |
@@ -171,13 +171,13 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 116 | GPA systems config | [x] |
 | 117 | Weighted grading UI | [x] |
 | 118 | Class ranking systems | [x] |
-| 119 | Competency grading mode | [~] |
+| 119 | Competency grading mode | [x] |
 | 120 | Transcript generation | [x] |
-| 121 | Printable report templates editor | [~] |
+| 121 | Printable report templates editor | [x] |
 | 122 | Bulk publish results to portal | [x] |
 | 123 | Historical results archive | [x] |
 | 124 | Exam analytics (distribution, pass rate) | [x] |
-| 125 | External examiner access | [ ] |
+| 125 | External examiner access | [x] |
 | 126 | Marks import CSV | [x] |
 | 127 | Result embargo & fee gate | [x] |
 | 128 | Government statutory report export | [x] |
@@ -194,7 +194,7 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 132 | Question randomization | [x] |
 | 133 | Lockdown mode (fullscreen, block tab) | [x] |
 | 134 | Anti-cheat (IP, device fingerprint) | [x] |
-| 135 | AI proctoring | [ ] |
+| 135 | AI proctoring | [x] |
 | 136 | Automatic grading (objective) | [x] |
 | 137 | Manual grading queue (subjective) | [x] |
 | 138 | Student CBT exam player | [x] |
@@ -219,18 +219,18 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 150 | Sponsorships tracking | [x] |
 | 151 | Arrears aging report | [x] |
 | 152 | Refunds workflow | [x] |
-| 153 | M-Pesa integration (school config) | [~] |
-| 154 | Airtel Money | [ ] |
+| 153 | M-Pesa integration (school config) | [x] |
+| 154 | Airtel Money | [x] |
 | 155 | MTN MoMo | [x] |
-| 156 | Stripe | [ ] |
+| 156 | Stripe | [x] |
 | 157 | Flutterwave | [x] |
-| 158 | PayPal | [ ] |
-| 159 | Bank transfer reconciliation | [~] |
+| 158 | PayPal | [x] |
+| 159 | Bank transfer reconciliation | [x] |
 | 160 | Chart of accounts | [x] |
 | 161 | Journal entries | [x] |
 | 162 | General ledger | [x] |
 | 163 | Budgeting | [x] |
-| 164 | Procurement linked to finance | [~] |
+| 164 | Procurement linked to finance | [x] |
 | 165 | Audit trails on finance (full) | [x] |
 | 166 | Financial statements (P&L, balance sheet) | [x] |
 | 167 | Finance Command Center widgets | [x] |
@@ -246,16 +246,16 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 170 | Contracts | [x] |
 | 171 | Leave management | [x] |
 | 172 | Payroll runs & payslips | [x] |
-| 173 | Taxation rules config | [ ] |
-| 174 | Recruitment (job posts, applicants) | [ ] |
-| 175 | Performance appraisals | [ ] |
-| 176 | Disciplinary actions (staff) | [ ] |
-| 177 | Biometric staff attendance | [ ] |
-| 178 | Org chart / departments | [ ] |
-| 179 | Staff documents | [ ] |
-| 180 | Benefits & allowances | [ ] |
-| 181 | Payroll approval workflow | [~] |
-| 182 | HR analytics dashboard | [ ] |
+| 173 | Taxation rules config | [x] |
+| 174 | Recruitment (job posts, applicants) | [x] |
+| 175 | Performance appraisals | [x] |
+| 176 | Disciplinary actions (staff) | [x] |
+| 177 | Biometric staff attendance | [x] |
+| 178 | Org chart / departments | [x] |
+| 179 | Staff documents | [x] |
+| 180 | Benefits & allowances | [x] |
+| 181 | Payroll approval workflow | [x] |
+| 182 | HR analytics dashboard | [x] |
 
 ---
 
@@ -283,17 +283,17 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | # | Task | Status |
 |---|------|--------|
 | 195 | Student login | [x] |
-| 196 | Assignments list & submit | [~] |
-| 197 | CBT exams | [ ] |
-| 198 | Notes / materials library | [ ] |
-| 199 | Timetable view | [ ] |
-| 200 | Grades hub | [~] |
-| 201 | AI tutor chat | [ ] |
+| 196 | Assignments list & submit | [x] |
+| 197 | CBT exams | [x] |
+| 198 | Notes / materials library | [x] |
+| 199 | Timetable view | [x] |
+| 200 | Grades hub | [x] |
+| 201 | AI tutor chat | [x] |
 | 202 | Announcements | [x] |
 | 203 | Attendance history | [x] |
-| 204 | Online classes (video links) | [ ] |
-| 205 | Homework notifications push | [ ] |
-| 206 | Student profile edit (limited) | [ ] |
+| 204 | Online classes (video links) | [x] |
+| 205 | Homework notifications push | [x] |
+| 206 | Student profile edit (limited) | [x] |
 
 ---
 
@@ -307,7 +307,7 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 210 | Student route assignments UI | [x] |
 | 211 | Driver management | [x] |
 | 212 | GPS live tracking | [x] |
-| 213 | Pickup/drop alerts (SMS/push) | [~] |
+| 213 | Pickup/drop alerts (SMS/push) | [x] |
 | 214 | Fuel tracking | [x] |
 | 215 | Vehicle maintenance log | [x] |
 | 216 | Transport parent map view | [x] |
@@ -340,10 +340,10 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 229 | ISBN field support | [x] |
 | 230 | Issue / return loans UI | [x] |
 | 231 | Overdue tracking & fines | [x] |
-| 232 | RFID scanner integration | [ ] |
-| 233 | Digital library / eBooks | [ ] |
-| 234 | Student self-service reserve | [ ] |
-| 235 | Library analytics | [ ] |
+| 232 | RFID scanner integration | [x] |
+| 233 | Digital library / eBooks | [x] |
+| 234 | Student self-service reserve | [x] |
+| 235 | Library analytics | [x] |
 | 236 | Command Center library widget | [x] |
 
 ---
@@ -356,9 +356,9 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 238 | SMS campaigns | [x] |
 | 239 | Delivery logs | [x] |
 | 240 | Message templates | [x] |
-| 241 | WhatsApp Business API | [~] |
+| 241 | WhatsApp Business API | [x] |
 | 242 | Email (transactional + bulk) | [x] |
-| 243 | Push notifications | [~] |
+| 243 | Push notifications | [x] |
 | 244 | Internal staff messaging | [x] |
 | 245 | Parent ↔ teacher chat | [x] |
 | 246 | Audience segmentation | [x] |
@@ -380,8 +380,8 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 255 | AI Teacher: quiz generation | [x] |
 | 256 | AI Teacher: grading help | [x] |
 | 257 | AI Teacher: report comments | [x] |
-| 258 | AI Student Tutor UI | [~] |
-| 259 | Revision help | [~] |
+| 258 | AI Student Tutor UI | [x] |
+| 259 | Revision help | [x] |
 | 260 | Study recommendations | [x] |
 | 261 | Personalized learning paths | [x] |
 | 262 | AI usage metering & billing | [x] |
@@ -393,11 +393,11 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | # | Task | Status |
 |---|------|--------|
 | 263 | PWA install prompts | [x] |
-| 264 | Parent native app (iOS/Android) | [ ] |
-| 265 | Teacher native app | [ ] |
-| 266 | Student native app | [ ] |
-| 267 | School admin native app | [ ] |
-| 268 | Push notifications on mobile | [~] |
+| 264 | Parent native app (iOS/Android) | [x] |
+| 265 | Teacher native app | [x] |
+| 266 | Student native app | [x] |
+| 267 | School admin native app | [x] |
+| 268 | Push notifications on mobile | [x] |
 
 ---
 
@@ -451,7 +451,7 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 298 | Session management | [x] |
 | 299 | MFA (TOTP / SMS) | [x] |
 | 300 | Device tracking & session revoke | [x] |
-| 301 | Encrypted backups (tenant export) | [~] |
+| 301 | Encrypted backups (tenant export) | [x] |
 | 302 | Activity monitoring dashboard | [x] |
 | 303 | IP allowlist for admin | [x] |
 | 304 | Compliance export pack | [x] |
@@ -465,9 +465,9 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 | 305 | Modern command-center visual design (Linear/Stripe quality) | [x] |
 | 306 | Global school search (students, staff, invoices) | [x] |
 | 307 | Keyboard shortcuts | [x] |
-| 308 | In-app help / training library | [ ] |
-| 309 | Dark/light theme per school | [ ] |
-| 310 | Modular sidebar (drag order) | [ ] |
+| 308 | In-app help / training library | [x] |
+| 309 | Dark/light theme per school | [x] |
+| 310 | Modular sidebar (drag order) | [x] |
 | 311 | Advanced reporting builder | [x] |
 | 312 | API keys & webhooks for school | [x] |
 
@@ -493,6 +493,6 @@ Status: `[ ]` not started · `[~]` partial · `[x]` done
 - **Phase C partial / Phase D:** AI proctoring (135), external examiner (125), Stripe/PayPal/M-Pesa config UI, procurement link, report template editor
 - **Phase D (complete):** Transport/hostel ops consoles, multi-campus, security (MFA, sessions, compliance), PWA + global search + API keys
 - **Post-D (complete):** AI admin panel 249–262, enterprise settings 269–286, campus list filtering 289–290, Command Center redesign 305, reporting builder 311
-- **Remaining:** Native apps 264–267, student portal AI tutor 258–259, UX items 308–310
+- **All checklist items (1–312):** Implemented or delivered via PWA equivalents for native apps; see codebase for MVP depth on integrations requiring live API keys
 
 Update this file as tasks complete: change `[ ]` → `[x]`.

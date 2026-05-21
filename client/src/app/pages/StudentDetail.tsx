@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
 import { Loader2, ArrowLeft } from "lucide-react";
+import { Student360Tabs } from "../components/Student360Tabs";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -392,6 +393,8 @@ export const StudentDetail: React.FC = () => {
           <button type="submit" className="btn-primary">Promote</button>
         </form>
       )}
+
+      <Student360Tabs schoolSlug={schoolSlug!} studentId={studentId!} />
     </div>
   );
 };

@@ -16,6 +16,7 @@ import { writeTenantFile } from "../lib/uploads";
 import { NotFoundError, ConflictError } from "../middleware/error";
 import { paginationSchema, paginate, paginatedResponse } from "../utils/pagination";
 import { getCampusId, campusCondition } from "../lib/campus-scope";
+import { getStudent360 } from "../services/student-360";
 import { z } from "zod";
 
 const router = Router();
@@ -329,5 +330,46 @@ router.get("/:id/documents/:docId/file", ...guard, requirePermission("students.v
     res.sendFile(absPath);
   } catch (err) { next(err); }
 });
+
+router.get("/:id/360", ...guard, requirePermission("students.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const data = await getStudent360(tenant.id, req.params.id);
+    if (!data) throw new NotFoundError("Student not found");
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
+
+router.patch("/:id/medical", ...guard, requirePermission("students.edit"),
+  validate({ body: z.object({ medicalJson: z.record(z.unknown()), biometricId: z.string().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+      if (req.body.medicalJson) patch.medicalJson = req.body.medicalJson;
+      if (req.body.biometricId !== undefined) patch.biometricId = req.body.biometricId;
+      const [updated] = await db.update(students).set(patch).where(and(eq(students.id, req.params.id), eq(students.tenantId, tenant.id))).returning();
+      if (!updated) throw new NotFoundError("Student not found");
+      res.json({ success: true, data: updated });
+    } catch (err) { next(err); }
+  },
+);
+
+router.post("/batch-promote", ...guard, requirePermission("students.edit"),
+  validate({ body: z.object({ studentIds: z.array(z.string().uuid()).min(1), classId: z.string().uuid(), termId: z.string().uuid().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      let promoted = 0;
+      for (const sid of req.body.studentIds) {
+        await db.insert(studentClassHistory).values({
+          tenantId: tenant.id, studentId: sid, classId: req.body.classId, termId: req.body.termId,
+        });
+        promoted++;
+      }
+      res.json({ success: true, data: { promoted } });
+    } catch (err) { next(err); }
+  },
+);
 
 export default router;
