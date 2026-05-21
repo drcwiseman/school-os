@@ -19,9 +19,13 @@ export type PlatformNotificationsHub = {
 
 const EMPTY_HUB: PlatformNotificationsHub = { unreadCount: 0, alerts: [] };
 
-function isMissingRelation(err: unknown): boolean {
+function isSchemaLag(err: unknown): boolean {
   const e = err as { code?: string; message?: string };
-  return e.code === "42P01" || Boolean(e.message?.includes("does not exist"));
+  return (
+    e.code === "42P01"
+    || e.code === "42703"
+    || Boolean(e.message?.includes("does not exist"))
+  );
 }
 
 export async function getPlatformNotificationsHub(): Promise<PlatformNotificationsHub> {
@@ -52,7 +56,7 @@ export async function getPlatformNotificationsHub(): Promise<PlatformNotificatio
       });
     }
   } catch (err) {
-    if (!isMissingRelation(err)) console.warn("[notifications] jobs:", (err as Error).message);
+    if (!isSchemaLag(err)) console.warn("[notifications] jobs:", (err as Error).message);
   }
 
   try {
@@ -75,7 +79,7 @@ export async function getPlatformNotificationsHub(): Promise<PlatformNotificatio
       });
     }
   } catch (err) {
-    if (!isMissingRelation(err)) console.warn("[notifications] backups:", (err as Error).message);
+    if (!isSchemaLag(err)) console.warn("[notifications] backups:", (err as Error).message);
   }
 
   try {
@@ -103,7 +107,7 @@ export async function getPlatformNotificationsHub(): Promise<PlatformNotificatio
       });
     }
   } catch (err) {
-    if (!isMissingRelation(err)) console.warn("[notifications] support:", (err as Error).message);
+    if (!isSchemaLag(err)) console.warn("[notifications] support:", (err as Error).message);
   }
 
   if (!alerts.length) return EMPTY_HUB;

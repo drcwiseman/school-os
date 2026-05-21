@@ -27,6 +27,8 @@ async function runMigrationFile(filename: string) {
  */
 export async function ensureRuntimeSchema() {
   const statements = [
+    `ALTER TABLE "platform_backups" ADD COLUMN IF NOT EXISTS "offsite_key" text`,
+    `ALTER TABLE "platform_backups" ADD COLUMN IF NOT EXISTS "offsite_status" text`,
     `ALTER TABLE "platform_admins" ADD COLUMN IF NOT EXISTS "role" text NOT NULL DEFAULT 'super_admin'`,
     `ALTER TABLE "announcements" ADD COLUMN IF NOT EXISTS "publish_at" timestamp`,
     `CREATE TABLE IF NOT EXISTS "features" (
