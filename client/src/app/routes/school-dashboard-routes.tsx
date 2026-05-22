@@ -42,8 +42,8 @@ function FacilitiesTabRedirect({ tab }: { tab: FacilitiesTabId }) {
   return <Navigate to={facilitiesPath(schoolSlug, tab)} replace />;
 }
 
-/** Shared staff app routes (under /s/:slug/* or clean custom-domain paths). */
-export function SchoolDashboardRoutes() {
+/** Shared staff app routes — must be invoked as `{schoolDashboardRouteElements()}` (not a <Component />). */
+export function schoolDashboardRouteElements() {
   return (
     <>
       <Route path="dashboard" element={<Dashboard />} />

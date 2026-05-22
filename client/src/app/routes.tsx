@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { CustomDomainShell } from "./components/CustomDomainShell";
-import { SchoolDashboardRoutes } from "./routes/school-dashboard-routes";
+import { schoolDashboardRouteElements } from "./routes/school-dashboard-routes";
 import { DashboardLayout } from "./layout/DashboardLayout";
 import { PublicLayout } from "./public/layout/PublicLayout";
 import { MarketingHome } from "./public/Home";
@@ -70,7 +70,7 @@ export const AppRoutes = () => {
         <Route path="/portal/dashboard" element={<PortalDashboard />} />
         <Route path="/exam" element={<StudentCbtExam />} />
         <Route element={<DashboardLayout />}>
-          <SchoolDashboardRoutes />
+          {schoolDashboardRouteElements()}
         </Route>
       </Route>
 
@@ -107,7 +107,7 @@ export const AppRoutes = () => {
       </Route>
 
       <Route path="/s/:schoolSlug/*" element={<DashboardLayout />}>
-        <SchoolDashboardRoutes />
+        {schoolDashboardRouteElements()}
       </Route>
     </Routes>
   );
