@@ -33,15 +33,25 @@ export const OrgBrandMark: React.FC<Props> = ({ variant = "header", onNavigate }
       </div>
     );
 
+  const displayName = name.toLowerCase().includes("schoolos") ? "Masomo Best" : name;
+  const tagline = variant === "header" ? "School management" : undefined;
+
   const nameClass =
     variant === "footer"
-      ? "font-heading text-xl font-bold text-white"
-      : "font-heading text-lg font-bold tracking-tight text-marketing-navy";
+      ? "font-heading text-xl font-bold text-white leading-tight"
+      : "font-heading text-base sm:text-lg font-bold tracking-tight text-marketing-navy leading-tight";
 
   return (
-    <Link to="/" className="inline-flex items-center gap-2.5 shrink-0" onClick={onNavigate}>
+    <Link to="/" className="inline-flex items-center gap-2.5 shrink-0 min-w-0" onClick={onNavigate}>
       {iconBox}
-      <span className={nameClass}>{name}</span>
+      <span className="min-w-0">
+        <span className={`block ${nameClass}`}>{displayName}</span>
+        {tagline && (
+          <span className="block text-[10px] font-semibold uppercase tracking-wider text-sky-600/80">
+            {tagline}
+          </span>
+        )}
+      </span>
     </Link>
   );
 };

@@ -586,8 +586,12 @@ export const Settings: React.FC = () => {
               <div>
                 <label className="label">ID cards</label>
                 <select className="input" disabled={!canManage} value={idCardTpl} onChange={(e) => setIdCardTpl(e.target.value)}>
-                  <option value="default">Default</option><option value="photo">Photo ID</option>
+                  <option value="default">Default (front + back)</option>
+                  <option value="uganda_national">Uganda national ID style</option>
+                  <option value="makerere">Makerere / university style</option>
+                  <option value="photo">Photo ID (uses default layout)</option>
                 </select>
+                <p className="text-xs text-slate-500 mt-1">PDF includes front and back with barcode. Applies to student and staff cards.</p>
               </div>
             </div>
           </div>

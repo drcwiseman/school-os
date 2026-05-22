@@ -191,7 +191,9 @@ export const StaffIdCardsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-400">Generate professional staff ID cards (PDF). Select staff or print all active employees.</p>
+      <p className="text-sm text-slate-400">
+        Staff ID cards use the template from School settings → Branding (Uganda national, Makerere, or default). PDF includes front, back, and barcode.
+      </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-primary" onClick={() => downloadBulk(true)}>
           <Download className="w-4 h-4" /> All active staff

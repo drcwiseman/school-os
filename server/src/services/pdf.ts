@@ -2,12 +2,19 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { db } from "../db";
 import {
   tenantSettings, tenants, students, invoices, payments, receipts, reportCards, payslips, staff,
-  examGroups, examAdmitCards, assessments, marks, classes, subjects, terms, studentClassHistory,
+  examGroups, examAdmitCards, assessments, marks, classes, streams, subjects, terms, studentClassHistory,
 } from "../db/schema";
 import { percentToGrade, scoreToPercent } from "./exam-grading";
 import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 import { formatMoney } from "../utils/money";
 import { resolveTenantLocale } from "./tenant-locale";
+import {
+  appendIdCardPair,
+  createIdCardPdf,
+  type IdCardBranding,
+  type IdCardSubject,
+  type IdCardTemplateId,
+} from "./id-card-pdf";
 
 export type PdfTemplate = "invoice" | "receipt" | "report_card" | "payslip";
 
@@ -140,25 +147,38 @@ export async function generatePayslipPdf(tenantId: string, payslipId: string): P
   return doc.save();
 }
 
+async function loadIdCardTemplate(tenantId: string): Promise<IdCardTemplateId> {
+  const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+  const ext = (settings?.brandingExtendedJson ?? {}) as { idCardTemplate?: string };
+  const t = ext.idCardTemplate ?? "default";
+  if (t === "uganda_national" || t === "makerere" || t === "photo") return t === "photo" ? "default" : t;
+  return "default";
+}
+
+function toIdBranding(b: Branding): IdCardBranding {
+  return {
+    schoolName: b.schoolName,
+    logoText: b.logoText,
+    primaryColor: rgb(b.primaryColor.r, b.primaryColor.g, b.primaryColor.b),
+    footer: b.footer,
+  };
+}
+
 export async function generateStaffIdCardPdf(tenantId: string, staffId: string): Promise<Uint8Array> {
   const branding = await loadBranding(tenantId);
+  const template = await loadIdCardTemplate(tenantId);
   const [row] = await db.select().from(staff).where(and(eq(staff.id, staffId), eq(staff.tenantId, tenantId), isNull(staff.deletedAt))).limit(1);
   if (!row) throw new Error("Staff not found");
 
-  const doc = await PDFDocument.create();
-  const page = doc.addPage([242, 153]);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const { width, height } = page.getSize();
-  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(0.96, 0.97, 1), borderWidth: 0 });
-  page.drawText(branding.schoolName, { x: 12, y: height - 18, size: 9, font: bold, color: rgb(branding.primaryColor.r, branding.primaryColor.g, branding.primaryColor.b) });
-  page.drawText("STAFF ID", { x: 12, y: height - 30, size: 7, font });
-  page.drawText(`${row.firstName} ${row.lastName}`, { x: 12, y: 52, size: 11, font: bold });
-  page.drawText(row.employeeNo, { x: 12, y: 38, size: 9, font });
-  if (row.jobTitle) page.drawText(row.jobTitle, { x: 12, y: 26, size: 8, font });
-  else if (row.department) page.drawText(row.department, { x: 12, y: 26, size: 8, font });
-  page.drawText("Valid while employed", { x: 12, y: 12, size: 6, font });
-  return doc.save();
+  const subject: IdCardSubject = {
+    kind: "staff",
+    firstName: row.firstName,
+    lastName: row.lastName,
+    identifier: row.employeeNo,
+    subtitle: row.jobTitle ?? row.department ?? undefined,
+    validUntil: "While employed",
+  };
+  return createIdCardPdf(template, subject, toIdBranding(branding));
 }
 
 export async function generateStaffIdCardsBulkPdf(tenantId: string, staffIds?: string[]): Promise<Uint8Array> {
@@ -168,20 +188,19 @@ export async function generateStaffIdCardsBulkPdf(tenantId: string, staffIds?: s
     : await db.select().from(staff).where(and(...conditions)).orderBy(staff.employeeNo);
 
   const branding = await loadBranding(tenantId);
+  const template = await loadIdCardTemplate(tenantId);
   const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const cardBranding = toIdBranding(branding);
 
   for (const row of rows) {
-    const page = doc.addPage([242, 153]);
-    const { width, height } = page.getSize();
-    page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(0.96, 0.97, 1), borderWidth: 0 });
-    page.drawText(branding.schoolName, { x: 12, y: height - 18, size: 9, font: bold, color: rgb(branding.primaryColor.r, branding.primaryColor.g, branding.primaryColor.b) });
-    page.drawText("STAFF ID", { x: 12, y: height - 30, size: 7, font });
-    page.drawText(`${row.firstName} ${row.lastName}`, { x: 12, y: 52, size: 11, font: bold });
-    page.drawText(row.employeeNo, { x: 12, y: 38, size: 9, font });
-    if (row.jobTitle) page.drawText(row.jobTitle, { x: 12, y: 26, size: 8, font });
-    else if (row.department) page.drawText(row.department, { x: 12, y: 26, size: 8, font });
+    await appendIdCardPair(doc, template, {
+      kind: "staff",
+      firstName: row.firstName,
+      lastName: row.lastName,
+      identifier: row.employeeNo,
+      subtitle: row.jobTitle ?? row.department ?? undefined,
+      validUntil: "While employed",
+    }, cardBranding);
   }
 
   if (rows.length === 0) {
@@ -202,19 +221,39 @@ async function loadStudentContext(tenantId: string, studentId: string) {
 }
 
 export async function generateStudentIdCardPdf(tenantId: string, studentId: string): Promise<Uint8Array> {
-  const { branding, student } = await loadStudentContext(tenantId, studentId);
-  const doc = await PDFDocument.create();
-  const page = doc.addPage([242, 153]);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const { width, height } = page.getSize();
-  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(0.95, 0.97, 1), borderWidth: 0 });
-  page.drawText(branding.schoolName, { x: 12, y: height - 18, size: 9, font: bold, color: rgb(branding.primaryColor.r, branding.primaryColor.g, branding.primaryColor.b) });
-  page.drawText("STUDENT ID", { x: 12, y: height - 30, size: 7, font });
-  page.drawText(`${student.firstName} ${student.lastName}`, { x: 12, y: 50, size: 11, font: bold });
-  page.drawText(student.admissionNumber, { x: 12, y: 36, size: 9, font });
-  if (student.gender) page.drawText(String(student.gender), { x: 12, y: 24, size: 8, font });
-  return doc.save();
+  const { branding, student, idCardTemplate } = await loadStudentContext(tenantId, studentId);
+  const template = (idCardTemplate === "uganda_national" || idCardTemplate === "makerere"
+    ? idCardTemplate
+    : "default") as IdCardTemplateId;
+
+  let subtitle: string | undefined;
+  const [enrollment] = await db
+    .select({ className: classes.name, streamName: streams.name })
+    .from(studentClassHistory)
+    .innerJoin(classes, eq(classes.id, studentClassHistory.classId))
+    .leftJoin(streams, eq(streams.id, studentClassHistory.streamId))
+    .where(and(
+      eq(studentClassHistory.studentId, studentId),
+      eq(studentClassHistory.tenantId, tenantId),
+    ))
+    .limit(1);
+  if (enrollment) {
+    subtitle = enrollment.streamName
+      ? `${enrollment.className} · ${enrollment.streamName}`
+      : enrollment.className;
+  }
+
+  const subject: IdCardSubject = {
+    kind: "student",
+    firstName: student.firstName,
+    lastName: student.lastName,
+    identifier: student.admissionNumber,
+    subtitle,
+    gender: student.gender,
+    dob: student.dob,
+    validUntil: "Current academic year",
+  };
+  return createIdCardPdf(template, subject, toIdBranding(branding));
 }
 
 export async function generateTransferCertificatePdf(tenantId: string, studentId: string, transferId?: string): Promise<Uint8Array> {

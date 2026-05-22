@@ -9,6 +9,9 @@ import { Loader2 } from "lucide-react";
 import {
   ExamGroupsPanel, ExamTimetablePanel, ExamResultsPanel, ExamPrintingPanel, ExamMultiGroupsPanel,
 } from "../components/exams/ExamEnhancementPanels";
+import { PageTabs } from "../components/PageTabs";
+import { ResponsiveDataTable } from "../components/ResponsiveDataTable";
+import { ClipboardList } from "lucide-react";
 
 export const Exams: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
@@ -214,50 +217,46 @@ export const Exams: React.FC = () => {
     }
   };
 
-  const tabLabels: Record<typeof tab, string> = {
-    assessments: "Assessments",
-    groups: "Groups",
-    timetable: "Timetable",
-    marks: "Marks",
-    results: "Results",
-    printing: "Printing",
-    "multi-groups": "Multi-groups",
-    moderation: "Moderation",
-    reports: "Reports",
-    cbt: "CBT",
-    banks: "Question bank",
-    rankings: "Rankings",
-    analytics: "Analytics",
-  };
+  const examTabs = [
+    { id: "assessments" as const, label: "Assessments" },
+    { id: "marks" as const, label: "Enter marks" },
+    { id: "reports" as const, label: "Report cards" },
+    { id: "results" as const, label: "Results" },
+    { id: "moderation" as const, label: "Moderation" },
+    { id: "groups" as const, label: "Groups" },
+    { id: "timetable" as const, label: "Timetable" },
+    { id: "printing" as const, label: "Printing" },
+    { id: "multi-groups" as const, label: "Multi-groups" },
+    { id: "cbt" as const, label: "CBT" },
+    { id: "banks" as const, label: "Question bank" },
+    { id: "rankings" as const, label: "Rankings" },
+    { id: "analytics" as const, label: "Analytics" },
+  ];
+
+  const panelLoading = loading && ["assessments", "moderation", "reports", "cbt", "banks", "rankings", "analytics"].includes(tab);
 
   return (
-    <div className="space-y-6 animate-fade-in w-full min-w-0">
+    <div className="page-shell">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Exams & Results</h1>
-          <p className="text-slate-400 mt-1">Assessments, moderation, and report cards</p>
+        <div className="min-w-0">
+          <h1 className="page-title flex items-center gap-2">
+            <ClipboardList className="w-7 h-7 text-primary-400 shrink-0" />
+            Exams & Results
+          </h1>
+          <p className="text-slate-400 mt-1 text-sm">Assessments, marks, moderation, and report cards by class and term</p>
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto pb-1">
-        <div className="flex gap-2 flex-nowrap">
-          {(["assessments", "groups", "timetable", "marks", "results", "printing", "multi-groups", "moderation", "reports", "cbt", "banks", "rankings", "analytics"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`shrink-0 px-4 py-2 rounded-lg text-sm whitespace-nowrap ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
-            >
-              {tabLabels[t]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageTabs tabs={examTabs} value={tab} onChange={setTab} />
 
-      {tab === "assessments" && (
+      {panelLoading && (
+        <div className="content-loader"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>
+      )}
+
+      {!panelLoading && tab === "assessments" && (
         <>
-          <form onSubmit={createAssessment} className="card p-4 grid md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <input className="input" placeholder="Exam name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <form onSubmit={createAssessment} className="card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <input className="input sm:col-span-2 lg:col-span-1" placeholder="Exam name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <select className="input" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}>
               <option value="">Class</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -274,38 +273,42 @@ export const Exams: React.FC = () => {
               <option value="">Exam group</option>
               {examGroups.map((g: any) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
-            <button type="submit" className="btn-primary">Add exam</button>
+            <button type="submit" className="btn-primary w-full sm:w-auto">Add exam</button>
           </form>
-          <DataTable loading={loading} rows={assessments} cols={[
-            { k: "name", l: "Name" },
-            { k: "type", l: "Type" },
-            { k: "maxScore", l: "Max" },
-          ]} actions={(row) => (
-            <div className="flex gap-2">
-              <button type="button" className="btn-ghost text-xs" onClick={() => { setMarksAssessmentId(row.id); setTab("marks"); }}>Enter marks</button>
-              <button type="button" className="btn-ghost text-xs" onClick={() => submitMarks(row.id)}>Submit</button>
-              {hasPermission("exams.moderate") && (
-                <ConfirmAction
-                  label="Remove"
-                  confirmMessage={`Remove assessment "${row.name}"?`}
-                  onConfirm={() => deleteAssessment(row.id)}
-                />
-              )}
-            </div>
-          )} />
+          <ResponsiveDataTable
+            rows={assessments}
+            columns={[
+              { key: "name", label: "Name" },
+              { key: "type", label: "Type" },
+              { key: "maxScore", label: "Max score" },
+            ]}
+            actions={(row) => (
+              <div className="flex flex-wrap gap-2 justify-end">
+                <button type="button" className="btn-ghost text-xs" onClick={() => { setMarksAssessmentId(row.id); setTab("marks"); }}>Marks</button>
+                <button type="button" className="btn-ghost text-xs" onClick={() => submitMarks(row.id)}>Submit</button>
+                {hasPermission("exams.moderate") && (
+                  <ConfirmAction
+                    label="Remove"
+                    confirmMessage={`Remove assessment "${row.name}"?`}
+                    onConfirm={() => deleteAssessment(row.id)}
+                  />
+                )}
+              </div>
+            )}
+          />
         </>
       )}
 
-      {tab === "groups" && schoolSlug && <ExamGroupsPanel schoolSlug={schoolSlug} />}
-      {tab === "timetable" && schoolSlug && <ExamTimetablePanel schoolSlug={schoolSlug} />}
-      {tab === "results" && schoolSlug && <ExamResultsPanel schoolSlug={schoolSlug} />}
-      {tab === "printing" && schoolSlug && <ExamPrintingPanel schoolSlug={schoolSlug} />}
-      {tab === "multi-groups" && schoolSlug && <ExamMultiGroupsPanel schoolSlug={schoolSlug} />}
+      {!panelLoading && tab === "groups" && schoolSlug && <ExamGroupsPanel schoolSlug={schoolSlug} />}
+      {!panelLoading && tab === "timetable" && schoolSlug && <ExamTimetablePanel schoolSlug={schoolSlug} />}
+      {!panelLoading && tab === "results" && schoolSlug && <ExamResultsPanel schoolSlug={schoolSlug} />}
+      {!panelLoading && tab === "printing" && schoolSlug && <ExamPrintingPanel schoolSlug={schoolSlug} />}
+      {!panelLoading && tab === "multi-groups" && schoolSlug && <ExamMultiGroupsPanel schoolSlug={schoolSlug} />}
 
-      {tab === "marks" && (
-        <div className="card p-4 space-y-4 w-full overflow-x-auto">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[200px]">
+      {!panelLoading && tab === "marks" && (
+        <div className="card p-4 space-y-4 w-full min-w-0">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end">
+            <div className="flex-1 min-w-0 w-full sm:min-w-[200px]">
               <label className="label">Assessment</label>
               <select
                 className="input"
@@ -325,55 +328,61 @@ export const Exams: React.FC = () => {
           </div>
           {marksLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary-500" /></div>
+          ) : marksRows.length === 0 ? (
+            <p className="text-center py-8 text-slate-400 text-sm">No marks — select an assessment.</p>
           ) : (
-            <table className="table">
-              <thead><tr><th>Student</th><th>Score</th><th>Grade</th><th>Remarks</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>
-                {marksRows.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-6 text-slate-400">No marks — select assessment or add rows.</td></tr>
-                ) : marksRows.map((r, i) => (
-                  <tr key={r.id ?? i}>
-                    <td>{r.label ?? <span className="font-mono text-xs">{r.studentId.slice(0, 12)}…</span>}</td>
-                    <td>
-                      <input
-                        className="input w-24"
-                        type="number"
-                        min={0}
-                        value={r.score}
-                        disabled={!hasPermission("exams.enter_marks")}
-                        onChange={(e) => {
-                          const next = [...marksRows];
-                          next[i] = { ...r, score: e.target.value };
-                          setMarksRows(next);
-                        }}
-                      />
-                    </td>
-                    <td><input className="input w-16 text-sm" value={r.grade ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, grade: e.target.value }; setMarksRows(next); }} /></td>
-                    <td><input className="input w-28 text-sm" value={r.remarks ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, remarks: e.target.value }; setMarksRows(next); }} /></td>
-                    <td className="capitalize text-sm">{r.status ?? "draft"}</td>
-                    <td>
-                      {r.id && hasPermission("exams.moderate") && (
-                        <ConfirmAction label="Remove" confirmMessage="Remove this mark?" onConfirm={() => removeMark(r.id!)} />
-                      )}
-                    </td>
-                  </tr>
+            <>
+              <div className="hidden md:block table-wrap">
+                <table className="table min-w-[720px]">
+                  <thead><tr><th>Student</th><th>Score</th><th>Grade</th><th>Remarks</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    {marksRows.map((r, i) => (
+                      <tr key={r.id ?? i}>
+                        <td>{r.label ?? <span className="font-mono text-xs">{r.studentId.slice(0, 12)}…</span>}</td>
+                        <td>
+                          <input className="input w-full max-w-[6rem]" type="number" min={0} value={r.score} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, score: e.target.value }; setMarksRows(next); }} />
+                        </td>
+                        <td><input className="input w-full max-w-[4rem] text-sm" value={r.grade ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, grade: e.target.value }; setMarksRows(next); }} /></td>
+                        <td><input className="input w-full max-w-[8rem] text-sm" value={r.remarks ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, remarks: e.target.value }; setMarksRows(next); }} /></td>
+                        <td className="capitalize text-sm">{r.status ?? "draft"}</td>
+                        <td>{r.id && hasPermission("exams.moderate") && <ConfirmAction label="Remove" confirmMessage="Remove this mark?" onConfirm={() => removeMark(r.id!)} />}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="md:hidden space-y-3">
+                {marksRows.map((r, i) => (
+                  <div key={r.id ?? i} className="rounded-xl border border-slate-700/60 p-3 space-y-2 bg-slate-900/30">
+                    <p className="font-medium text-white text-sm">{r.label ?? r.studentId}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><label className="label">Score</label><input className="input" type="number" value={r.score} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, score: e.target.value }; setMarksRows(next); }} /></div>
+                      <div><label className="label">Grade</label><input className="input" value={r.grade ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, grade: e.target.value }; setMarksRows(next); }} /></div>
+                    </div>
+                    <div><label className="label">Remarks</label><input className="input" value={r.remarks ?? ""} disabled={!hasPermission("exams.enter_marks")} onChange={(e) => { const next = [...marksRows]; next[i] = { ...r, remarks: e.target.value }; setMarksRows(next); }} /></div>
+                    <p className="text-xs text-slate-500 capitalize">Status: {r.status ?? "draft"}</p>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       )}
 
-      {tab === "moderation" && (
-        <DataTable loading={loading} rows={moderation} cols={[
-          { k: "assessmentId", l: "Assessment" },
-          { k: "submittedAt", l: "Submitted", r: (x) => new Date(x.submittedAt).toLocaleString() },
-        ]} actions={(row) => (
-          <button type="button" className="btn-ghost text-xs" onClick={() => approve(row.assessmentId)}>Approve</button>
-        )} />
+      {!panelLoading && tab === "moderation" && (
+        <ResponsiveDataTable
+          rows={moderation}
+          columns={[
+            { key: "assessmentId", label: "Assessment", render: (x) => <span className="font-mono text-xs">{String(x.assessmentId).slice(0, 8)}…</span> },
+            { key: "submittedAt", label: "Submitted", render: (x) => new Date(x.submittedAt).toLocaleString() },
+          ]}
+          actions={(row) => (
+            <button type="button" className="btn-ghost text-xs" onClick={() => approve(row.assessmentId)}>Approve</button>
+          )}
+        />
       )}
 
-      {tab === "reports" && (
+      {!panelLoading && tab === "reports" && (
         <>
           {hasPermission("exams.publish") && (
             <form onSubmit={generateReportCards} className="card p-4 grid md:grid-cols-3 gap-3 items-end">
@@ -403,21 +412,25 @@ export const Exams: React.FC = () => {
               )}
             </form>
           )}
-          <DataTable loading={loading} rows={reportCards} cols={[
-          { k: "studentId", l: "Student" },
-          { k: "published", l: "Published", r: (x) => x.published ? "Yes" : "No" },
-        ]} actions={(row) => (
-          <div className="flex gap-2">
-            {!row.published && hasPermission("exams.publish") && (
-              <button type="button" className="btn-ghost text-xs" onClick={() => publishReport(row.id)}>Publish</button>
+          <ResponsiveDataTable
+            rows={reportCards}
+            columns={[
+              { key: "studentId", label: "Student", render: (x) => <span className="font-mono text-xs">{String(x.studentId).slice(0, 8)}…</span> },
+              { key: "published", label: "Published", render: (x) => (x.published ? "Yes" : "No") },
+            ]}
+            actions={(row) => (
+              <div className="flex flex-wrap gap-2 justify-end">
+                {!row.published && hasPermission("exams.publish") && (
+                  <button type="button" className="btn-ghost text-xs" onClick={() => publishReport(row.id)}>Publish</button>
+                )}
+                <button type="button" className="btn-ghost text-xs" onClick={() => downloadPdf(`/s/${schoolSlug}/api/reports/pdf/report-card/${row.id}`)}>PDF</button>
+              </div>
             )}
-            <button type="button" className="btn-ghost text-xs" onClick={() => downloadPdf(`/s/${schoolSlug}/api/reports/pdf/report-card/${row.id}`)}>Result PDF</button>
-          </div>
-        )} />
+          />
         </>
       )}
 
-      {tab === "cbt" && (
+      {!panelLoading && tab === "cbt" && (
         <div className="space-y-4">
           <form className="card p-4 flex flex-wrap gap-2" onSubmit={async (e) => {
             e.preventDefault();
@@ -434,20 +447,24 @@ export const Exams: React.FC = () => {
             </select>
             <button type="submit" className="btn-primary">Create paper</button>
           </form>
-          <DataTable loading={loading} rows={cbtPapers} cols={[
-            { k: "title", l: "Title" },
-            { k: "mode", l: "Mode" },
-            { k: "published", l: "Live", r: (x) => x.published ? "Yes" : "No" },
-          ]} actions={(row) => (
-            <button type="button" className="btn-ghost text-xs" onClick={async () => {
-              await api.patch(`/s/${schoolSlug}/api/cbt/papers/${row.id}`, { published: !row.published });
-              load();
-            }}>{row.published ? "Unpublish" : "Publish"}</button>
-          )} />
+          <ResponsiveDataTable
+            rows={cbtPapers}
+            columns={[
+              { key: "title", label: "Title" },
+              { key: "mode", label: "Mode" },
+              { key: "published", label: "Live", render: (x) => (x.published ? "Yes" : "No") },
+            ]}
+            actions={(row) => (
+              <button type="button" className="btn-ghost text-xs" onClick={async () => {
+                await api.patch(`/s/${schoolSlug}/api/cbt/papers/${row.id}`, { published: !row.published });
+                load();
+              }}>{row.published ? "Unpublish" : "Publish"}</button>
+            )}
+          />
         </div>
       )}
 
-      {tab === "banks" && (
+      {!panelLoading && tab === "banks" && (
         <div className="card p-4">
           <button type="button" className="btn-primary mb-4" onClick={async () => {
             const name = window.prompt("Bank name");
@@ -459,21 +476,26 @@ export const Exams: React.FC = () => {
         </div>
       )}
 
-      {tab === "rankings" && (
+      {!panelLoading && tab === "rankings" && (
         <div className="space-y-4">
-          <select className="input max-w-xs" value={rankClassId} onChange={(e) => setRankClassId(e.target.value)}>
+          <select className="input w-full max-w-md" value={rankClassId} onChange={(e) => setRankClassId(e.target.value)}>
             <option value="">Select class…</option>
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <DataTable loading={loading} rows={rankings} cols={[
-            { k: "firstName", l: "Student", r: (x) => `${x.firstName} ${x.lastName}` },
-            { k: "rank", l: "Rank" },
-            { k: "average", l: "Average", r: (x) => x.average?.toFixed(1) ?? "—" },
-          ]} />
+          <ResponsiveDataTable
+            loading={loading}
+            rows={rankings}
+            columns={[
+              { key: "firstName", label: "Student", render: (x) => `${x.firstName} ${x.lastName}` },
+              { key: "rank", label: "Rank" },
+              { key: "average", label: "Average", render: (x) => x.average?.toFixed(1) ?? "—" },
+            ]}
+            emptyMessage={rankClassId ? "No rankings for this class." : "Select a class."}
+          />
         </div>
       )}
 
-      {tab === "analytics" && examAnalytics && (
+      {!panelLoading && tab === "analytics" && examAnalytics && (
         <div className="grid md:grid-cols-3 gap-4">
           <div className="card p-4"><p className="text-slate-500 text-sm">Pass rate</p><p className="text-2xl font-bold text-white">{examAnalytics.passRate}%</p></div>
           <div className="card p-4"><p className="text-slate-500 text-sm">Marks sampled</p><p className="text-2xl font-bold text-white">{examAnalytics.totalMarks}</p></div>
@@ -486,27 +508,3 @@ export const Exams: React.FC = () => {
     </div>
   );
 };
-
-function DataTable({ loading, rows, cols, actions }: { loading: boolean; rows: any[]; cols: { k: string; l: string; r?: (x: any) => string }[]; actions?: (row: any) => React.ReactNode }) {
-  if (loading) return (
-    <div className="flex justify-center py-12">
-      <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-    </div>
-  );
-  return (
-    <div className="card overflow-x-auto w-full">
-      <table className="table min-w-[640px] w-full">
-        <thead><tr>{cols.map((c) => <th key={c.k}>{c.l}</th>)}{actions && <th>Actions</th>}</tr></thead>
-        <tbody>
-          {rows.length === 0 ? <tr><td colSpan={cols.length + (actions ? 1 : 0)} className="text-center py-8 text-slate-400">No records</td></tr>
-            : rows.map((row) => (
-              <tr key={row.id}>
-                {cols.map((c) => <td key={c.k}>{c.r ? c.r(row) : String(row[c.k] ?? "—")}</td>)}
-                {actions && <td>{actions(row)}</td>}
-              </tr>
-            ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}

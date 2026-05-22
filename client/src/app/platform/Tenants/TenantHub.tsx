@@ -19,6 +19,7 @@ import { useToast } from "../../components/Toast";
 import { COUNTRY_OPTIONS } from "../../../lib/currencies";
 import { SchoolFormModal, type TenantRow } from "../components/SchoolFormModal";
 import { SchoolLoginsPanel } from "../components/SchoolLoginsPanel";
+import { ImpersonationPicker } from "../components/ImpersonationPicker";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -140,14 +141,13 @@ export const TenantHub: React.FC = () => {
   };
 
   const [loginSlug, setLoginSlug] = useState<string | null>(null);
-  const [loginReadOnly, setLoginReadOnly] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const enterSchool = async (slug: string, readOnly = false) => {
+  const enterSchool = async (slug: string, readOnly = false, userId?: string) => {
     setLoginSlug(slug);
     setLoginLoading(true);
     try {
-      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly });
+      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly, userId });
       const raw = res.data.url?.startsWith("http")
         ? res.data.url
         : `${window.location.origin}${res.data.url}`;
@@ -159,11 +159,6 @@ export const TenantHub: React.FC = () => {
     } finally {
       setLoginLoading(false);
     }
-  };
-
-  const loginAsSchoolAdmin = async () => {
-    if (!loginSlug) return;
-    await enterSchool(loginSlug, loginReadOnly);
   };
 
   const openFeatures = async (slug: string) => {
@@ -370,10 +365,7 @@ export const TenantHub: React.FC = () => {
                       <button
                         type="button"
                         title="Login as school admin"
-                        onClick={() => {
-                          setLoginSlug(t.slug);
-                          setLoginReadOnly(false);
-                        }}
+                        onClick={() => setLoginSlug(t.slug)}
                         className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
                       >
                         <UserCog size={15} />
@@ -528,33 +520,18 @@ export const TenantHub: React.FC = () => {
       {loginSlug && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button type="button" className="absolute inset-0 bg-slate-900/40" aria-label="Close" onClick={() => setLoginSlug(null)} />
-          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">Login as school admin</h3>
+          <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-slate-900">Enter school ERP</h3>
             <p className="text-sm text-slate-600">
-              Opens the school ERP in a new tab signed in as that school&apos;s administrator (or first active user).
+              Choose a role or user to open the school in a new tab with their permissions.
             </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={loginReadOnly}
-                onChange={(e) => setLoginReadOnly(e.target.checked)}
-              />
-              Read-only shadow mode (cannot edit data)
-            </label>
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-secondary text-sm" onClick={() => setLoginSlug(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary text-sm inline-flex items-center gap-1"
-                disabled={loginLoading}
-                onClick={loginAsSchoolAdmin}
-              >
-                {loginLoading ? <Loader2 size={14} className="animate-spin" /> : null}
-                Open school ERP
-              </button>
-            </div>
+            <ImpersonationPicker
+              slug={loginSlug}
+              onSuccess={() => setLoginSlug(null)}
+            />
+            <button type="button" className="btn-secondary text-sm w-full" onClick={() => setLoginSlug(null)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}

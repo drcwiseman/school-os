@@ -7,7 +7,8 @@ import {
   portalMessages, routeAssignments, transportRoutes, transportStops, tenantSettings,
   curriculumFrameworks, curriculumUnits, cbtPapers, timetablePeriods, studentMaterials, onlineClassLinks,
   onlineClassAttendance, assignmentSubmissions, studentClassHistory, schoolEvents,
-  vehicleGpsPings, studentLeaveRequests,
+  vehicleGpsPings, studentLeaveRequests, gatePasses, disciplineIncidents, disciplineActions,
+  classes, streams, sickbayVisits,
 } from "../db/schema";
 import { adminAssistantReply, studyRecommendations } from "../services/ai-admin";
 import { generateReportCardPdf, generateReceiptPdf, generateInvoicePdf } from "../services/pdf";
@@ -16,9 +17,6 @@ import { assertPortalCanAccessStudent } from "../services/portal-access";
 import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import {
   requirePortalAuth,
-  createParentSession,
-  createStudentSession,
-  verifyPassword,
   deletePortalSession,
 } from "../middleware/portal-auth";
 import { validate } from "../utils/validate";
@@ -35,40 +33,6 @@ function sendPdf(res: any, bytes: Uint8Array, filename: string) {
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.send(Buffer.from(bytes));
 }
-
-router.post("/login", validate({ body: z.object({ email: z.string().email(), password: z.string() }) }), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    const portalAllowed = await isFeatureAllowedForTenant(tenant.id, "portal_enabled");
-    if (!portalAllowed) throw new ForbiddenError("Parent/student portal is not enabled for this school");
-
-    const [parent] = await db.select().from(parentAccounts)
-      .where(and(eq(parentAccounts.tenantId, tenant.id), eq(parentAccounts.email, req.body.email))).limit(1);
-
-    if (parent) {
-      if (parent.status !== "active") throw new UnauthorizedError("Account is not active");
-      const valid = await verifyPassword(req.body.password, parent.passwordHash);
-      if (!valid) throw new UnauthorizedError("Invalid credentials");
-      const session = await createParentSession(parent.id, tenant.id);
-      res.cookie("portal_session_token", session.token, { httpOnly: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
-      return res.json({ success: true, account: { id: parent.id, email: parent.email, type: "parent" } });
-    }
-
-    const [student] = await db.select().from(studentAccounts)
-      .where(and(eq(studentAccounts.tenantId, tenant.id), eq(studentAccounts.email, req.body.email))).limit(1);
-
-    if (student) {
-      if (student.status !== "active") throw new UnauthorizedError("Account is not active");
-      const valid = await verifyPassword(req.body.password, student.passwordHash);
-      if (!valid) throw new UnauthorizedError("Invalid credentials");
-      const session = await createStudentSession(student.id, tenant.id);
-      res.cookie("portal_session_token", session.token, { httpOnly: true, sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
-      return res.json({ success: true, account: { id: student.id, email: student.email, type: "student" } });
-    }
-
-    throw new UnauthorizedError("Invalid credentials");
-  } catch (e) { next(e); }
-});
 
 router.post("/logout", requirePortalAuth, async (req, res) => {
   const token = req.cookies?.portal_session_token;
@@ -177,22 +141,107 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
       const { normalizePaymentProviders, isPaypalReady, isPesapalReady } = await import("../lib/payment-providers");
       const payCfg = normalizePaymentProviders(settings?.paymentProvidersJson as Record<string, unknown>);
 
+      const { buildParentPortalExtras } = await import("../services/portal-parent-data");
+      const parentExtras = await buildParentPortalExtras(tenant.id, studentIds, principal);
+
+      const leaves = studentIds.length
+        ? await db.select().from(studentLeaveRequests)
+          .where(and(eq(studentLeaveRequests.tenantId, tenant.id), inArray(studentLeaveRequests.studentId, studentIds)))
+          .orderBy(desc(studentLeaveRequests.createdAt))
+          .limit(30)
+        : [];
+
+      const gatePassRows = studentIds.length
+        ? await db.select({
+          id: gatePasses.id,
+          studentId: gatePasses.studentId,
+          passNumber: gatePasses.passNumber,
+          visitorName: gatePasses.visitorName,
+          relationToStudent: gatePasses.relationToStudent,
+          passDate: gatePasses.passDate,
+          inTime: gatePasses.inTime,
+          outTime: gatePasses.outTime,
+          status: gatePasses.status,
+          purpose: gatePasses.purpose,
+        })
+          .from(gatePasses)
+          .where(and(eq(gatePasses.tenantId, tenant.id), inArray(gatePasses.studentId, studentIds)))
+          .orderBy(desc(gatePasses.passDate))
+          .limit(25)
+        : [];
+
+      const disciplineRows = studentIds.length
+        ? await db.select({
+          id: disciplineIncidents.id,
+          studentId: disciplineIncidents.studentId,
+          incidentDate: disciplineIncidents.incidentDate,
+          category: disciplineIncidents.category,
+          description: disciplineIncidents.description,
+          severity: disciplineIncidents.severity,
+        })
+          .from(disciplineIncidents)
+          .where(and(eq(disciplineIncidents.tenantId, tenant.id), inArray(disciplineIncidents.studentId, studentIds)))
+          .orderBy(desc(disciplineIncidents.incidentDate))
+          .limit(25)
+        : [];
+
+      const incidentIds = disciplineRows.map((d) => d.id);
+      const actionRows = incidentIds.length
+        ? await db.select({
+          incidentId: disciplineActions.incidentId,
+          action: disciplineActions.action,
+          actionDate: disciplineActions.actionDate,
+          notes: disciplineActions.notes,
+        })
+          .from(disciplineActions)
+          .where(and(eq(disciplineActions.tenantId, tenant.id), inArray(disciplineActions.incidentId, incidentIds)))
+        : [];
+
+      const sickbayRows = studentIds.length
+        ? await db.select({
+          id: sickbayVisits.id,
+          studentId: sickbayVisits.studentId,
+          visitDate: sickbayVisits.visitDate,
+          complaint: sickbayVisits.complaint,
+          treatment: sickbayVisits.treatment,
+          dischargedAt: sickbayVisits.dischargedAt,
+        })
+          .from(sickbayVisits)
+          .where(and(eq(sickbayVisits.tenantId, tenant.id), inArray(sickbayVisits.studentId, studentIds)))
+          .orderBy(desc(sickbayVisits.visitDate))
+          .limit(15)
+        : [];
+
+      const actionsByIncident: Record<string, typeof actionRows> = {};
+      for (const a of actionRows) {
+        if (!actionsByIncident[a.incidentId]) actionsByIncident[a.incidentId] = [];
+        actionsByIncident[a.incidentId].push(a);
+      }
+
       res.json({
         success: true,
         data: {
           children,
+          enrollments: parentExtras.enrollmentsEnhanced,
+          ...parentExtras,
           statements,
           receipts: receiptRows,
           reportCards: publishedCards,
           attendance,
           announcements: msgs,
           transport: transport.map((t) => ({ ...t, stops: stopsByRoute[t.routeId] ?? [] })),
+          leaves,
+          gatePasses: gatePassRows,
+          discipline: disciplineRows.map((d) => ({ ...d, actions: actionsByIncident[d.id] ?? [] })),
+          sickbay: sickbayRows,
           paymentGatewaysEnabled: paymentGateways,
           paymentProviders: {
             paypal: isPaypalReady(payCfg),
             pesapal: isPesapalReady(payCfg),
           },
           currency: settings?.currency ?? "UGX",
+          resultsVisible,
+          feesMustBeClear,
         },
       });
     } else {

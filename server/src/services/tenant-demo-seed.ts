@@ -2,7 +2,7 @@ import { db } from "../db";
 import {
   tenants, tenantSettings, roles, rolePermissions, permissions, users, userRoles,
   staff, students, academicYears, terms, classes, streams, studentClassHistory,
-  subjects, teacherAssignments, guardians, studentGuardians, parentAccounts,
+  subjects, teacherAssignments, guardians, studentGuardians, parentAccounts, studentAccounts,
   announcements, feeHeads, invoices, messageTemplates,
 } from "../db/schema";
 import { eq, and, sql, like, inArray } from "drizzle-orm";
@@ -27,6 +27,7 @@ export type DemoSeedResult = {
 
 const DEMO_PASSWORD = "Demo123!";
 const PARENT_PASSWORD = "Parent123!";
+const STUDENT_PORTAL_PASSWORD = "Student123!";
 
 const UG_SUBJECTS: { code: string; name: string }[] = [
   { code: "MATH", name: "Mathematics" },
@@ -119,6 +120,10 @@ function demoEmail(slug: string, key: string) {
 
 function parentEmail(slug: string, admissionNumber: string) {
   return `parent.${admissionNumber.toLowerCase().replace(/-/g, ".")}@${slug}.demo`;
+}
+
+function studentPortalEmail(slug: string, admissionNumber: string) {
+  return `student.${admissionNumber.toLowerCase().replace(/-/g, ".")}@${slug}.demo`;
 }
 
 async function demoStep<T>(phase: string, fn: () => Promise<T>): Promise<T> {
@@ -329,6 +334,7 @@ export async function seedDemoDataForTenant(
 
   const passwordHash = await hashPassword(DEMO_PASSWORD);
   const parentHash = await hashPassword(PARENT_PASSWORD);
+  const studentPortalHash = await hashPassword(STUDENT_PORTAL_PASSWORD);
 
   for (const emp of STAFF_ROSTER) {
     const email = demoEmail(slug, emp.emailKey);
@@ -507,6 +513,21 @@ export async function seedDemoDataForTenant(
         });
         created.push(`parent account ${admissionNumber}`);
       }
+
+      const sEmail = studentPortalEmail(slug, admissionNumber);
+      const [stuAcct] = await db.select().from(studentAccounts).where(and(
+        eq(studentAccounts.tenantId, tenantId),
+        eq(studentAccounts.email, sEmail),
+      )).limit(1);
+      if (!stuAcct) {
+        await db.insert(studentAccounts).values({
+          tenantId,
+          email: sEmail,
+          passwordHash: studentPortalHash,
+          studentId: stu.id,
+        });
+        created.push(`student portal ${admissionNumber}`);
+      }
     }
   }
 
@@ -579,10 +600,12 @@ export async function seedDemoDataForTenant(
   const teachersAssigned = new Set(assignRows.map((r) => r.userId)).size;
 
   const credentials: DemoSeedResult["credentials"] = [
-    { label: "Head teacher", email: demoEmail(slug, "headteacher"), password: DEMO_PASSWORD },
-    { label: "Mathematics teacher", email: demoEmail(slug, "math"), password: DEMO_PASSWORD },
-    { label: "Sample parent (S1-01)", email: parentEmail(slug, "S1-01"), password: PARENT_PASSWORD },
-    { label: "Sample parent (S6-05)", email: parentEmail(slug, "S6-05"), password: PARENT_PASSWORD },
+    { label: "Head teacher (staff ERP)", email: demoEmail(slug, "headteacher"), password: DEMO_PASSWORD },
+    { label: "Mathematics teacher (staff ERP)", email: demoEmail(slug, "math"), password: DEMO_PASSWORD },
+    { label: "Parent portal (S1-01)", email: parentEmail(slug, "S1-01"), password: PARENT_PASSWORD },
+    { label: "Parent portal (S6-05)", email: parentEmail(slug, "S6-05"), password: PARENT_PASSWORD },
+    { label: "Student portal (S1-01)", email: studentPortalEmail(slug, "S1-01"), password: STUDENT_PORTAL_PASSWORD },
+    { label: "Student portal (S6-05)", email: studentPortalEmail(slug, "S6-05"), password: STUDENT_PORTAL_PASSWORD },
   ];
 
   return {

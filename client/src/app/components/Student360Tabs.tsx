@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api, downloadPdf } from "../api/client";
 import { useAuth } from "../state/AuthContext";
+import { IdCardPreview, type IdCardTemplateId } from "./IdCardPreview";
 
 type Props = { schoolSlug: string; studentId: string };
 
@@ -13,6 +14,8 @@ export const Student360Tabs: React.FC<Props> = ({ schoolSlug, studentId }) => {
   const [medical, setMedical] = useState({ allergies: "", conditions: "", emergencyContact: "", emergencyPhone: "" });
   const [biometricId, setBiometricId] = useState("");
   const [certForm, setCertForm] = useState({ title: "Certificate of Achievement", body: "" });
+  const [idCardTemplate, setIdCardTemplate] = useState<IdCardTemplateId>("default");
+  const [schoolName, setSchoolName] = useState("School");
 
   const reload = () => {
     api.get(`/s/${schoolSlug}/api/students/${studentId}/360`).then((res) => {
@@ -29,6 +32,17 @@ export const Student360Tabs: React.FC<Props> = ({ schoolSlug, studentId }) => {
   };
 
   useEffect(() => { reload(); }, [schoolSlug, studentId]);
+
+  useEffect(() => {
+    api.get(`/s/${schoolSlug}/api/settings`).then((res) => {
+      const ext = (res.data?.brandingExtendedJson ?? {}) as { idCardTemplate?: string };
+      const t = ext.idCardTemplate ?? "default";
+      if (t === "uganda_national" || t === "makerere") setIdCardTemplate(t);
+      else setIdCardTemplate("default");
+      const b = (res.data?.brandingJson ?? {}) as { name?: string; logoText?: string };
+      setSchoolName(b.logoText ?? b.name ?? "School");
+    }).catch(() => {});
+  }, [schoolSlug]);
 
   const saveMedical = async () => {
     await api.patch(`/s/${schoolSlug}/api/students/${studentId}/medical`, { medicalJson: medical, biometricId });
@@ -351,34 +365,21 @@ export const Student360Tabs: React.FC<Props> = ({ schoolSlug, studentId }) => {
 
         {tab === "id-card" && (
           <div className="bg-slate-950/20 rounded-xl border border-slate-800/80 p-4 space-y-4">
-            <div className="flex justify-center py-2">
-              <div className="border border-slate-700 bg-white shadow-xl rounded-2xl p-5 w-72 text-slate-900 flex flex-col items-center text-center space-y-4 relative overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-2.5 bg-gradient-to-r from-blue-600 to-indigo-600" />
-                <div className="w-full">
-                  <h4 className="font-extrabold text-sm uppercase tracking-wider text-indigo-900">Student Identity Card</h4>
-                  <div className="w-full h-px bg-slate-200 my-2" />
-                </div>
-                
-                {data.student?.photoUrl ? (
-                  <img src={data.student.photoUrl} alt="" className="w-24 h-24 object-cover rounded-xl border border-slate-200 shadow-sm" />
-                ) : (
-                  <div className="w-24 h-24 rounded-xl bg-slate-100 flex items-center justify-center border border-slate-200 shadow-sm">
-                    <span className="text-2xl font-bold text-slate-405">
-                      {data.student?.firstName?.[0] ?? ""}{data.student?.lastName?.[0] ?? ""}
-                    </span>
-                  </div>
-                )}
-                
-                <div>
-                  <p className="font-bold text-base text-slate-900 leading-tight">{data.student?.firstName} {data.student?.lastName}</p>
-                  <p className="text-xs font-mono text-slate-500 mt-1 font-semibold">ADM. NO: {data.student?.admissionNumber}</p>
-                </div>
-              </div>
-            </div>
-            
+            <p className="text-xs text-slate-500 text-center">
+              Template from School settings → Branding → ID cards. PDF includes front, back, and barcode.
+            </p>
+            <IdCardPreview
+              template={idCardTemplate}
+              schoolName={schoolName}
+              firstName={data.student?.firstName ?? ""}
+              lastName={data.student?.lastName ?? ""}
+              identifier={data.student?.admissionNumber ?? ""}
+              subtitle={data.student?.className}
+              kind="student"
+            />
             <div className="flex justify-center pt-2">
               <button type="button" className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition-all duration-200" onClick={() => downloadPdf(`/s/${schoolSlug}/api/student-mgmt/students/${studentId}/pdf/id-card`)}>
-                Download ID Card PDF
+                Download ID Card PDF (front + back)
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { db } from "../db";
 import {
   students, invoices, reportCards, attendanceRecords, attendanceSessions,
   announcements, assignments, assignmentSubmissions, studentLeaveRequests,
+  gatePasses, disciplineIncidents, portalMessages,
 } from "../db/schema";
 import { requirePortalAuth } from "../middleware/portal-auth";
 import { filterStudentsForPortal } from "../services/portal-access";
@@ -54,6 +55,35 @@ portalEnhancementsRouter.get("/dashboard/summary", async (req, res, next) => {
         eq(announcements.tenantId, tenant.id), eq(announcements.published, true),
       )))[0]?.n ?? 0;
 
+      const pendingLeaves = studentIds.length
+        ? (await db.select({ n: sql<number>`count(*)` }).from(studentLeaveRequests).where(and(
+          eq(studentLeaveRequests.tenantId, tenant.id),
+          inArray(studentLeaveRequests.studentId, studentIds),
+          eq(studentLeaveRequests.status, "pending"),
+        )))[0]?.n ?? 0
+        : 0;
+
+      const gatePassCount = studentIds.length
+        ? Number((await db.select({ n: sql<number>`count(*)` }).from(gatePasses).where(and(
+          eq(gatePasses.tenantId, tenant.id), inArray(gatePasses.studentId, studentIds),
+        )))[0]?.n ?? 0)
+        : 0;
+
+      const disciplineCount = studentIds.length
+        ? Number((await db.select({ n: sql<number>`count(*)` }).from(disciplineIncidents).where(and(
+          eq(disciplineIncidents.tenantId, tenant.id), inArray(disciplineIncidents.studentId, studentIds),
+        )))[0]?.n ?? 0)
+        : 0;
+
+      const unreadMessages = studentIds.length
+        ? Number((await db.select({ n: sql<number>`count(*)` }).from(portalMessages).where(and(
+          eq(portalMessages.tenantId, tenant.id),
+          inArray(portalMessages.studentId, studentIds),
+          eq(portalMessages.senderType, "staff"),
+          sql`${portalMessages.readAt} is null`,
+        )))[0]?.n ?? 0)
+        : 0;
+
       return res.json({
         success: true,
         data: {
@@ -66,6 +96,10 @@ portalEnhancementsRouter.get("/dashboard/summary", async (req, res, next) => {
           attendanceAbsent: Number(attendanceStats[0]?.absent ?? 0),
           publishedReportCards: Number(reportCount),
           noticeboardCount: Number(noticeCount),
+          pendingLeaves: Number(pendingLeaves),
+          gatePassCount,
+          disciplineCount,
+          unreadStaffMessages: unreadMessages,
           children: children.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName, admissionNumber: c.admissionNumber })),
         },
       });
@@ -111,6 +145,31 @@ portalEnhancementsRouter.get("/dashboard/summary", async (req, res, next) => {
         pendingLeaves: leaves.filter((l) => l.status === "pending").length,
       },
     });
+  } catch (e) { next(e); }
+});
+
+portalEnhancementsRouter.get("/notifications", async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    if (principal.kind !== "parent") {
+      return res.json({ success: true, data: [] });
+    }
+    const { getPortalAccessibleStudentIds } = await import("../services/portal-access");
+    const { buildParentPortalExtras } = await import("../services/portal-parent-data");
+    const studentIds = await getPortalAccessibleStudentIds(principal);
+    const extras = await buildParentPortalExtras(tenant.id, studentIds, principal);
+    res.json({ success: true, data: extras.notifications });
+  } catch (e) { next(e); }
+});
+
+portalEnhancementsRouter.patch("/messages/:id/read", async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    const { markPortalMessageRead } = await import("../services/portal-parent-data");
+    await markPortalMessageRead(tenant.id, principal, req.params.id);
+    res.json({ success: true });
   } catch (e) { next(e); }
 });
 

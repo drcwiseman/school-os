@@ -70,8 +70,11 @@ export const DemoDataPanel: React.FC<Props> = ({ schoolSlug, showAdminLink }) =>
           Add missing only
         </button>
       </div>
-      <div className="text-xs text-slate-500 space-y-1 font-mono">
-        <p>Parent portal: parent.s1.01@{schoolSlug}.demo / Parent123!</p>
+      <div className="text-xs text-slate-500 space-y-1 font-mono border-t border-slate-800 pt-3">
+        <p className="text-slate-400 font-sans font-semibold mb-1">After demo load — portal (same URL for both):</p>
+        <p>Parent: parent.s1.01@{schoolSlug}.demo / Parent123!</p>
+        <p>Student: student.s1.01@{schoolSlug}.demo / Student123!</p>
+        <p className="text-slate-400 font-sans font-semibold mt-2 mb-1">Staff ERP (not portal):</p>
         <p>Head teacher: headteacher@{schoolSlug}.demo / Demo123!</p>
       </div>
       {showAdminLink && (

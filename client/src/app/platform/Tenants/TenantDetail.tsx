@@ -21,6 +21,7 @@ import {
 import { api } from "../../api/client";
 import { absoluteSchoolUrl, normalizeAppUrl } from "../../lib/app-origin";
 import { useToast } from "../../components/Toast";
+import { ImpersonationPicker } from "../components/ImpersonationPicker";
 import {
   COUNTRY_OPTIONS,
   CURRENCY_OPTIONS,
@@ -75,6 +76,9 @@ export const TenantDetail: React.FC = () => {
     loginUrl: string;
     parentPortalUrl?: string;
     studentPortalUrl?: string;
+    portal?: {
+      samples?: { parent: { email: string }[]; student: { email: string }[] };
+    };
     users: { id: string; email: string; firstName: string; lastName: string; status: string; roleName: string | null; isPrimaryAdmin: boolean }[];
   } | null>(null);
   const [resetCreds, setResetCreds] = useState<{ email: string; temporaryPassword: string } | null>(null);
@@ -195,10 +199,10 @@ export const TenantDetail: React.FC = () => {
     }
   };
 
-  const loginAsAdmin = async (readOnly = false) => {
+  const loginAsAdmin = async (readOnly = false, userId?: string) => {
     if (!slug) return;
     try {
-      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly });
+      const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly, userId });
       const raw = res.data.url?.startsWith("http")
         ? res.data.url
         : `${window.location.origin}${res.data.url}`;
@@ -296,22 +300,6 @@ export const TenantDetail: React.FC = () => {
             <ExternalLink size={15} />
             Open school
           </a>
-          <button
-            type="button"
-            onClick={() => loginAsAdmin(false)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            <UserCog size={15} />
-            Login as admin
-          </button>
-          <button
-            type="button"
-            onClick={() => loginAsAdmin(true)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            title="Read-only shadow"
-          >
-            Shadow
-          </button>
         </div>
       </div>
 
@@ -320,6 +308,18 @@ export const TenantDetail: React.FC = () => {
         <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2 mb-3">
           <LogIn size={16} /> School login
         </h2>
+        {loginAccess?.portal?.samples && (
+          <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-950 space-y-1 font-mono">
+            <p className="font-semibold font-sans text-emerald-900">Demo portal logins (password Parent123! / Student123!)</p>
+            {loginAccess.portal.samples.parent[0] && (
+              <p>Parent: {loginAccess.portal.samples.parent[0].email}</p>
+            )}
+            {loginAccess.portal.samples.student[0] && (
+              <p>Student: {loginAccess.portal.samples.student[0].email}</p>
+            )}
+            <p className="font-sans text-emerald-800">Full list: school Admin → Portal tab</p>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-3 text-sm mb-4">
           {[
             { label: "Staff ERP login", url: schoolLoginUrl },
@@ -340,6 +340,12 @@ export const TenantDetail: React.FC = () => {
               </button>
             </div>
           ))}
+        </div>
+        <div className="rounded-md border border-blue-100 bg-blue-50/50 p-4 mb-4">
+          <p className="text-xs font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+            <UserCog size={14} /> Impersonate by role or user
+          </p>
+          {slug && <ImpersonationPicker slug={slug} schoolName={tenant?.name} />}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm mb-4">
           <button
@@ -396,7 +402,18 @@ export const TenantDetail: React.FC = () => {
                       )}
                     </td>
                     <td className="px-3 py-2 text-slate-600">{u.roleName ?? "—"}</td>
-                    <td className="px-3 py-2 capitalize text-slate-600">{u.status}</td>
+                    <td className="px-3 py-2">
+                      <span className="capitalize text-slate-600">{u.status}</span>
+                      {u.status === "active" && (
+                        <button
+                          type="button"
+                          className="ml-2 text-[11px] font-medium text-blue-600 hover:underline"
+                          onClick={() => loginAsAdmin(false, u.id)}
+                        >
+                          Login as
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

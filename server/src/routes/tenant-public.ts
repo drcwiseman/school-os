@@ -42,4 +42,12 @@ router.get("/school-info", resolveTenant, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get("/portal-hints", resolveTenant, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getPortalLoginHints } = await import("../services/portal-login");
+    res.json({ success: true, data: await getPortalLoginHints(tenant.id, tenant.slug) });
+  } catch (e) { next(e); }
+});
+
 export default router;

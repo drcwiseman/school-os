@@ -615,18 +615,10 @@ export const SystemUtilitiesPanel: React.FC<{ schoolSlug: string }> = ({ schoolS
   );
 };
 
-export const PortalDashboardsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug }) => (
-  <div className="card p-8 space-y-4 max-w-2xl">
-    <h3 className="font-semibold text-white text-lg">Student & parent portal</h3>
-    <p className="text-sm text-slate-400">Separate login for parents and students — fees, attendance, report cards, homework, and notices.</p>
-    <ul className="text-sm text-slate-300 space-y-2">
-      <li className="flex gap-2"><span className="text-primary-400">•</span> Fee balances and online payment</li>
-      <li className="flex gap-2"><span className="text-primary-400">•</span> Attendance and published report cards</li>
-      <li className="flex gap-2"><span className="text-primary-400">•</span> School noticeboard announcements</li>
-      <li className="flex gap-2"><span className="text-primary-400">•</span> Messaging to school staff</li>
-    </ul>
-    <a href={`/s/${schoolSlug}/portal/login`} target="_blank" rel="noreferrer" className="btn-primary inline-flex">Open portal login</a>
-  </div>
+import { PortalLoginsPanel } from "./PortalLoginsPanel";
+
+export const PortalDashboardsPanel: React.FC<{ schoolSlug: string }> = (props) => (
+  <PortalLoginsPanel {...props} />
 );
 
 export const AuditPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug }) => {

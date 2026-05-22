@@ -4,7 +4,8 @@ import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
-import { Loader2, Receipt, Wallet } from "lucide-react";
+import { Loader2, Receipt, Wallet, DollarSign } from "lucide-react";
+import { PageTabs } from "../components/PageTabs";
 import { countryLabel, majorFromMinor, minorFromMajor, moneyInputStep } from "../../lib/currencies";
 import {
   AccountsDashboardPanel,
@@ -256,58 +257,55 @@ export const Finance: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      </div>
-    );
-  }
-
-  const tabBtn = (t: FinanceTab) =>
-    `shrink-0 px-4 py-2 rounded-lg text-sm capitalize whitespace-nowrap ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`;
-
   const amountStep = moneyInputStep(currency);
   const regionLabel = countryLabel(country);
 
+  const financeTabs: { id: FinanceTab; label: string }[] = [
+    { id: "overview", label: "Dashboard" },
+    ...(hasPermission("finance.invoice.create") ? [{ id: "billing" as const, label: "Billing" }] : []),
+    { id: "collect", label: "Collect payment" },
+    { id: "payments", label: "Payments" },
+    { id: "fees", label: "Fee structures" },
+    { id: "auto-invoices", label: "Auto invoices" },
+    { id: "debtors", label: "Debtors" },
+    { id: "receipts", label: "Receipts" },
+    { id: "aging", label: "Arrears" },
+    { id: "concessions", label: "Concessions" },
+    { id: "discounts", label: "Discounts" },
+    { id: "donations", label: "Donations" },
+    { id: "budgets", label: "Budgets" },
+    { id: "income", label: "Income & expense" },
+    { id: "gateways", label: "Gateways" },
+    { id: "accounting", label: "Accounting" },
+    { id: "statements", label: "Statements" },
+  ];
+
+  const panelTabsNeedLoad = ["overview", "billing", "collect", "payments", "fees", "debtors", "receipts", "aging", "accounting", "statements"];
+  const showPanelLoader = loading && panelTabsNeedLoad.includes(tab);
+
   return (
-    <div className="space-y-6 animate-fade-in w-full min-w-0">
+    <div className="page-shell">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Finance</h1>
+        <div className="min-w-0">
+          <h1 className="page-title flex items-center gap-2">
+            <DollarSign className="w-7 h-7 text-emerald-400 shrink-0" />
+            Finance
+          </h1>
           <p className="text-slate-400 mt-1 text-sm">
-            All amounts in <span className="text-slate-300 font-medium">{currency}</span>
+            Amounts in <span className="text-slate-300 font-medium">{currency}</span>
             {regionLabel ? <> · {regionLabel}</> : null}
           </p>
-          <p className="text-slate-400 mt-1">Fee management, accounting, concessions, budgets, and collections</p>
+          <p className="text-slate-500 mt-1 text-sm hidden sm:block">Fees by term, billing, collections, and accounts</p>
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto pb-1">
-        <div className="flex gap-2 flex-nowrap">
-        <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>dashboard</button>
-        {hasPermission("finance.invoice.create") && (
-          <button type="button" onClick={() => setTab("billing")} className={tabBtn("billing")}>billing</button>
-        )}
-        <button type="button" onClick={() => setTab("collect")} className={tabBtn("collect")}>collect</button>
-        <button type="button" onClick={() => setTab("payments")} className={tabBtn("payments")}>payment history</button>
-        <button type="button" onClick={() => setTab("fees")} className={tabBtn("fees")}>fee types</button>
-        <button type="button" onClick={() => setTab("auto-invoices")} className={tabBtn("auto-invoices")}>auto invoices</button>
-        <button type="button" onClick={() => setTab("concessions")} className={tabBtn("concessions")}>concessions</button>
-        <button type="button" onClick={() => setTab("discounts")} className={tabBtn("discounts")}>discounts</button>
-        <button type="button" onClick={() => setTab("donations")} className={tabBtn("donations")}>donations</button>
-        <button type="button" onClick={() => setTab("budgets")} className={tabBtn("budgets")}>budgets</button>
-        <button type="button" onClick={() => setTab("income")} className={tabBtn("income")}>income & expense</button>
-        <button type="button" onClick={() => setTab("gateways")} className={tabBtn("gateways")}>gateways</button>
-        <button type="button" onClick={() => setTab("debtors")} className={tabBtn("debtors")}>debtors</button>
-        <button type="button" onClick={() => setTab("receipts")} className={tabBtn("receipts")}>receipts</button>
-        <button type="button" onClick={() => setTab("aging")} className={tabBtn("aging")}>arrears</button>
-        <button type="button" onClick={() => setTab("accounting")} className={tabBtn("accounting")}>accounting</button>
-        <button type="button" onClick={() => setTab("statements")} className={tabBtn("statements")}>statements</button>
-        </div>
-      </div>
+      <PageTabs tabs={financeTabs} value={tab} onChange={setTab} />
 
-      {tab === "overview" && schoolSlug && (
+      {showPanelLoader && (
+        <div className="content-loader"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>
+      )}
+
+      {!showPanelLoader && tab === "overview" && schoolSlug && (
         <>
           <AccountsDashboardPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -315,9 +313,10 @@ export const Finance: React.FC = () => {
             <StatCard label="Total Collected" value={formatMoney(stats?.totalPaid)} icon={Receipt} />
             <StatCard label="Unpaid Invoices" value={String(stats?.unpaidCount ?? 0)} icon={Wallet} />
           </div>
-          <div className="card overflow-x-auto w-full">
+          <div className="card overflow-hidden w-full min-w-0">
             <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Recent Invoices</h3></div>
-            <table className="table">
+            <div className="table-wrap">
+            <table className="table min-w-[520px]">
               <thead><tr><th>Invoice No</th><th>Amount</th><th>Paid</th><th>Status</th>{hasPermission("finance.invoice.create") && <th>Actions</th>}</tr></thead>
               <tbody>
                 {invoices.length === 0 ? (
@@ -341,12 +340,13 @@ export const Finance: React.FC = () => {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}
 
-      {tab === "billing" && hasPermission("finance.invoice.create") && (
-        <div className="grid md:grid-cols-2 gap-6">
+      {!showPanelLoader && tab === "billing" && hasPermission("finance.invoice.create") && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card p-6 space-y-4">
             <h3 className="font-semibold text-white">Create invoice</h3>
             <form onSubmit={createInvoice} className="space-y-3">
@@ -412,8 +412,8 @@ export const Finance: React.FC = () => {
         </div>
       )}
 
-      {tab === "collect" && hasPermission("finance.payment.create") && (
-        <div className="card p-6 max-w-lg space-y-4">
+      {!showPanelLoader && tab === "collect" && hasPermission("finance.payment.create") && (
+        <div className="card p-6 w-full max-w-lg mx-auto sm:mx-0 space-y-4">
           <h3 className="font-semibold text-white">Record payment</h3>
           <form onSubmit={recordPayment} className="space-y-3">
             <div>
@@ -449,7 +449,7 @@ export const Finance: React.FC = () => {
         </div>
       )}
 
-      {tab === "payments" && schoolSlug && (
+      {!showPanelLoader && tab === "payments" && schoolSlug && (
         <div className="space-y-4">
           <PaymentHistoryPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />
           {hasPermission("finance.refund.create") && payments.length > 0 && (
@@ -468,7 +468,7 @@ export const Finance: React.FC = () => {
       {tab === "gateways" && schoolSlug && <PaymentGatewaysPanel schoolSlug={schoolSlug} />}
       {tab === "income" && schoolSlug && <IncomeExpensePanel schoolSlug={schoolSlug} formatMoney={formatMoney} />}
 
-      {tab === "fees" && (
+      {!showPanelLoader && tab === "fees" && (
         <div className="space-y-6">
           {hasPermission("finance.invoice.create") && (
             <div className="grid md:grid-cols-2 gap-6">
@@ -528,9 +528,10 @@ export const Finance: React.FC = () => {
               </div>
             </div>
           )}
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden w-full min-w-0">
           <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Fee structures</h3></div>
-          <table className="table">
+          <div className="table-wrap">
+          <table className="table min-w-[480px]">
             <thead><tr><th>Name</th><th>Active</th><th>Actions</th></tr></thead>
             <tbody>
               {feeStructures.length === 0 ? (
@@ -555,6 +556,7 @@ export const Finance: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
           {structureDetail && expandedStructureId && (
             <div className="p-4 border-t border-slate-700/50 bg-slate-900/30">
               <h4 className="text-sm font-medium text-white mb-2">{structureDetail.name} — line items</h4>
@@ -573,19 +575,19 @@ export const Finance: React.FC = () => {
         </div>
       )}
 
-      {tab === "debtors" && (
-        <div className="card overflow-hidden">
+      {!showPanelLoader && tab === "debtors" && (
+        <div className="card overflow-hidden w-full min-w-0">
           <DebtorsSection debtors={debtors} formatMoney={formatMoney} />
         </div>
       )}
 
-      {tab === "receipts" && (
-        <div className="card overflow-hidden">
+      {!showPanelLoader && tab === "receipts" && (
+        <div className="card overflow-hidden w-full min-w-0">
           <ReceiptsSection receipts={receipts} formatMoney={formatMoney} />
         </div>
       )}
 
-      {tab === "aging" && aging && (
+      {!showPanelLoader && tab === "aging" && aging && (
         <div className="grid md:grid-cols-4 gap-4">
           {(["current", "d30", "d60", "d90"] as const).map((k) => (
             <div key={k} className="card p-4">
@@ -597,7 +599,7 @@ export const Finance: React.FC = () => {
         </div>
       )}
 
-      {tab === "accounting" && (
+      {!showPanelLoader && tab === "accounting" && (
         <div className="space-y-4">
           <div className="card p-4 flex gap-2">
             <button type="button" className="btn-primary" onClick={async () => {
@@ -612,9 +614,10 @@ export const Finance: React.FC = () => {
             <h3 className="font-semibold text-white mb-2">Chart of accounts</h3>
             {accounts.map((a) => <p key={a.id} className="text-slate-300 text-sm">{a.code} — {a.name}</p>)}
           </div>
-          <div className="card overflow-hidden">
+          <div className="card overflow-hidden w-full min-w-0">
             <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">General ledger</h3></div>
-            <table className="table">
+            <div className="table-wrap">
+            <table className="table min-w-[560px]">
               <thead><tr><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead>
               <tbody>
                 {ledger.map((l, i) => (
@@ -627,11 +630,12 @@ export const Finance: React.FC = () => {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
 
-      {tab === "statements" && statements && (
+      {!showPanelLoader && tab === "statements" && statements && (
         <div className="grid md:grid-cols-2 gap-4">
           <div className="card p-5">
             <h3 className="font-semibold text-white">Profit & Loss</h3>
@@ -654,7 +658,8 @@ function PaymentsSection({ payments, formatMoney, canVoid, onVoid }: { payments:
   return (
     <>
       <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Payments</h3></div>
-      <table className="table">
+      <div className="table-wrap">
+      <table className="table min-w-[520px]">
         <thead>
           <tr>
             <th>Receipt</th>
@@ -686,6 +691,7 @@ function PaymentsSection({ payments, formatMoney, canVoid, onVoid }: { payments:
           ))}
         </tbody>
       </table>
+      </div>
     </>
   );
 }
@@ -694,7 +700,8 @@ function DebtorsSection({ debtors, formatMoney }: { debtors: any[]; formatMoney:
   return (
     <>
       <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Debtors</h3></div>
-      <table className="table">
+      <div className="table-wrap">
+      <table className="table min-w-[400px]">
         <thead><tr><th>Invoice</th><th>Balance</th><th>Status</th></tr></thead>
         <tbody>
           {debtors.map((d) => (
@@ -702,6 +709,7 @@ function DebtorsSection({ debtors, formatMoney }: { debtors: any[]; formatMoney:
           ))}
         </tbody>
       </table>
+      </div>
     </>
   );
 }
@@ -710,7 +718,8 @@ function ReceiptsSection({ receipts, formatMoney }: { receipts: any[]; formatMon
   return (
     <>
       <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Receipts</h3></div>
-      <table className="table">
+      <div className="table-wrap">
+      <table className="table min-w-[400px]">
         <thead><tr><th>Receipt No</th><th>Amount</th><th>Date</th></tr></thead>
         <tbody>
           {receipts.map((r) => (
@@ -718,6 +727,7 @@ function ReceiptsSection({ receipts, formatMoney }: { receipts: any[]; formatMon
           ))}
         </tbody>
       </table>
+      </div>
     </>
   );
 }

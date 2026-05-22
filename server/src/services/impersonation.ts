@@ -5,6 +5,112 @@ import { userAuthColumns } from "../lib/user-columns";
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { createSession } from "../middleware/auth";
 
+export type ImpersonationTargetUser = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+};
+
+export type ImpersonationTargetRow = ImpersonationTargetUser & {
+  roleNames: string[];
+};
+
+/** All active ERP users with roles (for platform impersonation picker). */
+export async function listImpersonationTargets(tenantId: string): Promise<{
+  users: ImpersonationTargetRow[];
+  roles: string[];
+}> {
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      status: users.status,
+      roleName: roles.name,
+    })
+    .from(users)
+    .leftJoin(userRoles, eq(userRoles.userId, users.id))
+    .leftJoin(roles, eq(roles.id, userRoles.roleId))
+    .where(and(eq(users.tenantId, tenantId), isNull(users.deletedAt)))
+    .orderBy(users.firstName, users.lastName);
+
+  const byId = new Map<string, ImpersonationTargetRow>();
+  for (const row of rows) {
+    let entry = byId.get(row.id);
+    if (!entry) {
+      entry = {
+        id: row.id,
+        email: row.email,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        status: row.status,
+        roleNames: [],
+      };
+      byId.set(row.id, entry);
+    }
+    if (row.roleName && !entry.roleNames.includes(row.roleName)) {
+      entry.roleNames.push(row.roleName);
+    }
+  }
+
+  const activeUsers = [...byId.values()].filter((u) => u.status === "active");
+  const roleSet = new Set<string>();
+  for (const u of activeUsers) {
+    for (const r of u.roleNames) roleSet.add(r);
+  }
+  const roleNames = [...roleSet].sort((a, b) => a.localeCompare(b));
+  return { users: activeUsers, roles: roleNames };
+}
+
+/** Resolve which user to impersonate (explicit user, first match for role, or default admin). */
+export async function resolveImpersonationUser(
+  tenantId: string,
+  opts: { userId?: string; roleName?: string },
+): Promise<ImpersonationTargetUser> {
+  if (opts.userId) {
+    const [user] = await db
+      .select(userAuthColumns)
+      .from(users)
+      .where(
+        and(eq(users.id, opts.userId), eq(users.tenantId, tenantId), isNull(users.deletedAt)),
+      )
+      .limit(1);
+    if (!user || user.status !== "active") {
+      throw new Error("User not found or inactive");
+    }
+    return user;
+  }
+
+  if (opts.roleName?.trim()) {
+    const roleFilter = opts.roleName.trim();
+    const rows = await db
+      .select(userAuthColumns)
+      .from(users)
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .where(
+        and(
+          eq(users.tenantId, tenantId),
+          isNull(users.deletedAt),
+          eq(users.status, "active"),
+          eq(roles.name, roleFilter),
+        ),
+      )
+      .orderBy(users.email);
+    if (!rows.length) {
+      throw new Error(`No active user with role "${roleFilter}"`);
+    }
+    return rows[0];
+  }
+
+  const fallback = await findImpersonationTargetUser(tenantId);
+  if (!fallback) throw new Error("No school user found — add an admin when creating the school");
+  return fallback;
+}
+
 export async function findImpersonationTargetUser(tenantId: string) {
   const allUsers = await db
     .select({ ...userAuthColumns, roleName: roles.name })

@@ -31,7 +31,10 @@ const FACILITIES_QUICK: { tab: FacilitiesTabId; name: string; perm: string; feat
   { tab: "hostel", name: "Hostel", perm: "boarding.view", feature: MODULE_FEATURE_CODES.boarding, icon: Home },
 ];
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<{ mobileOpen?: boolean; onMobileClose?: () => void }> = ({
+  mobileOpen = false,
+  onMobileClose,
+}) => {
   const { schoolSlug, logout, user, hasPermission, moduleEnabled } = useAuth();
   const location = useLocation();
 
@@ -133,7 +136,14 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-64 border-r border-slate-800 bg-surface flex flex-col h-screen">
+    <aside
+      className={`
+        w-64 max-w-[85vw] border-r border-slate-800 bg-surface flex flex-col h-full shrink-0 z-50
+        fixed inset-y-0 left-0 transition-transform duration-200 ease-out
+        lg:static lg:translate-x-0 lg:max-w-none
+        ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+      `}
+    >
       <div className="p-6 border-b border-slate-800">
         <h1 className="text-xl font-bold text-white tracking-tight">School OS</h1>
         <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">{schoolSlug}</p>
@@ -150,6 +160,7 @@ export const Sidebar: React.FC = () => {
                 to={item.path}
                 target={external ? "_blank" : undefined}
                 rel={external ? "noopener noreferrer" : undefined}
+                onClick={onMobileClose}
                 className={`nav-item flex-1 ${active ? "active" : ""} ${item.facilitiesTab && item.facilitiesTab !== "overview" ? "pl-8 text-[13px]" : ""}`}
               >
                 <Icon className="w-5 h-5" />

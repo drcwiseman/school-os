@@ -47,6 +47,7 @@ import messagingRoutes from "./messaging";
 import eventsRoutes from "./events";
 import reportsRoutes from "./reports";
 import portalRoutes from "./portal";
+import portalLoginRoute from "./portal-login-route";
 import { portalEnhancementsRouter } from "./portal-enhancements";
 import { adminEnhancementsRouter } from "./admin-enhancements";
 import settingsRoutes from "./settings";
@@ -115,6 +116,7 @@ router.use("/s/:schoolSlug/api/staff-hostel", ...schoolApi, ...featureGuard("sta
 router.use("/s/:schoolSlug/api/messaging",   ...schoolApi, ...featureGuard("messaging"), messagingRoutes, messagingEnhancementsRoutes);
 router.use("/s/:schoolSlug/api/events",      ...schoolApi, ...featureGuard("messaging"), eventsRoutes);
 router.use("/s/:schoolSlug/api/reports",     ...schoolApi, ...featureGuard("reports"), reportsRoutes);
+router.use("/s/:schoolSlug/api/portal/login", resolveTenant, portalLoginRoute);
 router.use("/s/:schoolSlug/api/portal",      resolveTenant, requireTenantFeature("portal_enabled"), portalRoutes, portalEnhancementsRouter);
 router.use("/s/:schoolSlug/api/saas",        ...schoolApi, saasRoutes);
 

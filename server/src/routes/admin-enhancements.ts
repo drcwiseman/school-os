@@ -30,6 +30,15 @@ const APPEARANCE_PRESETS = [
   { id: "light-slate", label: "Light Slate", accent: "#475569", mode: "light" as const },
 ];
 
+adminEnhancementsRouter.get("/portal-logins", requirePermission("settings.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { listSchoolPortalLogins } = await import("../services/school-portal-logins");
+    const data = await listSchoolPortalLogins(tenant.id, tenant.slug);
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
+
 adminEnhancementsRouter.get("/overview", requirePermission("settings.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;

@@ -64,7 +64,7 @@ import {
 } from "../middleware/platform-auth";
 import { platformSessionCookieOptions } from "../lib/platform-cookie";
 import { validate } from "../utils/validate";
-import { NotFoundError, ConflictError, UnauthorizedError } from "../middleware/error";
+import { NotFoundError, ConflictError, UnauthorizedError, BadRequestError } from "../middleware/error";
 import { requirePlatformPermission } from "../lib/platform-permissions";
 import { createAuditLog } from "../services/audit";
 import { platformAdminAuthColumns, platformAdminPublic } from "../db/platform-admin-columns";
@@ -153,7 +153,9 @@ import {
   TICKET_CATEGORIES,
 } from "../services/platform-support";
 import {
-  createImpersonationToken, findImpersonationTargetUser,
+  createImpersonationToken,
+  listImpersonationTargets,
+  resolveImpersonationUser,
 } from "../services/impersonation";
 import {
   getTenantAddonsDetailed, activateTenantAddon, deactivateTenantAddon, listAddonCatalog,
@@ -1445,15 +1447,17 @@ router.get("/tenants/:slug/logins", requirePlatformAuth, requirePlatformPermissi
     const { listSchoolErpUsers } = await import("../services/platform-school-logins");
     const { schoolLoginPath } = await import("../lib/app-origin");
     const users = await listSchoolErpUsers(tenant.id);
-    const { portalLoginPath } = await import("../lib/app-origin");
+    const { listSchoolPortalLogins } = await import("../services/school-portal-logins");
+    const portal = await listSchoolPortalLogins(tenant.id, tenant.slug);
     res.json({
       success: true,
       data: {
         slug: tenant.slug,
         schoolName: tenant.name,
         loginUrl: await schoolLoginPath(tenant.slug),
-        parentPortalUrl: await portalLoginPath(tenant.slug),
-        studentPortalUrl: await portalLoginPath(tenant.slug),
+        parentPortalUrl: portal.portalUrl,
+        studentPortalUrl: portal.portalUrl,
+        portal,
         users,
       },
     });
@@ -1477,15 +1481,39 @@ router.post("/tenants/:slug/reset-admin-password", requirePlatformAuth, requireP
   },
 );
 
+router.get("/tenants/:slug/impersonation-targets", requirePlatformAuth, requirePlatformPermission("tenants.read"),
+  async (req, res, next) => {
+    try {
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
+      if (!tenant) throw new NotFoundError("Tenant not found");
+      const data = await listImpersonationTargets(tenant.id);
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
 router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPermission("tenants.read"),
-  validate({ body: z.object({ readOnly: z.boolean().optional() }) }),
+  validate({
+    body: z.object({
+      readOnly: z.boolean().optional(),
+      userId: z.string().uuid().optional(),
+      roleName: z.string().min(1).optional(),
+    }),
+  }),
   async (req, res, next) => {
     try {
       const admin = (req as any).platformAdmin;
       const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
       if (!tenant) throw new NotFoundError("Tenant not found");
-      const target = await findImpersonationTargetUser(tenant.id);
-      if (!target) throw new NotFoundError("No school user found — add an admin when creating the school");
+      let target;
+      try {
+        target = await resolveImpersonationUser(tenant.id, {
+          userId: req.body?.userId,
+          roleName: req.body?.roleName,
+        });
+      } catch (e) {
+        throw new BadRequestError(e instanceof Error ? e.message : "Invalid impersonation target");
+      }
       const readOnly = req.body?.readOnly === true;
       const row = await createImpersonationToken({
         tenantId: tenant.id,
@@ -1497,6 +1525,7 @@ router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPe
         tenantId: tenant.id,
         entityType: "user",
         entityId: target.id,
+        after: { email: target.email, readOnly },
         ip: req.ip,
       });
       const { resolveClientOrigin } = await import("../lib/app-origin");
@@ -1508,6 +1537,12 @@ router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPe
           url: base ? `${base}${path}` : path,
           expiresAt: row.expiresAt,
           readOnly: row.readOnly,
+          user: {
+            id: target.id,
+            email: target.email,
+            firstName: target.firstName,
+            lastName: target.lastName,
+          },
         },
       });
     } catch (err) { next(err); }
