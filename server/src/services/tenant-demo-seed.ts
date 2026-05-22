@@ -56,6 +56,29 @@ const SENIOR_LEVELS = [
   { name: "Senior 6", level: 6 },
 ];
 
+/** Uganda secondary calendar for academic year 2025/2026 (avoids invalid month arithmetic). */
+const UG_TERM_WINDOWS = [
+  { start: "2025-02-03", end: "2025-05-02" },
+  { start: "2025-05-26", end: "2025-08-22" },
+  { start: "2025-09-15", end: "2025-12-12" },
+] as const;
+
+function parseIsoDate(iso: string, label: string): Date {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) throw new Error(`Invalid ${label} date: ${iso}`);
+  return d;
+}
+
+function studentDob(level: number, index: number): Date {
+  const year = 2008 - level;
+  const month = (index % 12) + 1;
+  const day = Math.min(10 + (index % 15), 28);
+  return parseIsoDate(
+    `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    "student DOB",
+  );
+}
+
 type StaffSeed = {
   employeeNo: string;
   firstName: string;
@@ -260,8 +283,9 @@ export async function seedDemoDataForTenant(
   for (let i = 0; i < termNames.length; i++) {
     let [term] = await db.select().from(terms).where(and(eq(terms.tenantId, tenantId), eq(terms.name, termNames[i]))).limit(1);
     if (!term) {
-      const start = new Date(`2025-${String(i * 4 + 2).padStart(2, "0")}-01`);
-      const end = new Date(`2025-${String(i * 4 + 5).padStart(2, "0")}-28`);
+      const window = UG_TERM_WINDOWS[i];
+      const start = parseIsoDate(window.start, `${termNames[i]} start`);
+      const end = parseIsoDate(window.end, `${termNames[i]} end`);
       [term] = await db.insert(terms).values({
         tenantId,
         academicYearId: year.id,
@@ -425,7 +449,7 @@ export async function seedDemoDataForTenant(
           lastName,
           gender,
           status: "active",
-          dob: new Date(2008 - sr.level, i % 12, Math.min(10 + (i % 15), 28)),
+          dob: studentDob(sr.level, studentIndex),
         }).returning();
         created.push(`student ${admissionNumber}`);
       }
