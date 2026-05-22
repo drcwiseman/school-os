@@ -4,6 +4,8 @@ import { api, downloadPdf } from "../api/client";
 import { useToast } from "../components/Toast";
 import { BarChart3, Download, Loader2, Plus, Play, Trash2 } from "lucide-react";
 import { useAuth } from "../state/AuthContext";
+import { countryLabel } from "../../lib/currencies";
+import { formatReportRowsForDisplay } from "../../lib/format-report-rows";
 
 type SavedReport = {
   id: string;
@@ -22,7 +24,8 @@ const REPORT_TYPES = [
 
 export const Reports: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
-  const { formatMoney } = useAuth();
+  const { formatMoney, currency, country } = useAuth();
+  const [reportCurrency, setReportCurrency] = useState<string | null>(null);
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<any>(null);
@@ -46,7 +49,8 @@ export const Reports: React.FC = () => {
         api.get(`/s/${schoolSlug}/api/reports/builder`).catch(() => ({ data: [] })),
       ]);
       setCollections(c.data);
-      setDebtors(d.data ?? []);
+      setReportCurrency(c.data?.currency ?? d.currency ?? null);
+      setDebtors(Array.isArray(d.data) ? d.data : []);
       setPerformance(p.data ?? []);
       setSaved(b.data ?? []);
     } catch (err: any) {
@@ -113,7 +117,15 @@ export const Reports: React.FC = () => {
       <div className="page-header">
         <div>
           <h1 className="page-title">Reports</h1>
-          <p className="text-slate-400 mt-1">Summaries, saved report builder, and PDF exports</p>
+          <p className="text-slate-400 mt-1">
+            Summaries, saved report builder, and PDF exports
+            {reportCurrency || currency ? (
+              <span className="block text-xs text-slate-500 mt-1">
+                Finance amounts in <span className="text-slate-300 font-medium">{reportCurrency ?? currency}</span>
+                {country ? ` · ${countryLabel(country)}` : ""}
+              </span>
+            ) : null}
+          </p>
         </div>
         <div className="flex gap-2">
           <button type="button" className={section === "dashboard" ? "btn-primary text-sm" : "btn-secondary text-sm"} onClick={() => setSection("dashboard")}>Dashboard</button>
@@ -154,6 +166,37 @@ export const Reports: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {debtors.length > 0 && (
+            <div className="card p-5 overflow-hidden">
+              <h3 className="font-semibold text-white mb-3">Outstanding invoices</h3>
+              <table className="table text-sm">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {debtors.slice(0, 15).map((d: { id: string; invoiceNo?: string; totalAmount: number; paidAmount: number; balance: number; status?: string }) => (
+                    <tr key={d.id}>
+                      <td className="font-mono text-xs">{d.invoiceNo ?? d.id.slice(0, 8)}</td>
+                      <td>{formatMoney(d.totalAmount)}</td>
+                      <td>{formatMoney(d.paidAmount)}</td>
+                      <td className="text-amber-400 font-medium">{formatMoney(d.balance)}</td>
+                      <td className="capitalize">{d.status ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {debtors.length > 15 && (
+                <p className="text-xs text-slate-500 mt-2">Showing 15 of {debtors.length} — run a saved debtors report for the full list.</p>
+              )}
+            </div>
+          )}
 
           <div className="card p-5">
             <h3 className="font-semibold text-white mb-3">Recent report cards</h3>
@@ -209,9 +252,12 @@ export const Reports: React.FC = () => {
 
           {runResult && (
             <div className="card p-5">
-              <h3 className="font-semibold text-white mb-2">Results: {runResult.name}</h3>
+              <h3 className="font-semibold text-white mb-2">
+                Results: {runResult.name}
+                <span className="text-xs font-normal text-slate-500 ml-2">({reportCurrency ?? currency})</span>
+              </h3>
               <pre className="text-xs text-slate-300 overflow-auto max-h-80 bg-slate-900/50 p-3 rounded-lg">
-                {JSON.stringify(runResult.rows, null, 2)}
+                {JSON.stringify(formatReportRowsForDisplay(runResult.rows, formatMoney), null, 2)}
               </pre>
             </div>
           )}

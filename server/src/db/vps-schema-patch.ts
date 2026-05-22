@@ -3,6 +3,9 @@
  * Used at boot (ensureRuntimeSchema) and via `npm run db:repair`.
  */
 import { FACILITIES_BASE_TABLES_SQL } from "./facilities-base-sql";
+import { FACILITIES_OPERATIONS_SQL } from "./facilities-operations-sql";
+import { OPERATIONS_BASE_TABLES_SQL } from "./operations-base-sql";
+import { MESSAGING_BASE_TABLES_SQL } from "./messaging-base-sql";
 
 export const VPS_SCHEMA_PATCH_SQL: string[] = [
   `CREATE TABLE IF NOT EXISTS "staff" (
@@ -58,6 +61,9 @@ export const VPS_SCHEMA_PATCH_SQL: string[] = [
     "created_at" timestamp DEFAULT now() NOT NULL
   )`,
   ...FACILITIES_BASE_TABLES_SQL,
+  ...FACILITIES_OPERATIONS_SQL,
+  ...OPERATIONS_BASE_TABLES_SQL,
+  ...MESSAGING_BASE_TABLES_SQL,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "campus_id" uuid REFERENCES "tenant_campuses"("id") ON DELETE SET NULL`,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_enabled" boolean NOT NULL DEFAULT false`,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_secret" text`,

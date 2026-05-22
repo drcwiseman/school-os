@@ -2,37 +2,155 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { useToast } from "../Toast";
 import { useAuth } from "../../state/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronRight } from "lucide-react";
 
 type StudentOpt = { id: string; firstName: string; lastName: string; admissionNumber?: string };
 type StaffOpt = { id: string; firstName: string; lastName: string; employeeNo: string };
+type FacilitiesTab =
+  | "overview" | "library" | "cards" | "transport" | "hostel" | "activities" | "rooms"
+  | "gate-passes" | "tickets" | "staff-hostel";
 
-export const FacilitiesOverviewPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug }) => {
+const StatCard: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  valueClass?: string;
+  tab: FacilitiesTab;
+  onNavigate: (tab: FacilitiesTab) => void;
+  enabled: boolean;
+}> = ({ label, value, valueClass = "text-white", tab, onNavigate, enabled }) => (
+  <button
+    type="button"
+    disabled={!enabled}
+    onClick={() => enabled && onNavigate(tab)}
+    className={`card p-4 text-left w-full transition group ${
+      enabled
+        ? "hover:border-teal-500/40 hover:bg-slate-800/60 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+        : "opacity-50 cursor-not-allowed"
+    }`}
+  >
+    <p className="text-slate-500 text-sm">{label}</p>
+    <p className={`text-2xl font-bold mt-1 ${valueClass}`}>{value}</p>
+    {enabled && (
+      <p className="text-xs text-teal-400/90 mt-2 flex items-center gap-0.5 group-hover:text-teal-300">
+        Manage <ChevronRight className="w-3 h-3" />
+      </p>
+    )}
+  </button>
+);
+
+const QUICK_LINKS: { tab: FacilitiesTab; label: string }[] = [
+  { tab: "library", label: "Library" },
+  { tab: "cards", label: "Library cards" },
+  { tab: "transport", label: "Transport" },
+  { tab: "hostel", label: "Hostel" },
+  { tab: "activities", label: "Activities" },
+  { tab: "rooms", label: "Rooms" },
+  { tab: "gate-passes", label: "Gate passes" },
+  { tab: "tickets", label: "Tickets" },
+  { tab: "staff-hostel", label: "Staff hostel" },
+];
+
+export const FacilitiesOverviewPanel: React.FC<{
+  schoolSlug: string;
+  onNavigate: (tab: FacilitiesTab) => void;
+  availableTabs: string[];
+}> = ({ schoolSlug, onNavigate, availableTabs }) => {
+  const { toast } = useToast();
   const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const can = (tab: FacilitiesTab) => availableTabs.includes(tab);
+
   useEffect(() => {
-    api.get(`/s/${schoolSlug}/api/facilities/overview`).then((r) => setData(r.data)).catch(() => {});
-  }, [schoolSlug]);
-  if (!data) return null;
+    setLoading(true);
+    api.get(`/s/${schoolSlug}/api/facilities/overview`)
+      .then((r) => setData(r.data ?? {}))
+      .catch((err: Error) => {
+        toast(err.message || "Could not load overview", "error");
+        setData({ upcomingActivities: 0, campusRooms: 0 });
+      })
+      .finally(() => setLoading(false));
+  }, [schoolSlug, toast]);
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary-500" /></div>;
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {data.library && (
-        <>
-          <div className="card p-4"><p className="text-slate-500 text-sm">Library titles</p><p className="text-2xl font-bold text-white">{data.library.books}</p></div>
-          <div className="card p-4"><p className="text-slate-500 text-sm">Active loans</p><p className="text-2xl font-bold text-amber-400">{data.library.activeLoans}</p></div>
-        </>
-      )}
-      {data.transport && (
-        <div className="card p-4"><p className="text-slate-500 text-sm">Transport routes</p><p className="text-2xl font-bold text-white">{data.transport.routes}</p></div>
-      )}
-      {data.hostel && (
-        <div className="card p-4"><p className="text-slate-500 text-sm">Hostel occupancy</p><p className="text-2xl font-bold text-emerald-400">{data.hostel.occupied}/{data.hostel.capacity}</p></div>
-      )}
-      <div className="card p-4"><p className="text-slate-500 text-sm">Upcoming activities</p><p className="text-2xl font-bold text-violet-400">{data.upcomingActivities ?? 0}</p></div>
-      <div className="card p-4"><p className="text-slate-500 text-sm">Campus rooms</p><p className="text-2xl font-bold text-white">{data.campusRooms ?? 0}</p></div>
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {(data.library != null || can("library")) && (
+          <>
+            <StatCard
+              label="Library titles"
+              value={data.library?.books ?? 0}
+              tab="library"
+              onNavigate={onNavigate}
+              enabled={can("library")}
+            />
+            <StatCard
+              label="Active loans"
+              value={data.library?.activeLoans ?? 0}
+              valueClass="text-amber-400"
+              tab="library"
+              onNavigate={onNavigate}
+              enabled={can("library")}
+            />
+          </>
+        )}
+        {(data.transport != null || can("transport")) && (
+          <StatCard
+            label="Transport routes"
+            value={data.transport?.routes ?? 0}
+            tab="transport"
+            onNavigate={onNavigate}
+            enabled={can("transport")}
+          />
+        )}
+        {(data.hostel != null || can("hostel")) && (
+          <StatCard
+            label="Hostel occupancy"
+            value={`${data.hostel?.occupied ?? 0}/${data.hostel?.capacity ?? 0}`}
+            valueClass="text-emerald-400"
+            tab="hostel"
+            onNavigate={onNavigate}
+            enabled={can("hostel")}
+          />
+        )}
+        <StatCard
+          label="Upcoming activities"
+          value={data.upcomingActivities ?? 0}
+          valueClass="text-violet-400"
+          tab="activities"
+          onNavigate={onNavigate}
+          enabled={can("activities")}
+        />
+        <StatCard
+          label="Campus rooms"
+          value={data.campusRooms ?? 0}
+          tab="rooms"
+          onNavigate={onNavigate}
+          enabled={can("rooms")}
+        />
+      </div>
+      <div className="card p-5">
+        <h3 className="font-semibold text-white mb-3">Quick actions</h3>
+        <div className="flex flex-wrap gap-2">
+          {QUICK_LINKS.filter((q) => can(q.tab)).map((q) => (
+            <button
+              key={q.tab}
+              type="button"
+              className="btn-secondary text-sm"
+              onClick={() => onNavigate(q.tab)}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-slate-500 text-xs mt-3">Click a metric card or button to open that module and add or edit records.</p>
+      </div>
     </div>
   );
 };
 
+/** @deprecated Use LibraryCrudPanel from ./LibraryCrudPanel */
 export const LibraryManagementPanel: React.FC<{
   schoolSlug: string;
   students: StudentOpt[];
@@ -121,6 +239,27 @@ export const LibraryManagementPanel: React.FC<{
     load();
   };
 
+  const editBook = async (book: { id: string; title: string; author?: string }) => {
+    const title = window.prompt("Book title", book.title);
+    if (title == null || !title.trim()) return;
+    const author = window.prompt("Author", book.author ?? "") ?? book.author;
+    await api.patch(`/s/${schoolSlug}/api/library/books/${book.id}`, { title: title.trim(), author: author || undefined });
+    toast("Book updated", "success");
+    load();
+  };
+
+  const deleteBook = async (id: string, title: string) => {
+    if (!window.confirm(`Delete “${title}” and all its copies?`)) return;
+    try {
+      await api.delete(`/s/${schoolSlug}/api/library/books/${id}`);
+      toast("Book removed", "success");
+      if (selectedBook === id) setSelectedBook("");
+      load();
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary-500" /></div>;
 
   return (
@@ -134,6 +273,26 @@ export const LibraryManagementPanel: React.FC<{
           <div className="card p-3"><span className="text-slate-500">Cards active</span><p className="text-xl font-bold text-white">{dash.cards?.active ?? 0}</p></div>
         </div>
       )}
+      <div className="card overflow-hidden">
+        <table className="table text-sm">
+          <thead><tr><th>Title</th><th>Author</th><th>ISBN</th>{hasPermission("library.manage") && <th></th>}</tr></thead>
+          <tbody>
+            {books.map((b) => (
+              <tr key={b.id}>
+                <td>{b.title}</td>
+                <td className="text-slate-400">{b.author ?? "—"}</td>
+                <td className="text-slate-400">{b.isbn ?? "—"}</td>
+                {hasPermission("library.manage") && (
+                  <td className="space-x-2 whitespace-nowrap">
+                    <button type="button" className="btn-ghost text-xs" onClick={() => editBook(b)}>Edit</button>
+                    <button type="button" className="btn-ghost text-xs text-rose-400" onClick={() => deleteBook(b.id, b.title)}>Delete</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div className="grid lg:grid-cols-2 gap-6">
         {hasPermission("library.manage") && (
           <form onSubmit={addBook} className="card p-5 space-y-3">
@@ -311,8 +470,18 @@ export const LibraryCardsPanel: React.FC<{
                   <td>{row.card.status}</td>
                   <td className="text-slate-400">{new Date(row.card.issuedAt).toLocaleDateString()}</td>
                   <td>
-                    {hasPermission("library.manage") && row.card.status === "active" && (
-                      <button type="button" className="btn-ghost text-xs" onClick={() => setStatus(row.card.id, "suspended")}>Suspend</button>
+                    {hasPermission("library.manage") && (
+                      <span className="space-x-2">
+                        {row.card.status === "active" && (
+                          <button type="button" className="btn-ghost text-xs" onClick={() => setStatus(row.card.id, "suspended")}>Suspend</button>
+                        )}
+                        {row.card.status !== "active" && (
+                          <button type="button" className="btn-ghost text-xs" onClick={() => setStatus(row.card.id, "active")}>Activate</button>
+                        )}
+                        {row.card.status !== "lost" && (
+                          <button type="button" className="btn-ghost text-xs text-rose-400" onClick={() => setStatus(row.card.id, "lost")}>Mark lost</button>
+                        )}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -512,13 +681,29 @@ export const TransportManagementPanel: React.FC<{ schoolSlug: string; students: 
       )}
       <div className="card overflow-hidden">
         <table className="table">
-          <thead><tr><th>Student</th><th>Route</th><th>Stop</th></tr></thead>
+          <thead><tr><th>Student</th><th>Route</th><th>Stop</th><th></th></tr></thead>
           <tbody>
             {assignments.map((row: any) => (
               <tr key={row.assignment.id}>
                 <td>{row.student.admissionNumber} {row.student.firstName} {row.student.lastName}</td>
                 <td>{row.route.name}</td>
                 <td className="text-slate-400">{row.stop?.name ?? "—"}</td>
+                <td>
+                  {hasPermission("transport.manage") && (
+                    <button
+                      type="button"
+                      className="btn-ghost text-xs text-rose-400"
+                      onClick={async () => {
+                        if (!window.confirm("Remove this student from the route?")) return;
+                        await api.delete(`/s/${schoolSlug}/api/transport/assignments/${row.assignment.id}`);
+                        toast("Assignment removed", "success");
+                        load();
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -653,13 +838,28 @@ export const HostelManagementPanel: React.FC<{ schoolSlug: string; students: Stu
       </div>
       <div className="card overflow-hidden">
         <table className="table">
-          <thead><tr><th>Student</th><th>House / Room</th><th>From</th></tr></thead>
+          <thead><tr><th>Student</th><th>House / Room</th><th>From</th><th></th></tr></thead>
           <tbody>
             {allocations.map((row: any) => (
               <tr key={row.allocation.id}>
                 <td>{row.student.firstName} {row.student.lastName}</td>
                 <td>{row.house.name} / {row.room.name}</td>
                 <td className="text-slate-400">{new Date(row.allocation.fromDate).toLocaleDateString()}</td>
+                <td>
+                  {hasPermission("boarding.manage") && (
+                    <button
+                      type="button"
+                      className="btn-ghost text-xs"
+                      onClick={async () => {
+                        await api.post(`/s/${schoolSlug}/api/boarding/allocations/${row.allocation.id}/checkout`, {});
+                        toast("Student checked out of room", "success");
+                        load();
+                      }}
+                    >
+                      Check out
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -733,6 +933,22 @@ export const ActivitiesManagementPanel: React.FC<{ schoolSlug: string }> = ({ sc
     load();
   };
 
+  const editActivity = async (ev: any) => {
+    const title = window.prompt("Title", ev.title);
+    if (title == null || !title.trim()) return;
+    const venue = window.prompt("Venue", ev.venue ?? "") ?? ev.venue;
+    await api.patch(`/s/${schoolSlug}/api/facilities/activities/${ev.id}`, { title: title.trim(), venue: venue || undefined });
+    toast("Activity updated", "success");
+    load();
+  };
+
+  const removeActivity = async (id: string, title: string) => {
+    if (!window.confirm(`Delete activity “${title}”?`)) return;
+    await api.delete(`/s/${schoolSlug}/api/facilities/activities/${id}`);
+    toast("Activity deleted", "success");
+    load();
+  };
+
   if (loading) return <Loader2 className="w-6 h-6 animate-spin mx-auto" />;
 
   return (
@@ -751,7 +967,7 @@ export const ActivitiesManagementPanel: React.FC<{ schoolSlug: string }> = ({ sc
       )}
       <div className="card overflow-hidden">
         <table className="table">
-          <thead><tr><th>Activity</th><th>Type</th><th>When</th><th>Venue</th><th>Status</th></tr></thead>
+          <thead><tr><th>Activity</th><th>Type</th><th>When</th><th>Venue</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {items.map((ev) => (
               <tr key={ev.id}>
@@ -764,6 +980,14 @@ export const ActivitiesManagementPanel: React.FC<{ schoolSlug: string }> = ({ sc
                     <button type="button" className="btn-ghost text-xs" onClick={() => togglePublish(ev.id, ev.published)}>
                       {ev.published ? "Published" : "Draft"}
                     </button>
+                  )}
+                </td>
+                <td className="space-x-2 whitespace-nowrap">
+                  {hasPermission("messaging.manage") && (
+                    <>
+                      <button type="button" className="btn-ghost text-xs" onClick={() => editActivity(ev)}>Edit</button>
+                      <button type="button" className="btn-ghost text-xs text-rose-400" onClick={() => removeActivity(ev.id, ev.title)}>Delete</button>
+                    </>
                   )}
                 </td>
               </tr>
@@ -819,6 +1043,26 @@ export const RoomsManagementPanel: React.FC<{ schoolSlug: string }> = ({ schoolS
     load();
   };
 
+  const updateRoomStatus = async (id: string, status: string) => {
+    await api.patch(`/s/${schoolSlug}/api/facilities/rooms/${id}`, { status });
+    toast("Room updated", "success");
+    load();
+  };
+
+  const deleteRoom = async (id: string, name: string) => {
+    if (!window.confirm(`Delete campus room “${name}”?`)) return;
+    await api.delete(`/s/${schoolSlug}/api/facilities/rooms/${id}`);
+    toast("Room deleted", "success");
+    load();
+  };
+
+  const cancelBooking = async (id: string) => {
+    if (!window.confirm("Cancel this booking?")) return;
+    await api.delete(`/s/${schoolSlug}/api/facilities/rooms/bookings/${id}`);
+    toast("Booking cancelled", "success");
+    load();
+  };
+
   if (loading) return <Loader2 className="w-6 h-6 animate-spin mx-auto" />;
 
   const campus = data?.campus ?? [];
@@ -839,7 +1083,27 @@ export const RoomsManagementPanel: React.FC<{ schoolSlug: string }> = ({ schoolS
         <div className="card p-4">
           <h3 className="font-semibold text-white mb-2">Campus rooms</h3>
           <ul className="text-sm text-slate-300 space-y-1">
-            {campus.map((r: any) => <li key={r.id}>{r.name} · {r.status} · cap {r.capacity ?? "—"}</li>)}
+            {campus.map((r: any) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-1 border-b border-slate-800/50 last:border-0">
+                <span>{r.name} · cap {r.capacity ?? "—"}</span>
+                {hasPermission("library.manage") ? (
+                  <span className="flex items-center gap-2">
+                    <select
+                      className="input text-xs py-1 max-w-[120px]"
+                      value={r.status}
+                      onChange={(e) => updateRoomStatus(r.id, e.target.value)}
+                    >
+                      <option value="available">Available</option>
+                      <option value="occupied">Occupied</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                    <button type="button" className="btn-ghost text-xs text-rose-400" onClick={() => deleteRoom(r.id, r.name)}>Delete</button>
+                  </span>
+                ) : (
+                  <span className="text-slate-500">{r.status}</span>
+                )}
+              </li>
+            ))}
           </ul>
         </div>
         <div className="card p-4">
@@ -868,13 +1132,18 @@ export const RoomsManagementPanel: React.FC<{ schoolSlug: string }> = ({ schoolS
       )}
       <div className="card overflow-hidden">
         <table className="table text-sm">
-          <thead><tr><th>Room</th><th>Event</th><th>Start</th></tr></thead>
+          <thead><tr><th>Room</th><th>Event</th><th>Start</th><th></th></tr></thead>
           <tbody>
             {bookings.map((row: any) => (
               <tr key={row.booking.id}>
                 <td>{row.room.name}</td>
                 <td>{row.booking.title}</td>
                 <td>{new Date(row.booking.startsAt).toLocaleString()}</td>
+                <td>
+                  {hasPermission("library.manage") && (
+                    <button type="button" className="btn-ghost text-xs text-rose-400" onClick={() => cancelBooking(row.booking.id)}>Cancel</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

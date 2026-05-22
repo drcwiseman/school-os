@@ -6,7 +6,7 @@ import {
   users, sessions, tenantSettings, auditLogs, students, staff,
   tenantApiKeys, tenantWebhookEndpoints,
 } from "../db/schema";
-import { eq, and, desc, isNull, sql, gt } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, gt, ne } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -45,11 +45,23 @@ router.get("/sessions/all", ...guard, requirePermission("settings.manage"), asyn
   } catch (e) { next(e); }
 });
 
-router.post("/sessions/:id/revoke", ...guard, requirePermission("settings.manage"), async (req, res, next) => {
+router.post("/sessions/:id/revoke", ...guard, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [row] = await db.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.id, req.params.id), eq(sessions.tenantId, tenant.id))).returning();
-    if (!row) throw new NotFoundError("Session not found");
+    const user = (req as any).user;
+    const [sess] = await db.select().from(sessions).where(and(
+      eq(sessions.id, req.params.id),
+      eq(sessions.tenantId, tenant.id),
+      isNull(sessions.revokedAt),
+    )).limit(1);
+    if (!sess) throw new NotFoundError("Session not found");
+    const { getUserPermissions } = await import("../middleware/rbac");
+    const perms = await getUserPermissions(user.id, tenant.id);
+    const isAdmin = perms.includes("settings.manage");
+    if (sess.userId !== user.id && !isAdmin) {
+      return res.status(403).json({ success: false, message: "Cannot revoke another user's session" });
+    }
+    await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, sess.id));
     res.json({ success: true });
   } catch (e) { next(e); }
 });
@@ -98,11 +110,52 @@ router.put("/settings", ...guard, requirePermission("settings.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      await db.update(tenantSettings).set({ securityJson: req.body }).where(eq(tenantSettings.tenantId, tenant.id));
+      const [before] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+      const merged = { ...(before?.securityJson as Record<string, unknown> ?? {}), ...req.body };
+      await db.update(tenantSettings).set({ securityJson: merged, updatedAt: new Date() }).where(eq(tenantSettings.tenantId, tenant.id));
+      res.json({ success: true, data: merged });
+    } catch (e) { next(e); }
+  },
+);
+
+router.get("/mfa/status", ...guard, async (req, res, next) => {
+  try {
+    const user = (req as any).user;
+    const [u] = await db.select({ mfaEnabled: users.mfaEnabled }).from(users).where(eq(users.id, user.id)).limit(1);
+    res.json({ success: true, data: { enabled: Boolean(u?.mfaEnabled) } });
+  } catch (e) { next(e); }
+});
+
+router.post("/mfa/disable", ...guard,
+  validate({ body: z.object({ token: z.string().length(6) }) }),
+  async (req, res, next) => {
+    try {
+      const user = (req as any).user;
+      const [u] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+      if (!u?.mfaSecret || !verifyTotp(u.mfaSecret, req.body.token)) {
+        return res.status(400).json({ success: false, message: "Invalid code" });
+      }
+      await db.update(users).set({ mfaEnabled: false, mfaSecret: null }).where(eq(users.id, user.id));
       res.json({ success: true });
     } catch (e) { next(e); }
   },
 );
+
+router.post("/sessions/revoke-others", ...guard, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const session = (req as any).session;
+    const conditions = [
+      eq(sessions.tenantId, tenant.id),
+      eq(sessions.userId, user.id),
+      isNull(sessions.revokedAt),
+    ];
+    if (session?.id) conditions.push(ne(sessions.id, session.id));
+    await db.update(sessions).set({ revokedAt: new Date() }).where(and(...conditions));
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
 
 router.get("/activity", ...guard, requirePermission("settings.view"), async (req, res, next) => {
   try {
@@ -151,6 +204,19 @@ router.get("/api-keys", ...guard, requirePermission("settings.manage"), async (r
   } catch (e) { next(e); }
 });
 
+router.delete("/api-keys/:id", ...guard, requirePermission("settings.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(tenantApiKeys).where(and(
+      eq(tenantApiKeys.id, req.params.id),
+      eq(tenantApiKeys.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("API key not found");
+    await createAuditLog({ tenantId: tenant.id, actorUserId: (req as any).user.id, action: "api_key.delete", entityType: "api_key", entityId: row.id, ip: req.ip });
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
 router.post("/api-keys", ...guard, requirePermission("settings.manage"),
   validate({ body: z.object({ name: z.string(), scopes: z.array(z.string()).optional() }) }),
   async (req, res, next) => {
@@ -194,5 +260,36 @@ router.post("/webhooks", ...guard, requirePermission("settings.manage"),
     } catch (e) { next(e); }
   },
 );
+
+router.patch("/webhooks/:id", ...guard, requirePermission("settings.manage"),
+  validate({ body: z.object({ url: z.string().url().optional(), events: z.array(z.string()).optional(), active: z.boolean().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const patch: Record<string, unknown> = {};
+      if (req.body.url != null) patch.url = req.body.url;
+      if (req.body.events != null) patch.eventsJson = req.body.events;
+      if (req.body.active != null) patch.active = req.body.active;
+      const [row] = await db.update(tenantWebhookEndpoints).set(patch).where(and(
+        eq(tenantWebhookEndpoints.id, req.params.id),
+        eq(tenantWebhookEndpoints.tenantId, tenant.id),
+      )).returning();
+      if (!row) throw new NotFoundError("Webhook not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/webhooks/:id", ...guard, requirePermission("settings.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(tenantWebhookEndpoints).where(and(
+      eq(tenantWebhookEndpoints.id, req.params.id),
+      eq(tenantWebhookEndpoints.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Webhook not found");
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
 
 export default router;

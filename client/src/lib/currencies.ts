@@ -59,8 +59,49 @@ export function currencyForCountry(countryCode: string): string {
   return COUNTRY_CURRENCY[cc] ?? DEFAULT_CURRENCY;
 }
 
+/** ISO 4217 currencies with no minor unit — amounts are still stored ×100 in the DB. */
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "UGX", "KES", "TZS", "RWF", "JPY", "KRW", "VND", "IDR", "CLP", "PYG", "XAF", "XOF",
+]);
+
+export function currencyFractionDigits(currency: string): number {
+  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 0 : 2;
+}
+
+export function moneyInputStep(currency: string): string {
+  return currencyFractionDigits(currency) === 0 ? "1" : "0.01";
+}
+
+export function minorFromMajor(major: number, _currency?: string): number {
+  return Math.round(major * 100);
+}
+
+export function majorFromMinor(minor: number): number {
+  return minor / 100;
+}
+
+export function countryLabel(countryCode: string): string {
+  const cc = countryCode.toUpperCase().trim();
+  return COUNTRY_OPTIONS.find((c) => c.code === cc)?.name ?? cc;
+}
+
 export function formatMoneyMinor(amountMinor: number, currency: string): string {
-  const opt = CURRENCY_OPTIONS.find((c) => c.code === currency);
-  const sym = opt?.symbol ?? currency;
-  return `${sym} ${(amountMinor / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const code = currency.toUpperCase();
+  const major = amountMinor / 100;
+  const digits = currencyFractionDigits(code);
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(major);
+  } catch {
+    const opt = CURRENCY_OPTIONS.find((c) => c.code === code);
+    const sym = opt?.symbol ?? code;
+    return `${sym} ${major.toLocaleString(undefined, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    })}`;
+  }
 }

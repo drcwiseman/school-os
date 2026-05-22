@@ -1,5 +1,7 @@
 # Deploy School OS on `school.bclimaxtech.com` (CWP / bishopcl)
 
+> **Retired.** Production SchoolOS now runs at **[https://masomobest.com](https://masomobest.com)** — see **[CWP-MASMOBEST-MIGRATION.md](./CWP-MASMOBEST-MIGRATION.md)**. Do not use this subdomain for new installs; redirect `school.bclimaxtech.com` → `masomobest.com` in CWP if the old URL still resolves.
+
 | Item | Value |
 |------|--------|
 | Subdomain | **school** → `https://school.bclimaxtech.com` |

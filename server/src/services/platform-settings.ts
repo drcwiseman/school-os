@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { platformSettings } from "../db/schema";
 import { DEFAULT_CURRENCY } from "../lib/currencies";
+import { DEFAULT_APP_ORIGIN, normalizeAppOrigin } from "../lib/app-origin";
 
 const DEFAULTS_KEY = "defaults";
 
@@ -50,7 +51,7 @@ const MARKETING_KEY = "marketing";
 
 const MARKETING_FALLBACK: PlatformMarketingSettings = {
   siteName: "SchoolOS",
-  siteUrl: "https://school.bclimaxtech.com",
+  siteUrl: DEFAULT_APP_ORIGIN,
   defaultTitle: "SchoolOS — School ERP & Academy Management for Africa",
   defaultDescription:
     "Multi-tenant school management: admissions, fees, exams, HR, parent portal, and integrations. Built for Uganda and East Africa.",
@@ -94,12 +95,17 @@ export async function setPlatformDefaults(patch: Partial<PlatformDefaults>): Pro
 export async function getPlatformMarketing(): Promise<PlatformMarketingSettings> {
   const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, MARKETING_KEY)).limit(1);
   const v = (row?.value ?? {}) as Partial<PlatformMarketingSettings>;
-  return { ...MARKETING_FALLBACK, ...v };
+  const merged = { ...MARKETING_FALLBACK, ...v };
+  return { ...merged, siteUrl: normalizeAppOrigin(merged.siteUrl) };
 }
 
 export async function setPlatformMarketing(patch: Partial<PlatformMarketingSettings>): Promise<PlatformMarketingSettings> {
   const current = await getPlatformMarketing();
-  const next = { ...current, ...patch };
+  const next = {
+    ...current,
+    ...patch,
+    ...(patch.siteUrl !== undefined ? { siteUrl: normalizeAppOrigin(patch.siteUrl) } : {}),
+  };
   await db
     .insert(platformSettings)
     .values({ key: MARKETING_KEY, value: next, updatedAt: new Date() })

@@ -7,6 +7,7 @@ import {
 import { percentToGrade, scoreToPercent } from "./exam-grading";
 import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 import { formatMoney } from "../utils/money";
+import { resolveTenantLocale } from "./tenant-locale";
 
 export type PdfTemplate = "invoice" | "receipt" | "report_card" | "payslip";
 
@@ -15,17 +16,24 @@ interface Branding {
   logoText?: string;
   primaryColor: { r: number; g: number; b: number };
   footer?: string;
+  currency: string;
 }
 
 async function loadBranding(tenantId: string): Promise<Branding> {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+  const [settings] = await db.select({
+    brandingJson: tenantSettings.brandingJson,
+    country: tenantSettings.country,
+    currency: tenantSettings.currency,
+  }).from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
   const branding = (settings?.brandingJson ?? {}) as Record<string, string>;
+  const locale = resolveTenantLocale(settings);
   return {
     schoolName: tenant?.name ?? "School",
     logoText: branding.logoText ?? branding.name,
     primaryColor: { r: 0.1, g: 0.3, b: 0.6 },
     footer: branding.footer ?? "Official document — do not alter",
+    currency: locale.currency,
   };
 }
 
@@ -55,9 +63,9 @@ export async function generateInvoicePdf(tenantId: string, invoiceId: string): P
   const lines = [
     `Student: ${student?.firstName ?? ""} ${student?.lastName ?? ""} (${student?.admissionNumber ?? ""})`,
     `Status: ${inv.status}`,
-    `Total: ${formatMoney(inv.totalAmount)}`,
-    `Paid: ${formatMoney(inv.paidAmount)}`,
-    `Balance: ${formatMoney(inv.totalAmount - inv.paidAmount)}`,
+    `Total: ${formatMoney(inv.totalAmount, branding.currency)}`,
+    `Paid: ${formatMoney(inv.paidAmount, branding.currency)}`,
+    `Balance: ${formatMoney(inv.totalAmount - inv.paidAmount, branding.currency)}`,
     `Due: ${inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "—"}`,
   ];
   for (const line of lines) {
@@ -73,7 +81,7 @@ export async function generateReceiptPdf(tenantId: string, receiptId: string): P
   if (!rec) throw new Error("Receipt not found");
 
   const { doc, page, font, bold, height } = await basePage(branding, `Receipt ${rec.receiptNo}`);
-  page.drawText(`Amount received: ${formatMoney(rec.amount)}`, { x: 50, y: height - 110, size: 12, font: bold });
+  page.drawText(`Amount received: ${formatMoney(rec.amount, branding.currency)}`, { x: 50, y: height - 110, size: 12, font: bold });
   page.drawText(`Date: ${new Date(rec.issuedAt).toLocaleString()}`, { x: 50, y: height - 130, size: 11, font });
   return doc.save();
 }
@@ -114,21 +122,21 @@ export async function generatePayslipPdf(tenantId: string, payslipId: string): P
   if (staffRow?.department) { page.drawText(String(staffRow.department), { x: 50, y, size: 10, font }); y -= 16; }
   page.drawText(`Period: ${data.period ?? "—"}`, { x: 50, y, size: 11, font });
   y -= 22;
-  page.drawText(`Gross pay: ${formatMoney(Number(data.gross ?? 0))}`, { x: 50, y, size: 11, font });
+  page.drawText(`Gross pay: ${formatMoney(Number(data.gross ?? 0), branding.currency)}`, { x: 50, y, size: 11, font });
   y -= 16;
   page.drawText("Deductions:", { x: 50, y, size: 10, font: bold });
   y -= 14;
   if (breakdown.length) {
     for (const line of breakdown.slice(0, 12)) {
-      page.drawText(`  ${line.name}: ${formatMoney(line.amountMinor)}`, { x: 50, y, size: 9, font });
+      page.drawText(`  ${line.name}: ${formatMoney(line.amountMinor, branding.currency)}`, { x: 50, y, size: 9, font });
       y -= 12;
     }
   } else {
-    page.drawText(`  Total: ${formatMoney(Number(data.deductions ?? 0))}`, { x: 50, y, size: 9, font });
+    page.drawText(`  Total: ${formatMoney(Number(data.deductions ?? 0), branding.currency)}`, { x: 50, y, size: 9, font });
     y -= 12;
   }
   y -= 8;
-  page.drawText(`Net pay: ${formatMoney(Number(data.net ?? 0))}`, { x: 50, y, size: 12, font: bold });
+  page.drawText(`Net pay: ${formatMoney(Number(data.net ?? 0), branding.currency)}`, { x: 50, y, size: 12, font: bold });
   return doc.save();
 }
 
@@ -267,9 +275,9 @@ export async function generateStudentFeeReportPdf(tenantId: string, studentId: s
   let y = height - 110;
   const header = [
     `Student: ${student.firstName} ${student.lastName} (${student.admissionNumber})`,
-    `Total billed: ${formatMoney(totalBilled)}`,
-    `Total paid: ${formatMoney(totalPaid)}`,
-    `Outstanding: ${formatMoney(balance)}`,
+    `Total billed: ${formatMoney(totalBilled, branding.currency)}`,
+    `Total paid: ${formatMoney(totalPaid, branding.currency)}`,
+    `Outstanding: ${formatMoney(balance, branding.currency)}`,
     "",
     "Recent invoices:",
   ];
@@ -278,7 +286,7 @@ export async function generateStudentFeeReportPdf(tenantId: string, studentId: s
     y -= 16;
   }
   for (const inv of invs.slice(0, 12)) {
-    page.drawText(`  ${inv.invoiceNo} — ${inv.status} — ${formatMoney(inv.totalAmount - inv.paidAmount)} due`, { x: 50, y, size: 9, font });
+    page.drawText(`  ${inv.invoiceNo} — ${inv.status} — ${formatMoney(inv.totalAmount - inv.paidAmount, branding.currency)} due`, { x: 50, y, size: 9, font });
     y -= 14;
     if (y < 80) break;
   }
@@ -286,7 +294,7 @@ export async function generateStudentFeeReportPdf(tenantId: string, studentId: s
   page.drawText("Recent payments:", { x: 50, y, size: 11, font: bold });
   y -= 16;
   for (const p of pays.slice(0, 8)) {
-    page.drawText(`  ${formatMoney(p.amount)} — ${p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "—"}`, { x: 50, y, size: 9, font });
+    page.drawText(`  ${formatMoney(p.amount, branding.currency)} — ${p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "—"}`, { x: 50, y, size: 9, font });
     y -= 14;
     if (y < 60) break;
   }

@@ -3,6 +3,11 @@ import { loadRawIntegrationCredentials } from "./platform-integrations-settings"
 import { getPlatformIntegrationConfig } from "./platform-integrations-settings";
 import type { SendMessageInput, SendMessageResult, MessagingProvider } from "./messaging";
 import { buildPaymentReference } from "./webhook-billing";
+import {
+  normalizePaymentProviders,
+  isPaypalReady,
+  isPesapalReady,
+} from "../lib/payment-providers";
 
 export async function isIntegrationEnabled(code: string): Promise<boolean> {
   const cfg = await getPlatformIntegrationConfig(code);
@@ -178,29 +183,87 @@ export async function initiateMtnMomoCollection(opts: {
   return { ok: true, reference, message: "MoMo collection request sent — confirm on phone" };
 }
 
-/** Tenant-level Stripe/PayPal using paymentProvidersJson when platform integration is off */
-export async function initiateTenantGatewayPayment(opts: {
-  tenantId: string;
-  provider: "stripe" | "paypal";
-  invoiceId: string;
-  amount: number;
-  customerEmail: string;
-  redirectUrl: string;
-}): Promise<{ ok: boolean; reference: string; paymentLink?: string; message?: string }> {
+async function loadTenantPaymentProviders(tenantId: string) {
   const { db } = await import("../db");
   const { tenantSettings } = await import("../db/schema");
   const { eq } = await import("drizzle-orm");
-  const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, opts.tenantId)).limit(1);
-  const pay = (settings?.paymentProvidersJson ?? {}) as Record<string, string>;
+  const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+  return normalizePaymentProviders(settings?.paymentProvidersJson as Record<string, unknown>);
+}
+
+async function pesapalApiBase(): Promise<string> {
+  const env = (process.env.PESAPAL_ENV ?? "sandbox").toLowerCase();
+  return env.includes("live") || env.includes("prod")
+    ? "https://pay.pesapal.com/v3"
+    : "https://cybqa.pesapal.com/pesapalv3";
+}
+
+async function pesapalAccessToken(consumerKey: string, consumerSecret: string): Promise<string> {
+  const base = await pesapalApiBase();
+  const res = await fetch(`${base}/api/Auth/RequestToken`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ consumer_key: consumerKey, consumer_secret: consumerSecret }),
+  });
+  const data = (await res.json()) as { token?: string; error?: { message?: string } };
+  if (!res.ok || !data.token) {
+    throw new Error(data.error?.message ?? `Pesapal auth failed (${res.status})`);
+  }
+  return data.token;
+}
+
+/** Tenant-level PayPal / Pesapal using paymentProvidersJson */
+export async function initiateTenantGatewayPayment(opts: {
+  tenantId: string;
+  provider: "paypal" | "pesapal";
+  invoiceId: string;
+  amount: number;
+  currency?: string;
+  customerEmail: string;
+  redirectUrl: string;
+}): Promise<{ ok: boolean; reference: string; paymentLink?: string; message?: string }> {
+  const pay = await loadTenantPaymentProviders(opts.tenantId);
   const reference = buildPaymentReference(opts.tenantId, opts.invoiceId);
 
-  if (opts.provider === "stripe" && pay.stripePublicKey) {
-    const link = `${opts.redirectUrl}${opts.redirectUrl.includes("?") ? "&" : "?"}provider=stripe&ref=${reference}&amount=${opts.amount}`;
-    return { ok: true, reference, paymentLink: link, message: "Stripe checkout — configure secret key in platform integrations for live charges" };
-  }
-  if (opts.provider === "paypal" && pay.paypalClientId) {
-    const link = `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(pay.paypalClientId)}&amount=${opts.amount}&item_name=School+fees&invoice=${reference}&return=${encodeURIComponent(opts.redirectUrl)}`;
+  if (opts.provider === "paypal" && isPaypalReady(pay)) {
+    const clientId = pay.paypal!.clientId!.trim();
+    const link = `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(clientId)}&amount=${opts.amount}&item_name=School+fees&invoice=${reference}&return=${encodeURIComponent(opts.redirectUrl)}`;
     return { ok: true, reference, paymentLink: link };
   }
-  return { ok: false, reference, message: `${opts.provider} keys not configured in school settings` };
+
+  if (opts.provider === "pesapal" && isPesapalReady(pay)) {
+    try {
+      const key = pay.pesapal!.consumerKey!.trim();
+      const secret = pay.pesapal!.consumerSecret!.trim();
+      const token = await pesapalAccessToken(key, secret);
+      const base = await pesapalApiBase();
+      const currency = opts.currency ?? "UGX";
+      const res = await fetch(`${base}/api/Transactions/SubmitOrderRequest`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: reference,
+          currency,
+          amount: opts.amount,
+          description: "School fees",
+          callback_url: opts.redirectUrl,
+          notification_id: process.env.PESAPAL_IPN_ID ?? "",
+          billing_address: { email_address: opts.customerEmail },
+        }),
+      });
+      const data = (await res.json()) as { redirect_url?: string; order_tracking_id?: string; message?: string };
+      if (!res.ok || !data.redirect_url) {
+        return { ok: false, reference, message: data.message ?? `Pesapal order failed (${res.status})` };
+      }
+      return { ok: true, reference, paymentLink: data.redirect_url, message: "Redirecting to Pesapal" };
+    } catch (e) {
+      return { ok: false, reference, message: e instanceof Error ? e.message : "Pesapal error" };
+    }
+  }
+
+  return { ok: false, reference, message: `${opts.provider} is not enabled or missing keys in school settings` };
 }

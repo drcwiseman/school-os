@@ -3,7 +3,7 @@ import { db } from "../db";
 import { roles, permissions, rolePermissions, userRoles, users, auditLogs } from "../db/schema";
 import { eq, and, ilike, desc, isNull } from "drizzle-orm";
 import { softDeleteStaffUser } from "../services/soft-delete";
-import { requireAuth } from "../middleware/auth";
+import { hashPassword, requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
@@ -40,6 +40,37 @@ router.post("/roles", ...guard, requirePermission("rbac.manage.roles"),
   }
 );
 
+router.patch("/roles/:roleId", ...guard, requirePermission("rbac.manage.roles"),
+  validate({ body: z.object({ name: z.string().min(1) }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [role] = await db.select().from(roles).where(and(eq(roles.id, req.params.roleId), eq(roles.tenantId, tenant.id))).limit(1);
+      if (!role) throw new NotFoundError("Role not found");
+      if (role.isSystem) throw new ConflictError("System roles cannot be renamed");
+      const [updated] = await db.update(roles).set({ name: req.body.name }).where(eq(roles.id, role.id)).returning();
+      await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "role.update", entityType: "role", entityId: role.id, before: role, after: updated, ip: req.ip });
+      res.json({ success: true, data: updated });
+    } catch (err) { next(err); }
+  },
+);
+
+router.delete("/roles/:roleId", ...guard, requirePermission("rbac.manage.roles"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [role] = await db.select().from(roles).where(and(eq(roles.id, req.params.roleId), eq(roles.tenantId, tenant.id))).limit(1);
+    if (!role) throw new NotFoundError("Role not found");
+    if (role.isSystem) throw new ConflictError("System roles cannot be deleted");
+    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, role.id));
+    await db.delete(userRoles).where(eq(userRoles.roleId, role.id));
+    await db.delete(roles).where(eq(roles.id, role.id));
+    await createAuditLog({ tenantId: tenant.id, actorUserId: user.id, action: "role.delete", entityType: "role", entityId: role.id, before: role, ip: req.ip });
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
 router.post("/roles/:roleId/permissions", ...guard, requirePermission("rbac.manage.permissions"),
   validate({ body: z.object({ permissionIds: z.array(z.string().uuid()) }) }),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -68,6 +99,42 @@ router.get("/permissions", ...guard, requirePermission("rbac.manage.roles"), asy
 });
 
 // ── Users ─────────────────────────────────────────────────────────────────────
+
+router.post("/users", ...guard, requirePermission("settings.users.manage"),
+  validate({
+    body: z.object({
+      email: z.string().email(),
+      password: z.string().min(8),
+      firstName: z.string().min(1),
+      lastName: z.string().min(1),
+      roleIds: z.array(z.string().uuid()).optional(),
+    }),
+  }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const actor = (req as any).user;
+      const [existing] = await db.select().from(users).where(and(eq(users.tenantId, tenant.id), eq(users.email, req.body.email))).limit(1);
+      if (existing) throw new ConflictError("Email already registered in this school");
+      const passwordHash = await hashPassword(req.body.password);
+      const [created] = await db.insert(users).values({
+        tenantId: tenant.id,
+        email: req.body.email,
+        passwordHash,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        status: "active",
+      }).returning();
+      if (req.body.roleIds?.length) {
+        await db.insert(userRoles).values(req.body.roleIds.map((rid: string) => ({
+          userId: created.id, roleId: rid, tenantId: tenant.id,
+        })));
+      }
+      await createAuditLog({ tenantId: tenant.id, actorUserId: actor.id, action: "user.create", entityType: "user", entityId: created.id, after: { email: created.email }, ip: req.ip });
+      res.status(201).json({ success: true, data: { id: created.id, email: created.email, firstName: created.firstName, lastName: created.lastName, status: created.status } });
+    } catch (err) { next(err); }
+  },
+);
 
 router.get("/users", ...guard, requirePermission("settings.users.view"), async (req: Request, res: Response, next: NextFunction) => {
   try {

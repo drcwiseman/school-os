@@ -16,7 +16,7 @@ export async function verifyDomainDns(tenantId: string, customDomain: string): P
   try {
     // 1. Resolve CNAME pointing to ingress.schoolos.com
     const cnames = await resolveCname(customDomain).catch(() => [] as string[]);
-    const ingressHost = process.env.INGRESS_CNAME_TARGET ?? "school.bclimaxtech.com";
+    const ingressHost = process.env.INGRESS_CNAME_TARGET ?? process.env.PLATFORM_DOMAIN ?? "masomobest.com";
     const cnameMatched = cnames.some(
       (c) => c === ingressHost || c.endsWith(`.${ingressHost}`) || c.endsWith(ingressHost),
     );

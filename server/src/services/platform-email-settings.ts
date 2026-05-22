@@ -319,7 +319,8 @@ export async function previewPlatformEmailTemplate(
   vars?: Record<string, string>,
 ): Promise<{ subject: string; text: string; html: string; variables: string[] }> {
   const marketing = await getPlatformMarketing();
-  const base = (process.env.CLIENT_ORIGIN || marketing.siteUrl || "https://school.bclimaxtech.com").replace(/\/$/, "");
+  const { resolveClientOrigin } = await import("../lib/app-origin");
+  const base = await resolveClientOrigin();
   const sample: Record<string, string> = {
     siteName: marketing.siteName,
     name: "Alex Operator",

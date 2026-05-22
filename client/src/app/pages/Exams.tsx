@@ -214,8 +214,24 @@ export const Exams: React.FC = () => {
     }
   };
 
+  const tabLabels: Record<typeof tab, string> = {
+    assessments: "Assessments",
+    groups: "Groups",
+    timetable: "Timetable",
+    marks: "Marks",
+    results: "Results",
+    printing: "Printing",
+    "multi-groups": "Multi-groups",
+    moderation: "Moderation",
+    reports: "Reports",
+    cbt: "CBT",
+    banks: "Question bank",
+    rankings: "Rankings",
+    analytics: "Analytics",
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in w-full min-w-0">
       <div className="page-header">
         <div>
           <h1 className="page-title">Exams & Results</h1>
@@ -223,12 +239,19 @@ export const Exams: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex gap-2">
-        {(["assessments", "groups", "timetable", "marks", "results", "printing", "multi-groups", "moderation", "reports", "cbt", "banks", "rankings", "analytics"] as const).map((t) => (
-          <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm capitalize ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"}`}>
-            {t}
-          </button>
-        ))}
+      <div className="w-full overflow-x-auto pb-1">
+        <div className="flex gap-2 flex-nowrap">
+          {(["assessments", "groups", "timetable", "marks", "results", "printing", "multi-groups", "moderation", "reports", "cbt", "banks", "rankings", "analytics"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`shrink-0 px-4 py-2 rounded-lg text-sm whitespace-nowrap ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
+            >
+              {tabLabels[t]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "assessments" && (
@@ -280,7 +303,7 @@ export const Exams: React.FC = () => {
       {tab === "multi-groups" && schoolSlug && <ExamMultiGroupsPanel schoolSlug={schoolSlug} />}
 
       {tab === "marks" && (
-        <div className="card p-4 space-y-4">
+        <div className="card p-4 space-y-4 w-full overflow-x-auto">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-[200px]">
               <label className="label">Assessment</label>
@@ -471,8 +494,8 @@ function DataTable({ loading, rows, cols, actions }: { loading: boolean; rows: a
     </div>
   );
   return (
-    <div className="card overflow-hidden">
-      <table className="table">
+    <div className="card overflow-x-auto w-full">
+      <table className="table min-w-[640px] w-full">
         <thead><tr>{cols.map((c) => <th key={c.k}>{c.l}</th>)}{actions && <th>Actions</th>}</tr></thead>
         <tbody>
           {rows.length === 0 ? <tr><td colSpan={cols.length + (actions ? 1 : 0)} className="text-center py-8 text-slate-400">No records</td></tr>

@@ -19,7 +19,7 @@ export type PlatformGeneralSettings = {
 
 const DEFAULTS: PlatformGeneralSettings = {
   platformName: "SchoolOS",
-  supportEmail: "support@school.bclimaxtech.com",
+  supportEmail: "support@masomobest.com",
   supportPhone: "",
   timezone: "Africa/Kampala",
   defaultLocale: "en-UG",

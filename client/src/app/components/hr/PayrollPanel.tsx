@@ -5,6 +5,7 @@ import { ConfirmAction } from "../ConfirmAction";
 import { useAuth } from "../../state/AuthContext";
 import { ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react";
 import { PayrollTaxRulesPanel } from "./HREnhancementPanels";
+import { HRSetupBanner } from "./HRSetupBanner";
 
 type PayrollItem = {
   id: string;
@@ -21,7 +22,7 @@ type RunDetail = { run: { id: string; period: string; status: string }; items: P
 
 function SectionTable({ title, headers, children }: { title: string; headers: string[]; children: React.ReactNode }) {
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-x-auto w-full">
       <div className="p-4 border-b border-slate-700/50 font-semibold text-white">{title}</div>
       <table className="table">
         <thead><tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr></thead>
@@ -41,9 +42,16 @@ export const PayrollPanel: React.FC<{ schoolSlug: string; showTaxRules?: boolean
   const [expandedRun, setExpandedRun] = useState<string | null>(null);
   const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const defaultPeriod = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
 
   const load = async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const [r, p] = await Promise.all([
         api.get(`/s/${schoolSlug}/api/payroll/runs`),
@@ -52,6 +60,7 @@ export const PayrollPanel: React.FC<{ schoolSlug: string; showTaxRules?: boolean
       setRuns(r.data ?? []);
       setPayslips(p.data ?? []);
     } catch (e: any) {
+      setLoadFailed(true);
       toast(e.message, "error");
     } finally {
       setLoading(false);
@@ -59,6 +68,10 @@ export const PayrollPanel: React.FC<{ schoolSlug: string; showTaxRules?: boolean
   };
 
   useEffect(() => { load(); }, [schoolSlug]);
+
+  useEffect(() => {
+    if (!period) setPeriod(defaultPeriod());
+  }, []);
 
   const toggleRun = async (id: string) => {
     if (expandedRun === id) {
@@ -82,9 +95,15 @@ export const PayrollPanel: React.FC<{ schoolSlug: string; showTaxRules?: boolean
   const startRun = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post(`/s/${schoolSlug}/api/payroll/runs`, { period });
+      const res = await api.post(`/s/${schoolSlug}/api/payroll/runs`, { period });
       setPeriod("");
-      toast("Payroll run created from active contracts", "success");
+      const count = res.data?.staffCount ?? res.data?.items?.length;
+      toast(
+        count != null
+          ? `Payroll run created for ${count} employee(s) from contracts`
+          : "Payroll run created from active contracts",
+        "success",
+      );
       load();
     } catch (e: any) {
       toast(e.message, "error");
@@ -144,7 +163,10 @@ export const PayrollPanel: React.FC<{ schoolSlug: string; showTaxRules?: boolean
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-w-0">
+      {loadFailed && (
+        <HRSetupBanner message="Payroll could not load. payroll_runs / payroll_items tables may be missing on the server." />
+      )}
       {showTaxRules && hasPermission("hr.view") && (
         <div className="card p-4">
           <h3 className="font-semibold text-white mb-2">Deduction rules</h3>

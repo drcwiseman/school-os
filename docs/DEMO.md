@@ -10,7 +10,7 @@ Use this after `npm run db:seed` (local or VPS). **Change all passwords in produ
 |-------------|----------|
 | **Local dev (UI)** | `http://localhost:5173` |
 | **Local prod-style** | `http://localhost:5000` (after `npm run build`) |
-| **VPS (CWP)** | `https://school.bclimaxtech.com` |
+| **VPS (CWP)** | `https://masomobest.com` |
 | **VPS (IP)** | `http://173.231.241.161` (only if Apache proxies to Node on 5000) |
 
 In development, use port **5173** for the React app. Port **5000** is API-only unless you built and run production mode.
@@ -45,7 +45,7 @@ Portal logins exist only for **school-a** in the seed data.
 
 ---
 
-## Full link map (production base: `https://school.bclimaxtech.com`)
+## Full link map (production base: `https://masomobest.com`)
 
 ### Public marketing
 

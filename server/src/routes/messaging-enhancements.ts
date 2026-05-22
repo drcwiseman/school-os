@@ -9,23 +9,21 @@ import { requirePermission } from "../middleware/rbac";
 import { requireTenantFeature } from "../middleware/require-feature";
 import { validate } from "../utils/validate";
 import { NotFoundError } from "../middleware/error";
+import { safeList } from "../lib/safe-route";
 import { broadcastAnnouncement, resolveMessageRecipients, sendTenantMessage } from "../services/tenant-messaging";
 import type { MessageAudience } from "../services/tenant-messaging";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch, requireTenantFeature("messaging_enabled")];
 
-router.get("/notifications", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    const user = (req as any).user;
-    const rows = await db.select().from(systemNotifications).where(and(
-      eq(systemNotifications.tenantId, tenant.id),
-      sql`(${systemNotifications.userId} = ${user.id} OR ${systemNotifications.userId} IS NULL)`,
-    )).orderBy(desc(systemNotifications.createdAt)).limit(50);
-    res.json({ success: true, data: rows });
-  } catch (e) { next(e); }
-});
+router.get("/notifications", ...guard, requirePermission("messaging.view"), safeList("system-notifications", [], async (req) => {
+  const tenant = (req as any).tenant;
+  const user = (req as any).user;
+  return db.select().from(systemNotifications).where(and(
+    eq(systemNotifications.tenantId, tenant.id),
+    sql`(${systemNotifications.userId} = ${user.id} OR ${systemNotifications.userId} IS NULL)`,
+  )).orderBy(desc(systemNotifications.createdAt)).limit(50);
+}));
 
 router.patch("/notifications/:id/read", ...guard, async (req, res, next) => {
   try {

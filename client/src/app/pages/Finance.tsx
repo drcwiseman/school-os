@@ -4,7 +4,8 @@ import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { useAuth } from "../state/AuthContext";
-import { DollarSign, Loader2, Receipt } from "lucide-react";
+import { Loader2, Receipt, Wallet } from "lucide-react";
+import { countryLabel, majorFromMinor, minorFromMajor, moneyInputStep } from "../../lib/currencies";
 import {
   AccountsDashboardPanel,
   AutoInvoicesPanel,
@@ -155,7 +156,7 @@ export const Finance: React.FC = () => {
     try {
       await api.post(`/s/${schoolSlug}/api/finance/payments`, {
         invoiceId: collectForm.invoiceId,
-        amount: Math.round(Number(collectForm.amount) * 100),
+        amount: minorFromMajor(Number(collectForm.amount), currency),
         method: collectForm.method,
       });
       toast("Payment recorded", "success");
@@ -182,7 +183,7 @@ export const Finance: React.FC = () => {
       await api.post(`/s/${schoolSlug}/api/finance/invoices`, {
         studentId: invoiceForm.studentId,
         invoiceNo: invoiceForm.invoiceNo,
-        totalAmount: Math.round(Number(invoiceForm.totalAmount) * 100),
+        totalAmount: minorFromMajor(Number(invoiceForm.totalAmount), currency),
         termId: invoiceForm.termId || undefined,
         dueDate: invoiceForm.dueDate || undefined,
       });
@@ -225,7 +226,7 @@ export const Finance: React.FC = () => {
     e.preventDefault();
     const items = structureForm.items
       .filter((i) => i.feeHeadId && i.amount)
-      .map((i) => ({ feeHeadId: i.feeHeadId, amount: Math.round(Number(i.amount) * 100) }));
+      .map((i) => ({ feeHeadId: i.feeHeadId, amount: minorFromMajor(Number(i.amount), currency) }));
     if (items.length === 0) return toast("Add at least one fee line", "error");
     try {
       await api.post(`/s/${schoolSlug}/api/finance/fee-structures`, {
@@ -264,19 +265,26 @@ export const Finance: React.FC = () => {
   }
 
   const tabBtn = (t: FinanceTab) =>
-    `px-4 py-2 rounded-lg text-sm capitalize ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"}`;
+    `shrink-0 px-4 py-2 rounded-lg text-sm capitalize whitespace-nowrap ${tab === t ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`;
+
+  const amountStep = moneyInputStep(currency);
+  const regionLabel = countryLabel(country);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in w-full min-w-0">
       <div className="page-header">
         <div>
           <h1 className="page-title">Finance</h1>
-          <p className="text-slate-400 mt-1 text-sm">All amounts in {currency} · {country === "UG" ? "Uganda" : country} region</p>
+          <p className="text-slate-400 mt-1 text-sm">
+            All amounts in <span className="text-slate-300 font-medium">{currency}</span>
+            {regionLabel ? <> · {regionLabel}</> : null}
+          </p>
           <p className="text-slate-400 mt-1">Fee management, accounting, concessions, budgets, and collections</p>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="w-full overflow-x-auto pb-1">
+        <div className="flex gap-2 flex-nowrap">
         <button type="button" onClick={() => setTab("overview")} className={tabBtn("overview")}>dashboard</button>
         {hasPermission("finance.invoice.create") && (
           <button type="button" onClick={() => setTab("billing")} className={tabBtn("billing")}>billing</button>
@@ -296,17 +304,18 @@ export const Finance: React.FC = () => {
         <button type="button" onClick={() => setTab("aging")} className={tabBtn("aging")}>arrears</button>
         <button type="button" onClick={() => setTab("accounting")} className={tabBtn("accounting")}>accounting</button>
         <button type="button" onClick={() => setTab("statements")} className={tabBtn("statements")}>statements</button>
+        </div>
       </div>
 
       {tab === "overview" && schoolSlug && (
         <>
           <AccountsDashboardPanel schoolSlug={schoolSlug} formatMoney={formatMoney} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard label="Total Invoiced" value={formatMoney(stats?.totalInvoiced)} icon={DollarSign} />
+            <StatCard label="Total Invoiced" value={formatMoney(stats?.totalInvoiced)} icon={Wallet} />
             <StatCard label="Total Collected" value={formatMoney(stats?.totalPaid)} icon={Receipt} />
-            <StatCard label="Unpaid Invoices" value={String(stats?.unpaidCount ?? 0)} icon={DollarSign} />
+            <StatCard label="Unpaid Invoices" value={String(stats?.unpaidCount ?? 0)} icon={Wallet} />
           </div>
-          <div className="card overflow-hidden">
+          <div className="card overflow-x-auto w-full">
             <div className="p-4 border-b border-slate-700/50"><h3 className="font-semibold text-white">Recent Invoices</h3></div>
             <table className="table">
               <thead><tr><th>Invoice No</th><th>Amount</th><th>Paid</th><th>Status</th>{hasPermission("finance.invoice.create") && <th>Actions</th>}</tr></thead>
@@ -414,7 +423,7 @@ export const Finance: React.FC = () => {
                 setCollectForm({
                   ...collectForm,
                   invoiceId: e.target.value,
-                  amount: inv ? String((inv.balance ?? 0) / 100) : "",
+                  amount: inv ? String(majorFromMinor(inv.balance ?? 0)) : "",
                 });
               }}>
                 <option value="">Select invoice…</option>
@@ -424,8 +433,8 @@ export const Finance: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="label">Amount</label>
-              <input className="input" type="number" step="0.01" min="0" required value={collectForm.amount} onChange={(e) => setCollectForm({ ...collectForm, amount: e.target.value })} />
+              <label className="label">Amount ({currency})</label>
+              <input className="input" type="number" step={amountStep} min="0" required value={collectForm.amount} onChange={(e) => setCollectForm({ ...collectForm, amount: e.target.value })} />
             </div>
             <div>
               <label className="label">Method</label>
@@ -493,7 +502,7 @@ export const Finance: React.FC = () => {
                       <option value="">Fee head…</option>
                       {feeHeads.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                     </select>
-                    <input className="input w-28" type="number" step="0.01" min="0" required placeholder={currency} value={item.amount} onChange={(e) => {
+                    <input className="input w-28" type="number" step={amountStep} min="0" required placeholder={currency} value={item.amount} onChange={(e) => {
                       const items = [...structureForm.items];
                       items[idx] = { ...item, amount: e.target.value };
                       setStructureForm({ ...structureForm, items });

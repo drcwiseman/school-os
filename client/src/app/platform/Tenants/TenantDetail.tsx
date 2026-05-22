@@ -19,6 +19,7 @@ import {
   Copy,
 } from "lucide-react";
 import { api } from "../../api/client";
+import { absoluteSchoolUrl, normalizeAppUrl } from "../../lib/app-origin";
 import { useToast } from "../../components/Toast";
 import {
   COUNTRY_OPTIONS,
@@ -72,6 +73,8 @@ export const TenantDetail: React.FC = () => {
   const [customDomain, setCustomDomain] = useState("");
   const [loginAccess, setLoginAccess] = useState<{
     loginUrl: string;
+    parentPortalUrl?: string;
+    studentPortalUrl?: string;
     users: { id: string; email: string; firstName: string; lastName: string; status: string; roleName: string | null; isPrimaryAdmin: boolean }[];
   } | null>(null);
   const [resetCreds, setResetCreds] = useState<{ email: string; temporaryPassword: string } | null>(null);
@@ -196,10 +199,10 @@ export const TenantDetail: React.FC = () => {
     if (!slug) return;
     try {
       const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly });
-      const url = res.data.url?.startsWith("http")
+      const raw = res.data.url?.startsWith("http")
         ? res.data.url
         : `${window.location.origin}${res.data.url}`;
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(normalizeAppUrl(raw), "_blank", "noopener,noreferrer");
       toast(readOnly ? "Opened read-only shadow session" : "Logged in as school administrator", "success");
     } catch (e: any) {
       toast(e.message, "error");
@@ -208,8 +211,18 @@ export const TenantDetail: React.FC = () => {
 
   const schoolLoginUrl = useMemo(() => {
     const u = loginAccess?.loginUrl ?? `/s/${slug}/login`;
-    return u.startsWith("http") ? u : `${window.location.origin}${u}`;
+    return normalizeAppUrl(absoluteSchoolUrl(u));
   }, [slug, loginAccess?.loginUrl]);
+
+  const parentPortalUrl = useMemo(() => {
+    const u = loginAccess?.parentPortalUrl ?? (slug ? `/s/${slug}/portal/login` : "");
+    return u ? normalizeAppUrl(absoluteSchoolUrl(u)) : "";
+  }, [slug, loginAccess?.parentPortalUrl]);
+
+  const studentPortalUrl = useMemo(() => {
+    const u = loginAccess?.studentPortalUrl ?? loginAccess?.parentPortalUrl ?? (slug ? `/s/${slug}/portal/login` : "");
+    return u ? normalizeAppUrl(absoluteSchoolUrl(u)) : "";
+  }, [slug, loginAccess?.studentPortalUrl, loginAccess?.parentPortalUrl]);
 
   const resetAdminPassword = async () => {
     if (!slug) return;
@@ -307,16 +320,34 @@ export const TenantDetail: React.FC = () => {
         <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2 mb-3">
           <LogIn size={16} /> School login
         </h2>
+        <div className="grid gap-3 sm:grid-cols-3 text-sm mb-4">
+          {[
+            { label: "Staff ERP login", url: schoolLoginUrl },
+            { label: "Parent portal", url: parentPortalUrl },
+            { label: "Student portal", url: studentPortalUrl },
+          ].map((link) => (
+            <div key={link.label} className="rounded-md border border-slate-100 bg-slate-50/80 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{link.label}</p>
+              <a href={link.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-blue-600 hover:underline font-mono text-xs break-all">
+                {link.url.replace(/^https?:\/\/[^/]+/, "")}
+              </a>
+              <button
+                type="button"
+                className="mt-2 inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
+                onClick={() => navigator.clipboard.writeText(link.url).then(() => toast(`${link.label} URL copied`, "success"))}
+              >
+                <Copy size={12} /> Copy
+              </button>
+            </div>
+          ))}
+        </div>
         <div className="flex flex-wrap items-center gap-2 text-sm mb-4">
-          <a href={schoolLoginUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-mono text-xs break-all">
-            {schoolLoginUrl}
-          </a>
           <button
             type="button"
             className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
-            onClick={() => navigator.clipboard.writeText(schoolLoginUrl).then(() => toast("Login URL copied", "success"))}
+            onClick={() => navigator.clipboard.writeText(schoolLoginUrl).then(() => toast("Staff login URL copied", "success"))}
           >
-            <Copy size={12} /> Copy URL
+            <Copy size={12} /> Copy staff URL
           </button>
           <button
             type="button"

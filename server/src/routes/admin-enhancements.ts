@@ -11,11 +11,12 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
-import { NotFoundError } from "../middleware/error";
+import { BadRequestError, NotFoundError } from "../middleware/error";
 import { getSetupWizardStatus } from "../services/setup-wizard";
 import { RBAC_PRESETS } from "../services/rbac-presets";
 import { createAuditLog } from "../services/audit";
 import { isTenantFeatureEnabled } from "../services/tenant-features";
+import { seedDemoDataForTenant } from "../services/tenant-demo-seed";
 
 export const adminEnhancementsRouter = Router();
 adminEnhancementsRouter.use(requireAuth, requireTenantMatch);
@@ -265,8 +266,26 @@ adminEnhancementsRouter.post("/noticeboard", requirePermission("messaging.send")
   },
 );
 
+adminEnhancementsRouter.delete("/noticeboard/:id", requirePermission("messaging.send"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(announcements).where(and(
+      eq(announcements.id, req.params.id), eq(announcements.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Announcement not found");
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
 adminEnhancementsRouter.patch("/noticeboard/:id", requirePermission("messaging.send"),
-  validate({ body: z.object({ published: z.boolean().optional(), title: z.string().optional(), body: z.string().optional() }) }),
+  validate({
+    body: z.object({
+      published: z.boolean().optional(),
+      title: z.string().optional(),
+      body: z.string().optional(),
+      audience: z.enum(["all", "students", "parents", "staff"]).optional(),
+    }),
+  }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
@@ -351,18 +370,31 @@ adminEnhancementsRouter.post("/data-reset", requirePermission("settings.manage")
   },
 );
 
-adminEnhancementsRouter.post("/demo-seed", requirePermission("settings.manage"), async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    const user = (req as any).user;
-    const { seedDemoDataForTenant } = await import("../services/tenant-demo-seed");
-    const result = await seedDemoDataForTenant(tenant.id);
-    await createAuditLog({
-      tenantId: tenant.id, actorUserId: user.id, action: "tenant.demo_seed",
-      entityType: "tenant", entityId: tenant.id, after: result, ip: req.ip,
-    });
-    res.json({ success: true, data: result });
-  } catch (e) { next(e); }
-});
+adminEnhancementsRouter.post("/demo-seed", requirePermission("settings.manage"),
+  validate({ body: z.object({ full: z.boolean().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const body = req.body ?? {};
+      const result = await seedDemoDataForTenant(tenant.id, { full: Boolean(body.full) });
+      try {
+        await createAuditLog({
+          tenantId: tenant.id, actorUserId: user.id, action: "tenant.demo_seed",
+          entityType: "tenant", entityId: tenant.id,
+          after: { message: result.message, stats: result.stats, createdCount: result.created.length },
+          ip: req.ip,
+        });
+      } catch (auditErr) {
+        console.error("[demo-seed] audit log failed:", auditErr);
+      }
+      res.json({ success: true, data: result });
+    } catch (e) {
+      console.error("[demo-seed]", e);
+      const msg = e instanceof Error ? e.message : "Demo seed failed";
+      next(new BadRequestError(msg));
+    }
+  },
+);
 
 export default adminEnhancementsRouter;

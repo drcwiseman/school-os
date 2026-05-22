@@ -2,6 +2,8 @@ import crypto from "crypto";
 import { db } from "../db";
 import { tenants } from "../db/schema";
 import { eq } from "drizzle-orm";
+import { getTenantPublicUrls } from "../lib/school-urls";
+import { ConflictError } from "../middleware/error";
 
 const VERIFY_PREFIX = "_schoolos-verify";
 
@@ -13,8 +15,13 @@ export function buildVerificationToken(tenantId: string) {
   return crypto.createHash("sha256").update(`${tenantId}-${process.env.SESSION_SECRET ?? "dev"}`).digest("hex").slice(0, 32);
 }
 
+import { normalizeCustomDomainInput } from "../lib/custom-domain-host";
+
 export async function setCustomDomain(tenantId: string, domain: string) {
-  const normalized = domain.toLowerCase().replace(/^https?:\/\//, "").split("/")[0].trim();
+  const normalized = normalizeCustomDomainInput(domain);
+  if (!normalized || normalized.includes(" ") || !normalized.includes(".")) {
+    throw new ConflictError("Enter a valid hostname (e.g. portal.yourschool.edu)");
+  }
   const token = buildVerificationToken(tenantId);
   const [updated] = await db
     .update(tenants)
@@ -34,7 +41,7 @@ export async function setCustomDomain(tenantId: string, domain: string) {
   return updated;
 }
 
-/** Mark domain verified (DNS TXT check can be wired later; manual verify for Phase 16). */
+/** Mark domain verified manually (platform override when DNS already correct). */
 export async function verifyCustomDomain(tenantId: string) {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
   if (!tenant?.customDomain) return null;
@@ -55,21 +62,30 @@ export async function verifyCustomDomain(tenantId: string) {
   return updated;
 }
 
-export function getDomainInstructions(tenant: typeof tenants.$inferSelect) {
+export async function getDomainInstructions(tenant: typeof tenants.$inferSelect) {
   const ssl = (tenant.sslConfig ?? {}) as Record<string, string>;
   const token = ssl.verificationToken ?? buildVerificationToken(tenant.id);
   const domain = tenant.customDomain ?? "";
+  const urls = await getTenantPublicUrls(tenant);
+
   return {
     customDomain: domain,
     domainVerified: tenant.domainVerified,
     subdomain: tenant.subdomain ?? tenant.slug,
-    suggestedSubdomainUrl: tenant.subdomain
-      ? `https://${tenant.subdomain}.${process.env.PLATFORM_DOMAIN ?? "schoolos.local"}`
+    suggestedSubdomainUrl: urls.suggestedSubdomainUrl,
+    dnsTxtRecord: domain
+      ? { host: buildVerificationHost(domain), value: token }
       : null,
-    dnsTxtRecord: {
-      host: buildVerificationHost(domain),
-      value: token,
+    dnsRecords: {
+      cname: domain ? { host: domain, value: urls.ingress.cnameTarget } : null,
+      aRecord: urls.ingress.aRecordIp ? { host: domain, value: urls.ingress.aRecordIp } : null,
     },
     sslStatus: ssl.status ?? "pending",
+    urls: {
+      platform: urls.platform,
+      custom: urls.custom,
+      recommendedStaffLogin: urls.custom?.staffLogin ?? urls.platform.staffLogin,
+      recommendedPortalLogin: urls.custom?.portalLogin ?? urls.platform.portalLogin,
+    },
   };
 }

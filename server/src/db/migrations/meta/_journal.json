@@ -128,13 +128,61 @@
       "tag": "0017_platform_backups",
       "breakpoints": true
     },
-    { "idx": 18, "version": "6", "when": 1779191600000, "tag": "0018_platform_extras", "breakpoints": true },
-    { "idx": 19, "version": "6", "when": 1779192000000, "tag": "0019_phase_b", "breakpoints": true },
-    { "idx": 20, "version": "6", "when": 1779192400000, "tag": "0020_phase_ab_complete", "breakpoints": true },
-    { "idx": 21, "version": "6", "when": 1779192800000, "tag": "0021_phase_c", "breakpoints": true },
-    { "idx": 22, "version": "6", "when": 1779193200000, "tag": "0022_phase_d", "breakpoints": true },
-    { "idx": 23, "version": "6", "when": 1779193600000, "tag": "0023_post_d", "breakpoints": true },
-    { "idx": 24, "version": "6", "when": 1779194000000, "tag": "0024_remaining", "breakpoints": true },
-    { "idx": 25, "version": "6", "when": 1779194400000, "tag": "0025_akkhor_admin", "breakpoints": true }
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1779191600000,
+      "tag": "0018_platform_extras",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1779192000000,
+      "tag": "0019_phase_b",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1779192400000,
+      "tag": "0020_phase_ab_complete",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1779192800000,
+      "tag": "0021_phase_c",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1779193200000,
+      "tag": "0022_phase_d",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1779193600000,
+      "tag": "0023_post_d",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1779194000000,
+      "tag": "0024_remaining",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1779194400000,
+      "tag": "0025_akkhor_admin",
+      "breakpoints": true
+    }
   ]
 }

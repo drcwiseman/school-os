@@ -1,3 +1,5 @@
+import { FACILITIES_OPS_IDS } from "../../lib/facilities-nav";
+
 /** Operations sub-modules — each has its own permission; do not merge under one "operations" role. */
 export const OPERATIONS_MODULES = [
   {
@@ -64,3 +66,8 @@ export const OPERATIONS_MODULES = [
 ] as const;
 
 export type OperationsModuleId = (typeof OPERATIONS_MODULES)[number]["id"];
+
+/** Shown under /ops/* in sidebar (library, transport, boarding live under Facilities). */
+export const OPS_SIDEBAR_MODULES = OPERATIONS_MODULES.filter(
+  (m) => !(FACILITIES_OPS_IDS as readonly string[]).includes(m.id),
+);

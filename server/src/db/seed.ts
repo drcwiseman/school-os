@@ -191,9 +191,9 @@ async function seed() {
     if (!existingSettings) {
       await db.insert(tenantSettings).values({
         tenantId: resolvedTenant.id,
-        country: demo.slug === "school-a" ? "UG" : "US",
-        currency: demo.slug === "school-a" ? "UGX" : "USD",
-        timezone: demo.slug === "school-a" ? "Africa/Kampala" : "UTC",
+        country: "UG",
+        currency: "UGX",
+        timezone: "Africa/Kampala",
       });
     }
 

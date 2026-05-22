@@ -2,8 +2,50 @@ import { Router } from "express";
 import { getPlatformMarketing, resolveMarketingAssetUrls } from "../services/platform-settings";
 import { servePlatformMediaFile } from "../services/platform-media";
 import { INTEGRATIONS_CATALOG } from "../lib/integrations-catalog";
+import { resolveTenantByHost, isPlatformHost } from "../services/tenant-resolve";
+import { getTenantPublicUrls } from "../lib/school-urls";
+import { hostMatchesTenantCustomDomain } from "../lib/custom-domain-host";
 
 const router = Router();
+
+/** SPA bootstrap: which school (if any) this Host header maps to. */
+router.get("/resolve-host", async (req, res, next) => {
+  try {
+    const host = req.headers.host ?? "";
+    if (!host || isPlatformHost(host)) {
+      return res.json({
+        success: true,
+        data: { kind: "platform" as const, host },
+      });
+    }
+    const tenant = await resolveTenantByHost(host);
+    if (!tenant) {
+      return res.json({
+        success: true,
+        data: { kind: "unknown" as const, host },
+      });
+    }
+    const onCustom = Boolean(
+      tenant.domainVerified && hostMatchesTenantCustomDomain(tenant.customDomain, host),
+    );
+    const urls = await getTenantPublicUrls(tenant);
+    res.json({
+      success: true,
+      data: {
+        kind: onCustom ? ("school-custom" as const) : ("school" as const),
+        host,
+        slug: tenant.slug,
+        name: tenant.name,
+        customDomain: tenant.customDomain,
+        domainVerified: tenant.domainVerified,
+        urls,
+        bootstrap: onCustom
+          ? { slug: tenant.slug, customDomain: tenant.customDomain, schoolName: tenant.name }
+          : null,
+      },
+    });
+  } catch (e) { next(e); }
+});
 
 router.get("/site-config", async (_req, res, next) => {
   try {

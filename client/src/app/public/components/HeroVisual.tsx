@@ -18,8 +18,8 @@ const FLOATING_MODULES = [
 /** Layered product preview — Classe365 / Teach'n Go style */
 export const HeroVisual: React.FC = () => (
   <div className="relative mx-auto w-full max-w-xl">
-    <div className="absolute -right-4 top-8 z-20 hidden w-52 animate-float lg:block" style={{ animationDelay: "0.5s" }}>
-      <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-marketing-lg">
+      <div className="absolute -right-4 top-8 z-20 hidden w-52 animate-float lg:block" style={{ animationDelay: "0.5s" }}>
+      <div className="rounded-2xl border border-marketing-primary/10 bg-white p-4 shadow-marketing-lg ring-1 ring-marketing-primary/5">
         <p className="text-[10px] font-bold uppercase tracking-wider text-marketing-navy/45">Modules</p>
         <ul className="mt-3 space-y-2.5">
           {FLOATING_MODULES.map((m) => (
@@ -35,9 +35,9 @@ export const HeroVisual: React.FC = () => (
     </div>
 
     <div className="relative animate-float">
-      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-marketing-accent/15 via-transparent to-marketing-sage/20 blur-2xl" />
-      <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-white p-2 shadow-marketing-lg ring-1 ring-marketing-navy/5">
-        <div className="rounded-xl bg-gradient-to-br from-marketing-navy to-[#162a45] p-5 text-white">
+      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-marketing-primary/20 via-transparent to-marketing-accent/15 blur-2xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-white/80 bg-white p-2 shadow-marketing-lg ring-1 ring-marketing-primary/10">
+        <div className="rounded-xl bg-gradient-to-br from-[#1e3a5f] via-marketing-navy to-[#162a45] p-5 text-white">
           <div className="mb-4 flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-marketing-sage/90">
               Exams · Term 2

@@ -80,9 +80,8 @@ export async function sendPlatformEmail(input: {
 }
 
 async function platformLoginUrl(): Promise<string> {
-  const marketing = await getPlatformMarketing();
-  const base = (process.env.CLIENT_ORIGIN || marketing.siteUrl || "https://school.bclimaxtech.com").replace(/\/$/, "");
-  return `${base}/platform/login`;
+  const { platformLoginPath } = await import("../lib/app-origin");
+  return platformLoginPath();
 }
 
 function escapeHtml(s: string) {

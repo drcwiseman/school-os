@@ -30,6 +30,43 @@ router.post("/incidents", ...guard, requirePermission("discipline.manage"),
   }
 );
 
+router.patch("/incidents/:id", ...guard, requirePermission("discipline.manage"),
+  validate({
+    body: z.object({
+      category: z.string().optional(),
+      description: z.string().optional(),
+      severity: z.string().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.update(disciplineIncidents).set(req.body).where(and(
+        eq(disciplineIncidents.id, req.params.id),
+        eq(disciplineIncidents.tenantId, tenant.id),
+      )).returning();
+      if (!row) throw new NotFoundError("Incident not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/incidents/:id", ...guard, requirePermission("discipline.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    await db.delete(disciplineActions).where(and(
+      eq(disciplineActions.incidentId, req.params.id),
+      eq(disciplineActions.tenantId, tenant.id),
+    ));
+    const [row] = await db.delete(disciplineIncidents).where(and(
+      eq(disciplineIncidents.id, req.params.id),
+      eq(disciplineIncidents.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Incident not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
 router.post("/incidents/:id/actions", ...guard, requirePermission("discipline.manage"),
   validate({ body: z.object({ action: z.string(), notes: z.string().optional() }) }),
   async (req, res, next) => {

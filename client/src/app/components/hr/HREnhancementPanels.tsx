@@ -3,14 +3,21 @@ import { api, downloadPdf } from "../../api/client";
 import { useToast } from "../Toast";
 import { useAuth } from "../../state/AuthContext";
 import { Download, Loader2 } from "lucide-react";
+import { minorFromMajor, moneyInputStep } from "../../../lib/currencies";
+import { HRSetupBanner } from "./HRSetupBanner";
 
 type StaffRow = { id: string; employeeNo: string; firstName: string; lastName: string; department?: string; jobTitle?: string };
 
 export const HRDashboardStrip: React.FC<{ schoolSlug: string }> = ({ schoolSlug }) => {
   const [data, setData] = useState<any>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    api.get(`/s/${schoolSlug}/api/hr/dashboard`).then((r) => setData(r.data)).catch(() => {});
+    setFailed(false);
+    api.get(`/s/${schoolSlug}/api/hr/dashboard`)
+      .then((r) => setData(r.data))
+      .catch(() => { setData(null); setFailed(true); });
   }, [schoolSlug]);
+  if (failed) return <HRSetupBanner />;
   if (!data) return null;
   const att = data.attendanceToday ?? {};
   return (
@@ -32,12 +39,14 @@ export const StaffAttendancePanel: React.FC<{ schoolSlug: string }> = ({ schoolS
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<any>(null);
   const [reportRange, setReportRange] = useState({ from: "", to: "" });
+  const [attendanceTableMissing, setAttendanceTableMissing] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
     api.get(`/s/${schoolSlug}/api/hr/staff-attendance?date=${date}`)
       .then((r) => {
         const list = r.data?.rows ?? [];
+        setAttendanceTableMissing(!!r.data?.attendanceTableMissing);
         setRows(list);
         const init: Record<string, string> = {};
         for (const row of list) {
@@ -79,6 +88,9 @@ export const StaffAttendancePanel: React.FC<{ schoolSlug: string }> = ({ schoolS
 
   return (
     <div className="space-y-4">
+      {attendanceTableMissing && (
+        <HRSetupBanner message="Staff attendance is not set up on the server yet. You can view the roster, but saving attendance requires db:repair." />
+      )}
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <label className="label">Attendance date</label>
@@ -208,7 +220,8 @@ export const StaffIdCardsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug
 
 export const PayrollTaxRulesPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug }) => {
   const { toast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, formatMoney, currency } = useAuth();
+  const amountStep = moneyInputStep(currency);
   const [rules, setRules] = useState<any[]>([]);
   const [form, setForm] = useState({ name: "", ratePercent: "", thresholdMinor: "" });
 
@@ -220,7 +233,7 @@ export const PayrollTaxRulesPanel: React.FC<{ schoolSlug: string }> = ({ schoolS
     await api.post(`/s/${schoolSlug}/api/hr/tax-rules`, {
       name: form.name,
       ratePercent: Number(form.ratePercent),
-      thresholdMinor: form.thresholdMinor ? Math.round(Number(form.thresholdMinor) * 100) : 0,
+      thresholdMinor: form.thresholdMinor ? minorFromMajor(Number(form.thresholdMinor), currency) : 0,
     });
     toast("Tax rule added", "success");
     setForm({ name: "", ratePercent: "", thresholdMinor: "" });
@@ -233,13 +246,13 @@ export const PayrollTaxRulesPanel: React.FC<{ schoolSlug: string }> = ({ schoolS
         <form onSubmit={submit} className="card p-4 grid md:grid-cols-4 gap-3">
           <input className="input" required placeholder="Rule name (e.g. PAYE)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <input className="input" type="number" required placeholder="Rate %" value={form.ratePercent} onChange={(e) => setForm({ ...form, ratePercent: e.target.value })} />
-          <input className="input" type="number" step="0.01" placeholder="Threshold" value={form.thresholdMinor} onChange={(e) => setForm({ ...form, thresholdMinor: e.target.value })} />
+          <input className="input" type="number" step={amountStep} placeholder={`Threshold (${currency})`} value={form.thresholdMinor} onChange={(e) => setForm({ ...form, thresholdMinor: e.target.value })} />
           <button type="submit" className="btn-primary">Add rule</button>
         </form>
       )}
       <ul className="text-sm text-slate-300 space-y-1">
         {rules.map((r) => (
-          <li key={r.id}>{r.name}: {r.ratePercent}% above {r.thresholdMinor ? (r.thresholdMinor / 100).toFixed(2) : 0}</li>
+          <li key={r.id}>{r.name}: {r.ratePercent}% above {r.thresholdMinor ? formatMoney(r.thresholdMinor) : formatMoney(0)}</li>
         ))}
       </ul>
     </div>

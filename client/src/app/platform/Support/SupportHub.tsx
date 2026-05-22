@@ -12,6 +12,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { api } from "../../api/client";
+import { normalizeAppUrl } from "../../lib/app-origin";
 import { useToast } from "../../components/Toast";
 import { usePlatformAuth } from "../hooks/usePlatformAuth";
 
@@ -225,7 +226,7 @@ export const SupportHub: React.FC = () => {
     try {
       const res = await api.post(`/api/platform/tenants/${slug}/impersonate`);
       const url = res.data?.url;
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      if (url) window.open(normalizeAppUrl(url), "_blank", "noopener,noreferrer");
       else toast("No impersonation URL returned", "error");
     } catch (err: any) {
       toast(err.message, "error");

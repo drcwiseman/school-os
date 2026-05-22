@@ -77,7 +77,7 @@ export const PortalDashboard: React.FC = () => {
   const childStatements = (data?.statements ?? []).filter((i: any) => i.studentId === activeChildId);
   const childTransport = (data?.transport ?? []).find((t: any) => t.studentId === activeChildId);
 
-  const payInvoice = async (invoiceId: string, provider: "flutterwave" | "mtn_momo" | "stripe" | "paypal" | "airtel_money") => {
+  const payInvoice = async (invoiceId: string, provider: "flutterwave" | "mtn_momo" | "paypal" | "pesapal" | "airtel_money") => {
     setPayingId(invoiceId);
     try {
       const res = await api.post(`/s/${schoolSlug}/api/portal/payments/initiate`, {
@@ -226,8 +226,12 @@ export const PortalDashboard: React.FC = () => {
                               Pay with card
                             </button>
                             <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "mtn_momo")}>MTN MoMo</button>
-                            <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "stripe")}>Stripe</button>
-                            <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "paypal")}>PayPal</button>
+                            {data.paymentProviders?.pesapal && (
+                              <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "pesapal")}>Pesapal</button>
+                            )}
+                            {data.paymentProviders?.paypal && (
+                              <button type="button" className="btn-secondary text-xs" disabled={payingId === i.id} onClick={() => payInvoice(i.id, "paypal")}>PayPal</button>
+                            )}
                           </div>
                         )}
                         {unpaid && data.paymentGatewaysEnabled && payingId === i.id && (

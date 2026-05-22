@@ -6,7 +6,9 @@ import { useAuth } from "../state/AuthContext";
 import { ModuleCrud } from "../components/ModuleCrud";
 import { Download, Upload } from "lucide-react";
 import { HRDashboardStrip, StaffAttendancePanel, StaffIdCardsPanel } from "../components/hr/HREnhancementPanels";
+import { HRSetupBanner } from "../components/hr/HRSetupBanner";
 import { PayrollPanel } from "../components/hr/PayrollPanel";
+import { minorFromMajor, moneyInputStep } from "../../lib/currencies";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const STAFF_CSV_TEMPLATE = "employeeNo,firstName,lastName,email,department\nE001,Jane,Nabukenya,jane@school.com,Headteacher\nE002,John,Okello,john@school.com,Teacher\nE003,Mary,Auma,mary@school.com,Secretary";
@@ -14,7 +16,8 @@ const STAFF_CSV_TEMPLATE = "employeeNo,firstName,lastName,email,department\nE001
 export const HR: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, formatMoney, currency } = useAuth();
+  const amountStep = moneyInputStep(currency);
   const canPayroll = hasPermission("payroll.view");
   type HRTab = "staff" | "attendance" | "leave" | "id-cards" | "payroll";
   const [tab, setTab] = useState<HRTab>("staff");
@@ -23,7 +26,7 @@ export const HR: React.FC = () => {
   const [importing, setImporting] = useState(false);
   const [staffKey, setStaffKey] = useState(0);
   const tabCls = (active: boolean) =>
-    `px-4 py-2 rounded-lg text-sm ${active ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"}`;
+    `shrink-0 px-4 py-2 rounded-lg text-sm whitespace-nowrap ${active ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`;
 
   const exportCsv = async () => {
     try {
@@ -58,7 +61,7 @@ export const HR: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in w-full min-w-0">
       <HRHeader />
       <HRDashboardStrip schoolSlug={schoolSlug!} />
       <HRTabs tab={tab} setTab={setTab} tabCls={tabCls} showPayroll={canPayroll} />
@@ -94,7 +97,7 @@ export const HR: React.FC = () => {
               { name: "lastName", label: "Last name", required: true },
               { name: "department", label: "Department" },
             ]} />
-          <StaffContractsPanel schoolSlug={schoolSlug!} hasPermission={hasPermission} toast={toast} />
+          <StaffContractsPanel schoolSlug={schoolSlug!} hasPermission={hasPermission} toast={toast} formatMoney={formatMoney} currency={currency} amountStep={amountStep} />
         </>
       ) : tab === "attendance" ? (
         <StaffAttendancePanel schoolSlug={schoolSlug!} />
@@ -127,7 +130,8 @@ function HRTabs({ tab, setTab, tabCls, showPayroll }: {
   showPayroll: boolean;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="w-full overflow-x-auto pb-1">
+      <div className="flex gap-2 flex-nowrap">
       <button type="button" onClick={() => setTab("staff")} className={tabCls(tab === "staff")}>Employees</button>
       <button type="button" onClick={() => setTab("attendance")} className={tabCls(tab === "attendance")}>Attendance</button>
       <button type="button" onClick={() => setTab("leave")} className={tabCls(tab === "leave")}>Leave</button>
@@ -135,6 +139,7 @@ function HRTabs({ tab, setTab, tabCls, showPayroll }: {
       {showPayroll && (
         <button type="button" onClick={() => setTab("payroll")} className={tabCls(tab === "payroll")}>Payroll</button>
       )}
+      </div>
     </div>
   );
 }
@@ -155,6 +160,7 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
   const [rows, setRows] = useState<LeaveRow[]>([]);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ staffId: "", startDate: "", endDate: "", reason: "" });
@@ -163,8 +169,10 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
   const load = async () => {
     setLoading(true);
     try {
+      setLoadFailed(false);
       setRows((await api.get(`/s/${schoolSlug}/api/hr/leave`)).data ?? []);
     } catch (err: any) {
+      setLoadFailed(true);
       toast(err.message, "error");
     } finally {
       setLoading(false);
@@ -221,6 +229,7 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
 
   return (
     <div className="space-y-4">
+      {loadFailed && <HRSetupBanner message="Leave requests could not load. The leave_requests table may be missing on the server." />}
       <div className="flex flex-wrap justify-between gap-2">
         <div className="flex gap-2">
           <button type="button" className={viewMode === "list" ? "btn-primary text-sm" : "btn-ghost text-sm"} onClick={() => setViewMode("list")}>List</button>
@@ -309,7 +318,14 @@ function LeaveRequestsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: 
 type StaffMember = { id: string; employeeNo: string; firstName: string; lastName: string };
 type ContractRow = { id: string; salary: number; startDate: string; endDate?: string | null };
 
-function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug: string; hasPermission: (p: string) => boolean; toast: (m: string, t?: "success" | "error") => void }) {
+function StaffContractsPanel({ schoolSlug, hasPermission, toast, formatMoney, currency, amountStep }: {
+  schoolSlug: string;
+  hasPermission: (p: string) => boolean;
+  toast: (m: string, t?: "success" | "error") => void;
+  formatMoney: (c?: number) => string;
+  currency: string;
+  amountStep: string;
+}) {
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [selectedStaff, setSelectedStaff] = useState("");
   const [contracts, setContracts] = useState<ContractRow[]>([]);
@@ -329,7 +345,7 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
   const addContract = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStaff) return;
-    const cents = Math.round(parseFloat(form.salary) * 100);
+    const cents = minorFromMajor(parseFloat(form.salary), currency);
     if (!Number.isFinite(cents) || cents <= 0) { toast("Enter a valid salary", "error"); return; }
     try {
       await api.post(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts`, {
@@ -346,7 +362,7 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
 
   const updateSalary = async (contractId: string) => {
     if (!selectedStaff) return;
-    const cents = Math.round(parseFloat(salaryEdits[contractId]) * 100);
+    const cents = minorFromMajor(parseFloat(salaryEdits[contractId]), currency);
     if (!Number.isFinite(cents) || cents <= 0) { toast("Enter a valid salary", "error"); return; }
     try {
       await api.patch(`/s/${schoolSlug}/api/hr/staff/${selectedStaff}/contracts/${contractId}`, { salary: cents });
@@ -390,7 +406,7 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
             ) : contracts.map((c) => (
               <li key={c.id} className="flex flex-wrap justify-between items-center gap-2 py-2 border-b border-slate-800/50">
                 <span>
-                  ${(c.salary / 100).toFixed(2)} / yr — {new Date(c.startDate).toLocaleDateString()}
+                  {formatMoney(c.salary)} / yr — {new Date(c.startDate).toLocaleDateString()}
                   {c.endDate ? ` – ${new Date(c.endDate).toLocaleDateString()}` : " (open)"}
                 </span>
                 {!c.endDate && hasPermission("hr.manage") && (
@@ -398,8 +414,8 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
                     <input
                       className="input text-xs w-28"
                       type="number"
-                      step="0.01"
-                      placeholder="New salary"
+                      step={amountStep}
+                      placeholder={`New salary (${currency})`}
                       value={salaryEdits[c.id] ?? ""}
                       onChange={(e) => setSalaryEdits({ ...salaryEdits, [c.id]: e.target.value })}
                     />
@@ -419,8 +435,8 @@ function StaffContractsPanel({ schoolSlug, hasPermission, toast }: { schoolSlug:
           {hasPermission("hr.manage") && (
             <form onSubmit={addContract} className="grid md:grid-cols-4 gap-3 items-end border-t border-slate-800 pt-4">
               <div>
-                <label className="label">Annual salary</label>
-                <input className="input" type="number" step="0.01" required value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} />
+                <label className="label">Annual salary ({currency})</label>
+                <input className="input" type="number" step={amountStep} required value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} />
               </div>
               <div>
                 <label className="label">Start date</label>

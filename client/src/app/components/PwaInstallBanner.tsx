@@ -7,6 +7,7 @@ export const PwaInstallBanner: React.FC = () => {
 
   useEffect(() => {
     const handler = (e: Event) => {
+      if (sessionStorage.getItem("pwa_dismiss") === "1") return;
       e.preventDefault();
       setPrompt(e);
     };

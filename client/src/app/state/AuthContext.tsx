@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { DEFAULT_COUNTRY, DEFAULT_CURRENCY, formatMoneyMinor } from "../../lib/currencies";
 import { applyTenantAppearance } from "../utils/theme";
+import { getTenantBootstrap, schoolPath } from "../lib/tenant-host";
 
 interface User {
   id: string;
@@ -63,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const match = location.pathname.match(/^\/s\/([^/]+)/);
-    const slug = match ? match[1] : null;
+    const slug = match?.[1] ?? getTenantBootstrap()?.slug ?? null;
     const isImpersonateRoute = /\/impersonate/.test(location.pathname);
 
     if (!slug) {
@@ -131,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setImpersonationReadOnly(false);
-    window.location.href = schoolSlug ? `/s/${schoolSlug}/login` : "/";
+    window.location.href = schoolSlug ? schoolPath(schoolSlug, "login") : "/";
   };
 
   return (

@@ -65,9 +65,31 @@ export function defaultCurrencyForCountry(countryCode: string): string {
   return hit?.code ?? DEFAULT_CURRENCY;
 }
 
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "UGX", "KES", "TZS", "RWF", "JPY", "KRW", "VND", "IDR", "CLP", "PYG", "XAF", "XOF",
+]);
+
+export function currencyFractionDigits(currency: string): number {
+  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 0 : 2;
+}
+
 export function formatMoneyMinor(amountMinor: number, currency: string): string {
-  const info = getCurrencyInfo(currency);
-  const sym = info?.symbol ?? currency;
+  const code = currency.toUpperCase();
   const major = amountMinor / 100;
-  return `${sym} ${major.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  const digits = currencyFractionDigits(code);
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(major);
+  } catch {
+    const info = getCurrencyInfo(code);
+    const sym = info?.symbol ?? code;
+    return `${sym} ${major.toLocaleString(undefined, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    })}`;
+  }
 }

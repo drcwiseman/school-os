@@ -90,10 +90,32 @@
 
   /* —— Marketing site (modern SaaS) —— */
   .marketing-page {
-    @apply relative min-h-screen overflow-x-hidden bg-marketing-cream text-marketing-navy antialiased;
+    @apply relative min-h-screen overflow-x-hidden bg-marketing-soft-warm text-marketing-navy antialiased;
     background-image:
-      radial-gradient(ellipse 70% 45% at 90% -5%, rgba(37, 99, 235, 0.08), transparent),
-      radial-gradient(ellipse 50% 40% at 0% 20%, rgba(92, 122, 98, 0.06), transparent);
+      radial-gradient(ellipse 80% 50% at 100% 0%, rgba(67, 97, 238, 0.12), transparent),
+      radial-gradient(ellipse 55% 45% at 0% 30%, rgba(37, 99, 235, 0.07), transparent),
+      radial-gradient(ellipse 40% 30% at 50% 100%, rgba(92, 122, 98, 0.05), transparent);
+  }
+  .mkt-section-soft {
+    @apply bg-gradient-to-b from-marketing-soft/80 via-white to-marketing-cream/40;
+  }
+  .mkt-section-alt {
+    @apply bg-white;
+  }
+  .mkt-role-card {
+    @apply relative overflow-hidden rounded-2xl border border-marketing-navy/5 bg-white p-6 shadow-marketing transition-all duration-300 hover:-translate-y-1.5 hover:border-marketing-primary/25 hover:shadow-marketing-lg;
+  }
+  .mkt-feature-tile {
+    @apply rounded-2xl border border-marketing-navy/5 bg-white p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-marketing-primary/20 hover:shadow-marketing;
+  }
+  .mkt-tab-panel {
+    @apply animate-tab-in;
+  }
+  .mkt-hero-chip {
+    @apply flex items-center gap-2.5 rounded-2xl border border-white/90 bg-white px-4 py-3 shadow-marketing-lg backdrop-blur-sm transition-transform duration-300 hover:scale-[1.02];
+  }
+  .mkt-promo-strip {
+    @apply bg-gradient-to-r from-marketing-primary via-marketing-accent to-marketing-primary-light text-white;
   }
   .mkt-header { @apply bg-marketing-cream/80 backdrop-blur-md; }
   .mkt-nav-pill {
@@ -111,12 +133,14 @@
     transform: translateY(-2px);
   }
   .mkt-hero {
-    @apply relative overflow-hidden px-5 pb-20 pt-8 sm:px-8 md:px-10 lg:px-12 lg:pb-28 lg:pt-12;
+    @apply relative overflow-hidden bg-gradient-to-br from-white via-marketing-soft/30 to-marketing-soft-warm px-5 pb-20 pt-4 sm:px-8 md:px-10 lg:px-12 lg:pb-28 lg:pt-8;
   }
   .mkt-hero::before {
     content: "";
     @apply pointer-events-none absolute inset-0;
-    background: radial-gradient(circle at 70% 30%, rgba(37, 99, 235, 0.06) 0%, transparent 50%);
+    background:
+      radial-gradient(circle at 75% 20%, rgba(67, 97, 238, 0.14) 0%, transparent 45%),
+      radial-gradient(circle at 10% 80%, rgba(37, 99, 235, 0.08) 0%, transparent 40%);
   }
   .glass-card {
     @apply rounded-2xl border border-marketing-navy/5 bg-white shadow-marketing;
@@ -206,6 +230,16 @@
     to { opacity: 1; transform: translateY(0); }
   }
   .animate-fade-up { animation: mktFadeUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes tabIn {
+    from { opacity: 0; transform: translateX(12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .animate-tab-in { animation: tabIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes chipPulse {
+    0%, 100% { box-shadow: 0 8px 32px -8px rgba(67, 97, 238, 0.25); }
+    50% { box-shadow: 0 12px 40px -6px rgba(67, 97, 238, 0.35); }
+  }
+  .animate-chip-pulse { animation: chipPulse 4s ease-in-out infinite; }
   .animate-slide-up { animation: slideUp 0.25s ease-out; }
   @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
   .animate-fade-in { animation: fadeIn 0.2s ease-out; }

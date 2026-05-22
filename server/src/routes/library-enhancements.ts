@@ -5,7 +5,7 @@ import {
   libraryBooks, libraryCopies, libraryLoans, libraryFines, libraryCards,
   students, staff,
 } from "../db/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNull } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
@@ -15,35 +15,64 @@ import { NotFoundError } from "../middleware/error";
 export const libraryEnhancementsRouter = Router();
 libraryEnhancementsRouter.use(requireAuth, requireTenantMatch);
 
+libraryEnhancementsRouter.get("/books/enriched", requirePermission("library.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const rows = await db.select({
+      id: libraryBooks.id,
+      title: libraryBooks.title,
+      author: libraryBooks.author,
+      isbn: libraryBooks.isbn,
+      createdAt: libraryBooks.createdAt,
+      totalCopies: sql<number>`coalesce((select count(*)::int from library_copies c where c.book_id = ${libraryBooks.id} and c.tenant_id = ${tenant.id}), 0)`,
+      availableCopies: sql<number>`coalesce((select count(*)::int from library_copies c where c.book_id = ${libraryBooks.id} and c.tenant_id = ${tenant.id} and c.status = 'available'), 0)`,
+    }).from(libraryBooks).where(eq(libraryBooks.tenantId, tenant.id)).orderBy(asc(libraryBooks.title));
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
 libraryEnhancementsRouter.get("/dashboard", requirePermission("library.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [books] = await db.select({ n: sql<number>`count(*)` }).from(libraryBooks).where(eq(libraryBooks.tenantId, tenant.id));
-    const [copies] = await db.select({
-      total: sql<number>`count(*)`,
-      available: sql<number>`count(*) filter (where ${libraryCopies.status} = 'available')`,
-      loaned: sql<number>`count(*) filter (where ${libraryCopies.status} = 'loaned')`,
-    }).from(libraryCopies).where(eq(libraryCopies.tenantId, tenant.id));
-    const [loans] = await db.select({
-      active: sql<number>`count(*) filter (where ${libraryLoans.returnedAt} is null)`,
-      overdue: sql<number>`count(*) filter (where ${libraryLoans.returnedAt} is null and ${libraryLoans.dueAt} < now())`,
-    }).from(libraryLoans).where(eq(libraryLoans.tenantId, tenant.id));
-    const [cards] = await db.select({
-      total: sql<number>`count(*)`,
-      active: sql<number>`count(*) filter (where ${libraryCards.status} = 'active')`,
-    }).from(libraryCards).where(eq(libraryCards.tenantId, tenant.id));
-    const [fines] = await db.select({ unpaid: sql<number>`count(*) filter (where ${libraryFines.paid} = false)` })
-      .from(libraryFines).where(eq(libraryFines.tenantId, tenant.id));
-    res.json({
-      success: true,
-      data: {
-        books: Number(books?.n ?? 0),
-        copies: copies,
-        loans: loans,
-        cards: cards,
-        unpaidFines: Number(fines?.unpaid ?? 0),
-      },
-    });
+    const data: Record<string, unknown> = {
+      books: 0,
+      copies: { total: 0, available: 0, loaned: 0 },
+      loans: { active: 0, overdue: 0 },
+      cards: { total: 0, active: 0 },
+      unpaidFines: 0,
+    };
+    try {
+      const [books] = await db.select({ n: sql<number>`count(*)` }).from(libraryBooks).where(eq(libraryBooks.tenantId, tenant.id));
+      data.books = Number(books?.n ?? 0);
+    } catch { /* ignore */ }
+    try {
+      const [copies] = await db.select({
+        total: sql<number>`count(*)`,
+        available: sql<number>`count(*) filter (where ${libraryCopies.status} = 'available')`,
+        loaned: sql<number>`count(*) filter (where ${libraryCopies.status} = 'loaned')`,
+      }).from(libraryCopies).where(eq(libraryCopies.tenantId, tenant.id));
+      data.copies = copies;
+    } catch { /* ignore */ }
+    try {
+      const [loans] = await db.select({
+        active: sql<number>`count(*) filter (where ${libraryLoans.returnedAt} is null)`,
+        overdue: sql<number>`count(*) filter (where ${libraryLoans.returnedAt} is null and ${libraryLoans.dueAt} < now())`,
+      }).from(libraryLoans).where(eq(libraryLoans.tenantId, tenant.id));
+      data.loans = loans;
+    } catch { /* ignore */ }
+    try {
+      const [cards] = await db.select({
+        total: sql<number>`count(*)`,
+        active: sql<number>`count(*) filter (where ${libraryCards.status} = 'active')`,
+      }).from(libraryCards).where(eq(libraryCards.tenantId, tenant.id));
+      data.cards = cards;
+    } catch { /* library_cards may be missing until schema patch */ }
+    try {
+      const [fines] = await db.select({ unpaid: sql<number>`count(*) filter (where ${libraryFines.paid} = false)` })
+        .from(libraryFines).where(eq(libraryFines.tenantId, tenant.id));
+      data.unpaidFines = Number(fines?.unpaid ?? 0);
+    } catch { /* ignore */ }
+    res.json({ success: true, data });
   } catch (e) { next(e); }
 });
 

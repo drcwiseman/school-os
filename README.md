@@ -119,7 +119,7 @@ See **[docs/HOSTING.md](docs/HOSTING.md)** for the full migration strategy, Dock
 
 **InMotion VPS (SSH):** see **[docs/INMOTION.md](docs/INMOTION.md)** and run `scripts/deploy-inmotion.sh` on the server.
 
-**CWP subdomain `school.bclimaxtech.com` (bishopcl):** see **[docs/CWP-SCHOOL-BCLIMax.md](docs/CWP-SCHOOL-BCLIMax.md)**.
+**Production (masomobest.com, bishopcl VPS):** see **[docs/CWP-MASMOBEST-MIGRATION.md](docs/CWP-MASMOBEST-MIGRATION.md)**. Legacy `school.bclimaxtech.com` docs: [CWP-SCHOOL-BCLIMax.md](docs/CWP-SCHOOL-BCLIMax.md) (retired).
 
 Quick commands:
 

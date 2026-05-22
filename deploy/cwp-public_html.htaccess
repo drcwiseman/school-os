@@ -1,5 +1,5 @@
 # Place in /home/bishopcl/public_html/.htaccess
-# Proxies school.bclimaxtech.com → School OS on http://127.0.0.1:5000
+# Proxies masomobest.com (Apache public_html) → School OS on http://127.0.0.1:5000
 
 RewriteEngine On
 RewriteBase /

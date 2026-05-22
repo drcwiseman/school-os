@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
+import { loadSchoolStudents } from "../../lib/load-school-students";
 import { useAuth } from "../state/AuthContext";
 import { MODULE_FEATURE_CODES } from "../../lib/module-features";
 import { Building2, Library, CreditCard, Bus, Home, Calendar, DoorOpen, LayoutDashboard, ShieldCheck, Ticket, BedDouble } from "lucide-react";
 import { GatePassPanel } from "../components/facilities/GatePassPanel";
 import { TicketsManagementPanel, StaffHostelManagementPanel } from "../components/facilities/TicketsStaffHostelPanels";
+import { LibraryCrudPanel } from "../components/facilities/LibraryCrudPanel";
 import {
   FacilitiesOverviewPanel,
-  LibraryManagementPanel,
   LibraryCardsPanel,
   TransportManagementPanel,
   HostelManagementPanel,
@@ -35,8 +36,8 @@ export const Facilities: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, moduleEnabled } = useAuth();
-  const initial = (searchParams.get("tab") as Tab) || "overview";
-  const [tab, setTab] = useState<Tab>(TAB_META.some((t) => t.id === initial) ? initial : "overview");
+  const tabFromUrl = (searchParams.get("tab") as Tab) || "overview";
+  const [tab, setTab] = useState<Tab>(TAB_META.some((t) => t.id === tabFromUrl) ? tabFromUrl : "overview");
   const [students, setStudents] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
 
@@ -48,7 +49,7 @@ export const Facilities: React.FC = () => {
 
   useEffect(() => {
     if (!schoolSlug) return;
-    api.get(`/s/${schoolSlug}/api/students?limit=300&enriched=true`).then((r) => setStudents(r.data ?? [])).catch(() => {});
+    loadSchoolStudents(schoolSlug).then(setStudents).catch(() => setStudents([]));
     api.get(`/s/${schoolSlug}/api/hr/staff`).then((r) => setStaff(r.data ?? [])).catch(() => {});
   }, [schoolSlug]);
 
@@ -58,8 +59,24 @@ export const Facilities: React.FC = () => {
   };
 
   useEffect(() => {
+    const urlTab = (searchParams.get("tab") as Tab) || "overview";
+    if (TAB_META.some((t) => t.id === urlTab) && visibleTabs.some((t) => t.id === urlTab)) {
+      setTab(urlTab);
+    }
+  }, [searchParams, visibleTabs]);
+
+  useEffect(() => {
     if (!visibleTabs.find((t) => t.id === tab) && visibleTabs.length) selectTab(visibleTabs[0].id);
-  }, [visibleTabs.length]);
+  }, [visibleTabs.length, tab]);
+
+  if (!visibleTabs.length) {
+    return (
+      <div className="card p-8 text-center text-slate-400">
+        <p>No facilities modules are enabled for your role or plan.</p>
+        <p className="text-sm mt-2">Ask an administrator to enable library, transport, boarding, or related permissions.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -88,8 +105,14 @@ export const Facilities: React.FC = () => {
           );
         })}
       </div>
-      {tab === "overview" && schoolSlug && <FacilitiesOverviewPanel schoolSlug={schoolSlug} />}
-      {tab === "library" && schoolSlug && <LibraryManagementPanel schoolSlug={schoolSlug} students={students} staff={staff} />}
+      {tab === "overview" && schoolSlug && (
+        <FacilitiesOverviewPanel
+          schoolSlug={schoolSlug}
+          onNavigate={selectTab}
+          availableTabs={visibleTabs.map((t) => t.id)}
+        />
+      )}
+      {tab === "library" && schoolSlug && <LibraryCrudPanel schoolSlug={schoolSlug} students={students} staff={staff} />}
       {tab === "cards" && schoolSlug && <LibraryCardsPanel schoolSlug={schoolSlug} students={students} staff={staff} />}
       {tab === "transport" && schoolSlug && <TransportManagementPanel schoolSlug={schoolSlug} students={students} />}
       {tab === "hostel" && schoolSlug && <HostelManagementPanel schoolSlug={schoolSlug} students={students} />}

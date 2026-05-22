@@ -6,7 +6,7 @@ type StaffColumnMeta = { hasDeletedAt: boolean; hasJobTitle: boolean; hasPhotoUr
 
 let columnMeta: StaffColumnMeta | null = null;
 
-async function getStaffColumnMeta(): Promise<StaffColumnMeta> {
+export async function getStaffColumnMeta(): Promise<StaffColumnMeta> {
   if (columnMeta) return columnMeta;
   const result = await db.execute(sql`
     SELECT column_name

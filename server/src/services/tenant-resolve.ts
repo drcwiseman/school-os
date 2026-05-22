@@ -1,8 +1,9 @@
 import { db } from "../db";
 import { tenants } from "../db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
+import { hostMatchesTenantCustomDomain } from "../lib/custom-domain-host";
 
-function normalizeHost(host: string): string {
+export function normalizeHost(host: string): string {
   return host.split(":")[0].toLowerCase().trim();
 }
 
@@ -26,12 +27,22 @@ export async function resolveTenantByHost(hostHeader: string) {
   const host = normalizeHost(hostHeader);
   if (!host || isPlatformHost(host)) return null;
 
+  const hostBare = host.replace(/^www\./, "");
   const [byCustom] = await db
     .select()
     .from(tenants)
-    .where(and(eq(tenants.customDomain, host), eq(tenants.domainVerified, true)))
+    .where(
+      and(
+        eq(tenants.domainVerified, true),
+        or(
+          eq(tenants.customDomain, host),
+          eq(tenants.customDomain, hostBare),
+          eq(tenants.customDomain, `www.${hostBare}`),
+        ),
+      ),
+    )
     .limit(1);
-  if (byCustom) return byCustom;
+  if (byCustom && hostMatchesTenantCustomDomain(byCustom.customDomain, host)) return byCustom;
 
   const parts = host.split(".");
   if (parts.length >= 3) {

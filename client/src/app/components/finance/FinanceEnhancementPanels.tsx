@@ -3,6 +3,7 @@ import { api } from "../../api/client";
 import { useToast } from "../Toast";
 import { useAuth } from "../../state/AuthContext";
 import { Loader2 } from "lucide-react";
+import { minorFromMajor, moneyInputStep } from "../../../lib/currencies";
 
 const FEE_TYPES = [
   { value: "tuition", label: "Tuition" },
@@ -85,6 +86,8 @@ export const AccountsDashboardPanel: React.FC<{ schoolSlug: string; formatMoney:
 
 export const ConcessionsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug }) => {
   const { toast } = useToast();
+  const { currency, formatMoney } = useAuth();
+  const amountStep = moneyInputStep(currency);
   const { students, terms } = useFinanceMeta(schoolSlug);
   const [policies, setPolicies] = useState<any[]>([]);
   const [concessions, setConcessions] = useState<any[]>([]);
@@ -109,7 +112,7 @@ export const ConcessionsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug 
       name: policyForm.name,
       category: policyForm.category,
       percent: policyForm.percent ? Number(policyForm.percent) : undefined,
-      amountMinor: policyForm.amountMinor ? Math.round(Number(policyForm.amountMinor) * 100) : undefined,
+      amountMinor: policyForm.amountMinor ? minorFromMajor(Number(policyForm.amountMinor), currency) : undefined,
       description: policyForm.description || undefined,
     });
     toast("Concession policy created", "success");
@@ -145,7 +148,7 @@ export const ConcessionsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug 
             <option value="other">Other</option>
           </select>
           <input className="input" type="number" min="0" max="100" placeholder="Percent off (optional)" value={policyForm.percent} onChange={(e) => setPolicyForm({ ...policyForm, percent: e.target.value })} />
-          <input className="input" type="number" step="0.01" placeholder="Fixed amount off (optional)" value={policyForm.amountMinor} onChange={(e) => setPolicyForm({ ...policyForm, amountMinor: e.target.value })} />
+          <input className="input" type="number" step={amountStep} placeholder={`Fixed amount off (${currency}, optional)`} value={policyForm.amountMinor} onChange={(e) => setPolicyForm({ ...policyForm, amountMinor: e.target.value })} />
           <button type="submit" className="btn-primary w-full">Save policy</button>
         </form>
         <form onSubmit={grantConcession} className="card p-6 space-y-3">
@@ -177,7 +180,7 @@ export const ConcessionsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug 
               <tr key={row.concession.id}>
                 <td>{row.student?.admissionNumber} {row.student?.firstName} {row.student?.lastName}</td>
                 <td>{row.policyName ?? "—"}</td>
-                <td>{row.concession.percent ? `${row.concession.percent}%` : row.concession.amountMinor ? `Fixed` : "—"}</td>
+                <td>{row.concession.percent ? `${row.concession.percent}%` : row.concession.amountMinor ? formatMoney(row.concession.amountMinor) : "—"}</td>
                 <td className="capitalize">{row.concession.status}</td>
               </tr>
             ))}
@@ -190,6 +193,8 @@ export const ConcessionsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug 
 
 export const DiscountsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: number) => string }> = ({ schoolSlug, formatMoney }) => {
   const { toast } = useToast();
+  const { currency } = useAuth();
+  const amountStep = moneyInputStep(currency);
   const { students } = useFinanceMeta(schoolSlug);
   const [rows, setRows] = useState<any[]>([]);
   const [form, setForm] = useState({ name: "", studentId: "", percent: "", amountMinor: "", reason: "" });
@@ -203,7 +208,7 @@ export const DiscountsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: nu
       name: form.name,
       studentId: form.studentId || undefined,
       percent: form.percent ? Number(form.percent) : undefined,
-      amountMinor: form.amountMinor ? Math.round(Number(form.amountMinor) * 100) : undefined,
+      amountMinor: form.amountMinor ? minorFromMajor(Number(form.amountMinor), currency) : undefined,
       reason: form.reason || undefined,
     });
     toast("Discount created", "success");
@@ -220,7 +225,7 @@ export const DiscountsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: nu
           {students.map((s) => <option key={s.id} value={s.id}>{s.admissionNumber}</option>)}
         </select>
         <input className="input" type="number" placeholder="% off" value={form.percent} onChange={(e) => setForm({ ...form, percent: e.target.value })} />
-        <input className="input md:col-span-2" type="number" step="0.01" placeholder="Fixed amount" value={form.amountMinor} onChange={(e) => setForm({ ...form, amountMinor: e.target.value })} />
+        <input className="input md:col-span-2" type="number" step={amountStep} placeholder={`Fixed amount (${currency})`} value={form.amountMinor} onChange={(e) => setForm({ ...form, amountMinor: e.target.value })} />
         <button type="submit" className="btn-primary">Add discount</button>
       </form>
       <div className="card overflow-hidden">
@@ -322,6 +327,8 @@ export const AutoInvoicesPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug
 
 export const DonationsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: number) => string }> = ({ schoolSlug, formatMoney }) => {
   const { toast } = useToast();
+  const { currency } = useAuth();
+  const amountStep = moneyInputStep(currency);
   const [rows, setRows] = useState<any[]>([]);
   const [form, setForm] = useState({ donorName: "", amount: "", purpose: "", paymentMethod: "cash", reference: "" });
 
@@ -332,7 +339,7 @@ export const DonationsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: nu
     e.preventDefault();
     await api.post(`/s/${schoolSlug}/api/finance/donations`, {
       donorName: form.donorName,
-      amountMinor: Math.round(Number(form.amount) * 100),
+      amountMinor: minorFromMajor(Number(form.amount), currency),
       purpose: form.purpose || undefined,
       paymentMethod: form.paymentMethod,
       reference: form.reference || undefined,
@@ -346,7 +353,7 @@ export const DonationsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: nu
     <div className="space-y-4">
       <form onSubmit={submit} className="card p-6 grid md:grid-cols-3 gap-3">
         <input className="input" required placeholder="Donor name" value={form.donorName} onChange={(e) => setForm({ ...form, donorName: e.target.value })} />
-        <input className="input" type="number" step="0.01" required placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+        <input className="input" type="number" step={amountStep} required placeholder={`Amount (${currency})`} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
         <input className="input" placeholder="Purpose" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
         <button type="submit" className="btn-primary md:col-span-3">Record donation</button>
       </form>
@@ -371,6 +378,8 @@ export const DonationsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: nu
 
 export const BudgetsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: number) => string }> = ({ schoolSlug, formatMoney }) => {
   const { toast } = useToast();
+  const { currency } = useAuth();
+  const amountStep = moneyInputStep(currency);
   const [rows, setRows] = useState<any[]>([]);
   const [form, setForm] = useState({ fiscalYear: String(new Date().getFullYear()), category: "", amountMinor: "" });
 
@@ -382,7 +391,7 @@ export const BudgetsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: numb
     await api.post(`/s/${schoolSlug}/api/finance/budgets`, {
       fiscalYear: Number(form.fiscalYear),
       category: form.category,
-      amountMinor: Math.round(Number(form.amountMinor) * 100),
+      amountMinor: minorFromMajor(Number(form.amountMinor), currency),
     });
     toast("Budget line added", "success");
     load();
@@ -393,7 +402,7 @@ export const BudgetsPanel: React.FC<{ schoolSlug: string; formatMoney: (c?: numb
       <form onSubmit={submit} className="card p-6 grid md:grid-cols-4 gap-3">
         <input className="input" type="number" required value={form.fiscalYear} onChange={(e) => setForm({ ...form, fiscalYear: e.target.value })} />
         <input className="input" required placeholder="Category (e.g. events)" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-        <input className="input" type="number" step="0.01" required placeholder="Budget amount" value={form.amountMinor} onChange={(e) => setForm({ ...form, amountMinor: e.target.value })} />
+        <input className="input" type="number" step={amountStep} required placeholder={`Budget (${currency})`} value={form.amountMinor} onChange={(e) => setForm({ ...form, amountMinor: e.target.value })} />
         <button type="submit" className="btn-primary">Add budget</button>
       </form>
       <div className="card overflow-hidden">
@@ -478,7 +487,8 @@ export const PaymentHistoryPanel: React.FC<{ schoolSlug: string; formatMoney: (c
 
 export const IncomeExpensePanel: React.FC<{ schoolSlug: string; formatMoney: (c?: number) => string }> = ({ schoolSlug, formatMoney }) => {
   const { toast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, currency } = useAuth();
+  const amountStep = moneyInputStep(currency);
   const [data, setData] = useState<any>(null);
   const [expForm, setExpForm] = useState({ description: "", amount: "", category: "" });
 
@@ -489,7 +499,7 @@ export const IncomeExpensePanel: React.FC<{ schoolSlug: string; formatMoney: (c?
     e.preventDefault();
     await api.post(`/s/${schoolSlug}/api/finance/expenses`, {
       description: expForm.description,
-      amount: Math.round(Number(expForm.amount) * 100),
+      amount: minorFromMajor(Number(expForm.amount), currency),
       category: expForm.category || undefined,
     });
     toast("Expense recorded", "success");
@@ -510,7 +520,7 @@ export const IncomeExpensePanel: React.FC<{ schoolSlug: string; formatMoney: (c?
       {hasPermission("finance.payment.create") && (
         <form onSubmit={addExpense} className="card p-6 grid md:grid-cols-4 gap-3">
           <input className="input" required placeholder="Description" value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} />
-          <input className="input" type="number" step="0.01" required placeholder="Amount" value={expForm.amount} onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })} />
+          <input className="input" type="number" step={amountStep} required placeholder={`Amount (${currency})`} value={expForm.amount} onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })} />
           <input className="input" placeholder="Category" value={expForm.category} onChange={(e) => setExpForm({ ...expForm, category: e.target.value })} />
           <button type="submit" className="btn-primary">Add expense</button>
         </form>

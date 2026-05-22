@@ -1,22 +1,28 @@
 import { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 import { NotFoundError, ForbiddenError } from "./error";
+import { hostMatchesTenantCustomDomain } from "../lib/custom-domain-host";
 import { resolveTenantByHost, resolveTenantBySlug } from "../services/tenant-resolve";
 
 export async function resolveTenant(req: Request, res: Response, next: NextFunction) {
   try {
     let slug = req.params.schoolSlug as string | undefined;
+    const host = req.headers.host ?? "";
 
-    if ((req as any).tenant && (req as any).tenant.slug) {
+    if ((req as any).tenant?.slug) {
+      req.params.schoolSlug = (req as any).tenant.slug;
       return next();
     }
 
-    if (!slug && process.env.USE_SUBDOMAIN === "true") {
-      const fromHost = await resolveTenantByHost(req.headers.host ?? "");
-      if (fromHost) {
+    const fromHost = await resolveTenantByHost(host);
+    if (fromHost) {
+      const onCustom = Boolean(
+        fromHost.domainVerified && hostMatchesTenantCustomDomain(fromHost.customDomain, host),
+      );
+      if (process.env.USE_SUBDOMAIN === "true" || onCustom) {
         (req as any).tenant = fromHost;
         req.params.schoolSlug = fromHost.slug;
-        return next();
+        slug = fromHost.slug;
       }
     }
 

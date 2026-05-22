@@ -1,13 +1,23 @@
 import {
+  BarChart3,
+  Bell,
   BookOpen,
   Bus,
   Calculator,
+  Calendar,
+  ClipboardList,
   FileText,
   GraduationCap,
+  Headphones,
   Library,
+  Monitor,
   Shield,
+  ShieldCheck,
+  UserCheck,
   Users,
+  Video,
   Wallet,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -224,6 +234,69 @@ export const ACADEMIC_LEARNING = {
     },
   ],
 } as const;
+
+/** TSMS-style “Why unique” trio */
+export const UNIQUE_OFFERING = {
+  eyebrow: "Smart Solution",
+  title: "Why SchoolOS is unique in offerings",
+  subtitle:
+    "Built for schools and academy networks — admissions, operations, finance, and automation under one roof. No more juggling separate apps.",
+  items: [
+    {
+      title: "Smart Analytics",
+      description: "Track progress and performance with live dashboards and export-ready reports.",
+      icon: BarChart3,
+      illustration: "analytics" as const,
+    },
+    {
+      title: "Automation",
+      description: "Save time with automated workflows, fee reminders, and scheduled announcements.",
+      icon: Zap,
+      illustration: "automation" as const,
+    },
+    {
+      title: "Secure & Reliable",
+      description: "Tenant-isolated data, audit trails, and encryption in transit and at rest.",
+      icon: ShieldCheck,
+      illustration: "security" as const,
+    },
+  ],
+} as const;
+
+/** Role-based feature grid (theschool-management.com pattern) */
+export const ROLE_FEATURES = [
+  { role: "School Admin", description: "Manage all activities across modules.", icon: Shield, tone: "from-blue-500 to-indigo-600" },
+  { role: "Head Teacher", description: "Oversee academics, staff, and school performance.", icon: GraduationCap, tone: "from-violet-500 to-purple-600" },
+  { role: "Teacher", description: "Manage classes, marks, homework, and attendance.", icon: BookOpen, tone: "from-sky-500 to-blue-600" },
+  { role: "Bursar", description: "Fees, invoices, payments, and expenses in one place.", icon: Wallet, tone: "from-emerald-500 to-teal-600" },
+  { role: "Receptionist", description: "Front office, admissions, and visitor management.", icon: UserCheck, tone: "from-amber-500 to-orange-500" },
+  { role: "Parent", description: "Monitor fees, results, and announcements.", icon: Users, tone: "from-rose-500 to-pink-600" },
+  { role: "Student", description: "Timetable, homework, and portal resources.", icon: GraduationCap, tone: "from-cyan-500 to-blue-500" },
+  { role: "Librarian", description: "Books, cards, loans, and reservations.", icon: Library, tone: "from-indigo-500 to-blue-700" },
+  { role: "Transport", description: "Routes, vehicles, and student assignments.", icon: Bus, tone: "from-lime-600 to-green-600" },
+  { role: "Exam Officer", description: "Schedules, marks, admit cards, and reports.", icon: ClipboardList, tone: "from-fuchsia-500 to-violet-600" },
+  { role: "Online Classes", description: "Virtual sessions with attendance tracking.", icon: Video, tone: "from-blue-600 to-cyan-500" },
+  { role: "IT Support", description: "Users, roles, and technical configuration.", icon: Headphones, tone: "from-slate-600 to-slate-800" },
+] as const;
+
+/** Compact feature grid for home */
+export const POWERFUL_FEATURES = [
+  { title: "Classes & Sections", description: "Create and manage multiple classes and streams.", icon: GraduationCap },
+  { title: "Subjects", description: "Organize subjects per class with teacher assignments.", icon: BookOpen },
+  { title: "Study Materials", description: "Upload and distribute resources to students.", icon: FileText },
+  { title: "Attendance", description: "Daily student and staff attendance with reports.", icon: Calendar },
+  { title: "Class Timetable", description: "Generate and manage schedules seamlessly.", icon: Calendar },
+  { title: "Noticeboard", description: "Publish announcements to staff and parents.", icon: Bell },
+  { title: "Homework", description: "Assign, track, and review submissions.", icon: ClipboardList },
+  { title: "Live Classes", description: "Online sessions with integrated attendance.", icon: Monitor },
+] as const;
+
+export const HOME_MODULE_TABS = [
+  { id: "academic", label: "Academic", features: ["Classes & streams", "Subjects & timetable", "Study materials", "Homework"] },
+  { id: "admin", label: "Administration", features: ["Staff & roles", "Admissions", "Noticeboard", "Events"] },
+  { id: "finance", label: "Accounting", features: ["Fee structures", "Invoices & receipts", "Expenses", "Reports"] },
+  { id: "exams", label: "Examination", features: ["Exam groups", "Marks entry", "Report cards", "Admit cards"] },
+] as const;
 
 export const PILLARS = [
   {

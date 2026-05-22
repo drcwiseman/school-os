@@ -2,10 +2,12 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { tenantHelpArticles } from "../db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
+import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
+import { NotFoundError } from "../middleware/error";
 import { safeList } from "../lib/safe-route";
 
 const router = Router();
@@ -28,8 +30,8 @@ router.get("/", ...guard, safeList("help", DEFAULT_ARTICLES.map((a, i) => ({ ...
   return rows;
 }));
 
-router.post("/", ...guard, validate({
-  body: z.object({ title: z.string(), category: z.string().optional(), bodyMd: z.string(), sortOrder: z.number().optional() }),
+router.post("/", ...guard, requirePermission("settings.manage"), validate({
+  body: z.object({ title: z.string().min(1), category: z.string().optional(), bodyMd: z.string(), sortOrder: z.number().optional() }),
 }), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -41,6 +43,37 @@ router.post("/", ...guard, validate({
       sortOrder: req.body.sortOrder ?? 0,
     }).returning();
     res.status(201).json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+router.patch("/:id", ...guard, requirePermission("settings.manage"), validate({
+  body: z.object({
+    title: z.string().min(1).optional(),
+    category: z.string().optional(),
+    bodyMd: z.string().optional(),
+    sortOrder: z.number().optional(),
+  }),
+}), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.update(tenantHelpArticles).set(req.body).where(and(
+      eq(tenantHelpArticles.id, req.params.id),
+      eq(tenantHelpArticles.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Article not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+router.delete("/:id", ...guard, requirePermission("settings.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(tenantHelpArticles).where(and(
+      eq(tenantHelpArticles.id, req.params.id),
+      eq(tenantHelpArticles.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Article not found");
+    res.json({ success: true });
   } catch (e) { next(e); }
 });
 

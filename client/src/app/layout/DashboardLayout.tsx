@@ -8,6 +8,7 @@ import { PwaInstallBanner } from "../components/PwaInstallBanner";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { HeaderNotifications } from "../components/HeaderNotifications";
 import { Loader2 } from "lucide-react";
+import { schoolPath } from "../lib/tenant-host";
 
 export const DashboardLayout: React.FC = () => {
   const { user, loading, schoolSlug, impersonationReadOnly } = useAuth();
@@ -23,15 +24,15 @@ export const DashboardLayout: React.FC = () => {
 
   if (!user || !schoolSlug) {
     // Redirect to login preserving the attempted url
-    const loginUrl = schoolSlug ? `/s/${schoolSlug}/login` : "/";
+    const loginUrl = schoolSlug ? schoolPath(schoolSlug, "login") : "/";
     return <Navigate to={loginUrl} state={{ from: location }} replace />;
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-surface p-8">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 overflow-y-auto bg-surface p-6 md:p-8 min-w-0">
+        <div className="w-full max-w-[min(100%,1600px)] mx-auto min-w-0">
           {impersonationReadOnly && (
             <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
               Platform shadow session — read-only. Changes are blocked.

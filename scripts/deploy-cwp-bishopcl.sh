@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Run ON THE SERVER as user bishopcl (after PostgreSQL is installed)
-# APP_DOMAIN=school.bclimaxtech.com ./scripts/deploy-cwp-bishopcl.sh
+# APP_DOMAIN=masomobest.com ./scripts/deploy-cwp-bishopcl.sh
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$HOME/school-os}"
-APP_DOMAIN="${APP_DOMAIN:-school.bclimaxtech.com}"
+APP_DOMAIN="${APP_DOMAIN:-masomobest.com}"
 PUBLIC_HTML="${PUBLIC_HTML:-$HOME/public_html}"
 NODE_PORT="${NODE_PORT:-5000}"
 
@@ -37,6 +37,7 @@ if [ ! -f server/.env ]; then
   sed -i "s|SESSION_SECRET=.*|SESSION_SECRET=$SECRET|" server/.env
   sed -i 's|NODE_ENV=development|NODE_ENV=production|' server/.env
   sed -i "s|CLIENT_ORIGIN=.*|CLIENT_ORIGIN=https://$APP_DOMAIN|" server/.env
+  sed -i "s|PLATFORM_DOMAIN=.*|PLATFORM_DOMAIN=$APP_DOMAIN|" server/.env
   echo ""
   echo "EDIT server/.env — set DATABASE_URL, then run this script again."
   echo "  nano $APP_DIR/server/.env"
@@ -44,6 +45,7 @@ if [ ! -f server/.env ]; then
 fi
 
 npm run build
+npm run db:repair --prefix server
 npm run db:migrate
 
 pm2 delete school-os 2>/dev/null || true

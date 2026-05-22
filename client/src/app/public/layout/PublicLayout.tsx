@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
+import { PromoStrip } from "../components/PromoStrip";
 import { PublicHeader } from "../components/PublicHeader";
 import { PublicFooter } from "../components/PublicFooter";
 import { SeoHead, seoFromMarketing } from "../components/SeoHead";
@@ -30,6 +31,7 @@ export const PublicLayout: React.FC = () => {
           plausibleDomain: marketing?.plausibleDomain,
         }}
       />
+      <PromoStrip />
       <PublicHeader />
       <main className="relative z-10 flex-1">
         <Outlet />

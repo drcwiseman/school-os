@@ -1,13 +1,17 @@
 import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
+import { useSchoolSlug } from "../hooks/useSchoolSlug";
+import { getTenantBootstrap, schoolPath } from "../lib/tenant-host";
 import { api } from "../api/client";
 import { Loader2, AlertCircle } from "lucide-react";
 
 export const Login: React.FC = () => {
-  const { schoolSlug } = useParams<{ schoolSlug: string }>();
+  const schoolSlug = useSchoolSlug();
+  const boot = getTenantBootstrap();
   const navigate = useNavigate();
   const { setAuth } = useAuth();
+  const displayName = boot?.schoolName ?? schoolSlug;
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +31,7 @@ export const Login: React.FC = () => {
           country: me.country,
           currency: me.currency,
         });
-        navigate(`/s/${schoolSlug}/dashboard`);
+        navigate(schoolPath(schoolSlug!, "dashboard"));
       }
     } catch (err: any) {
       setError(err.message || "Invalid credentials");
@@ -41,10 +45,10 @@ export const Login: React.FC = () => {
       <div className="w-full max-w-md card p-8 animate-fade-in">
         <div className="text-center mb-8">
           <div className="w-12 h-12 bg-primary-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
-            <span className="text-white font-bold text-xl">{schoolSlug?.charAt(0).toUpperCase()}</span>
+            <span className="text-white font-bold text-xl">{(displayName ?? schoolSlug)?.charAt(0).toUpperCase()}</span>
           </div>
           <h2 className="text-2xl font-bold text-white mb-1">School ERP sign in</h2>
-          <p className="text-slate-400 text-sm">Administrator or delegated staff account for <span className="text-slate-300">{schoolSlug}</span> — not the parent/student portal</p>
+          <p className="text-slate-400 text-sm">Administrator or delegated staff account for <span className="text-slate-300">{displayName ?? schoolSlug}</span> — not the parent/student portal</p>
         </div>
 
         {error && (

@@ -6,6 +6,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "./index";
 import { applyFacilitiesBaseTables } from "./facilities-base-sql";
+import { applyFacilitiesOperationsTables } from "./facilities-operations-sql";
 import { splitMigrationSql } from "./sql-runner";
 import path from "path";
 import fs from "fs";
@@ -73,6 +74,9 @@ async function main() {
   console.log("Running migrations (PG10-safe, no wrap transaction)…");
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
   await ensureMigrationsTable();
+
+  console.log("· ensure facilities operations tables (library cards, rooms, tickets…)");
+  await applyFacilitiesOperationsTables(runStatement);
 
   const lastMillis = await getLastAppliedMillis();
   const journal = JSON.parse(

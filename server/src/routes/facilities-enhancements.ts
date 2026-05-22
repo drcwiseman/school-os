@@ -64,23 +64,28 @@ facilitiesEnhancementsRouter.get("/overview", async (req, res, next) => {
 facilitiesEnhancementsRouter.get("/rooms", async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const campus = await db.select().from(facilityRooms).where(eq(facilityRooms.tenantId, tenant.id)).orderBy(facilityRooms.name);
-    const academic = await db.select().from(rooms).where(eq(rooms.tenantId, tenant.id)).orderBy(rooms.name);
-    const hostel = await db.select({
-      room: boardingRooms,
-      occupied: sql<number>`(
-        select count(*)::int from boarding_allocations ba
-        where ba.room_id = ${boardingRooms.id} and ba.tenant_id = ${tenant.id} and ba.to_date is null
-      )`,
-    }).from(boardingRooms).where(eq(boardingRooms.tenantId, tenant.id));
-    res.json({
-      success: true,
-      data: {
-        campus,
-        academic,
-        hostel: hostel.map((h) => ({ ...h.room, occupied: Number(h.occupied ?? 0), source: "hostel" })),
-      },
-    });
+    const out: { campus: unknown[]; academic: unknown[]; hostel: unknown[] } = {
+      campus: [],
+      academic: [],
+      hostel: [],
+    };
+    try {
+      out.campus = await db.select().from(facilityRooms).where(eq(facilityRooms.tenantId, tenant.id)).orderBy(facilityRooms.name);
+    } catch { /* facility_rooms may be missing until schema patch */ }
+    try {
+      out.academic = await db.select().from(rooms).where(eq(rooms.tenantId, tenant.id)).orderBy(rooms.name);
+    } catch { /* ignore */ }
+    try {
+      const hostel = await db.select({
+        room: boardingRooms,
+        occupied: sql<number>`(
+          select count(*)::int from boarding_allocations ba
+          where ba.room_id = ${boardingRooms.id} and ba.tenant_id = ${tenant.id} and ba.to_date is null
+        )`,
+      }).from(boardingRooms).where(eq(boardingRooms.tenantId, tenant.id));
+      out.hostel = hostel.map((h) => ({ ...h.room, occupied: Number(h.occupied ?? 0), source: "hostel" }));
+    } catch { /* ignore */ }
+    res.json({ success: true, data: out });
   } catch (e) { next(e); }
 });
 
@@ -221,6 +226,46 @@ facilitiesEnhancementsRouter.post("/activities", requirePermission("messaging.ma
     } catch (e) { next(e); }
   },
 );
+
+facilitiesEnhancementsRouter.delete("/rooms/:id", requirePermission("library.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    await db.delete(facilityRoomBookings).where(and(
+      eq(facilityRoomBookings.roomId, req.params.id),
+      eq(facilityRoomBookings.tenantId, tenant.id),
+    ));
+    const [row] = await db.delete(facilityRooms).where(and(
+      eq(facilityRooms.id, req.params.id),
+      eq(facilityRooms.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Room not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+facilitiesEnhancementsRouter.delete("/rooms/bookings/:id", requirePermission("library.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(facilityRoomBookings).where(and(
+      eq(facilityRoomBookings.id, req.params.id),
+      eq(facilityRoomBookings.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Booking not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+facilitiesEnhancementsRouter.delete("/activities/:id", requirePermission("messaging.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(schoolEvents).where(and(
+      eq(schoolEvents.id, req.params.id),
+      eq(schoolEvents.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Activity not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
 
 facilitiesEnhancementsRouter.patch("/activities/:id", requirePermission("messaging.manage"),
   validate({

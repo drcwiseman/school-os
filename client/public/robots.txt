@@ -3,4 +3,4 @@ Allow: /
 Disallow: /platform/
 Disallow: /s/
 
-Sitemap: https://school.bclimaxtech.com/sitemap.xml
+Sitemap: https://masomobest.com/sitemap.xml

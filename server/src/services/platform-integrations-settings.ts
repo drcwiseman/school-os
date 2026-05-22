@@ -78,7 +78,8 @@ async function saveRawConfigs(configs: Record<string, IntegrationConfigStored>) 
 
 async function webhookBaseUrl(): Promise<string> {
   const marketing = await getPlatformMarketing();
-  const base = (process.env.CLIENT_ORIGIN || marketing.siteUrl || "https://school.bclimaxtech.com").replace(/\/$/, "");
+  const { resolveClientOrigin } = await import("../lib/app-origin");
+  const base = await resolveClientOrigin();
   return `${base}/api/webhooks`;
 }
 

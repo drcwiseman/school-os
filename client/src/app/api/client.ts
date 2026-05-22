@@ -25,7 +25,11 @@ class ApiClient {
     const data = await resAuth.json().catch(() => null);
 
     if (!resAuth.ok) {
-      throw new Error(data?.message || `API Error: ${resAuth.status}`);
+      const err = new Error(data?.message || `API Error: ${resAuth.status}`) as Error & {
+        errors?: { field: string; message: string }[];
+      };
+      if (data?.errors) err.errors = data.errors;
+      throw err;
     }
 
     return data;

@@ -169,8 +169,13 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
       }
 
       const paymentGateways = await isFeatureAllowedForTenant(tenant.id, "payment_gateways");
-      const [settings] = await db.select({ currency: tenantSettings.currency }).from(tenantSettings)
+      const [settings] = await db.select({
+        currency: tenantSettings.currency,
+        paymentProvidersJson: tenantSettings.paymentProvidersJson,
+      }).from(tenantSettings)
         .where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+      const { normalizePaymentProviders, isPaypalReady, isPesapalReady } = await import("../lib/payment-providers");
+      const payCfg = normalizePaymentProviders(settings?.paymentProvidersJson as Record<string, unknown>);
 
       res.json({
         success: true,
@@ -183,6 +188,10 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
           announcements: msgs,
           transport: transport.map((t) => ({ ...t, stops: stopsByRoute[t.routeId] ?? [] })),
           paymentGatewaysEnabled: paymentGateways,
+          paymentProviders: {
+            paypal: isPaypalReady(payCfg),
+            pesapal: isPesapalReady(payCfg),
+          },
           currency: settings?.currency ?? "UGX",
         },
       });
@@ -274,7 +283,7 @@ router.post("/payments/initiate", requirePortalAuth,
   validate({
     body: z.object({
       invoiceId: z.string().uuid(),
-      provider: z.enum(["flutterwave", "mtn_momo", "stripe", "paypal", "airtel_money"]),
+      provider: z.enum(["flutterwave", "mtn_momo", "paypal", "pesapal", "airtel_money"]),
       payerPhone: z.string().optional(),
     }),
   }),
@@ -296,7 +305,8 @@ router.post("/payments/initiate", requirePortalAuth,
       const balance = invoice.totalAmount - invoice.paidAmount;
       if (balance <= 0) throw new ConflictError("Invoice is already paid");
 
-      const base = (process.env.CLIENT_ORIGIN || "").replace(/\/$/, "");
+      const { resolveClientOrigin } = await import("../lib/app-origin");
+      const base = await resolveClientOrigin();
       const redirectUrl = `${base}/s/${tenant.slug}/portal/dashboard?paid=1`;
       const { initiateFlutterwavePayment, initiateMtnMomoCollection } = await import("../services/integration-runtime");
 
@@ -331,13 +341,16 @@ router.post("/payments/initiate", requirePortalAuth,
         return res.json({ success: true, data: result });
       }
 
-      if (req.body.provider === "stripe" || req.body.provider === "paypal") {
+      if (req.body.provider === "paypal" || req.body.provider === "pesapal") {
         const { initiateTenantGatewayPayment } = await import("../services/integration-runtime");
+        const [settings] = await db.select({ currency: tenantSettings.currency }).from(tenantSettings)
+          .where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
         const result = await initiateTenantGatewayPayment({
           tenantId: tenant.id,
           provider: req.body.provider,
           invoiceId: invoice.id,
           amount: amountMajor,
+          currency: settings?.currency ?? "UGX",
           customerEmail: parentRow?.email ?? "parent@school.local",
           redirectUrl,
         });

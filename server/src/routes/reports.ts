@@ -12,6 +12,7 @@ import { requirePermission } from "../middleware/rbac";
 import {
   generateInvoicePdf, generateReceiptPdf, generateReportCardPdf, generatePayslipPdf, pdfStructureCheck,
 } from "../services/pdf";
+import { getTenantLocale } from "../services/tenant-locale";
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
 
@@ -30,7 +31,8 @@ router.get("/finance/collections", ...guard, requirePermission("reports.view"), 
       totalInvoiced: sql<number>`coalesce(sum(${invoices.totalAmount}),0)`,
       totalPaid: sql<number>`coalesce(sum(${invoices.paidAmount}),0)`,
     }).from(invoices).where(and(...conditions));
-    res.json({ success: true, data: summary });
+    const locale = await getTenantLocale(tenant.id);
+    res.json({ success: true, data: { ...summary, currency: locale.currency, country: locale.country } });
   } catch (e) { next(e); }
 });
 
@@ -40,7 +42,13 @@ router.get("/finance/debtors", ...guard, requirePermission("reports.view"), asyn
     const conditions = [eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt), sql`${invoices.paidAmount} < ${invoices.totalAmount}`];
     pushCampusFilter(conditions, invoices, req);
     const rows = await db.select().from(invoices).where(and(...conditions));
-    res.json({ success: true, data: rows.map((r) => ({ ...r, balance: r.totalAmount - r.paidAmount })) });
+    const locale = await getTenantLocale(tenant.id);
+    res.json({
+      success: true,
+      data: rows.map((r) => ({ ...r, balance: r.totalAmount - r.paidAmount })),
+      currency: locale.currency,
+      country: locale.country,
+    });
   } catch (e) { next(e); }
 });
 

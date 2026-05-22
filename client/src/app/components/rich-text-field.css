@@ -1,0 +1,79 @@
+/* Dark theme for school messaging (wraps .email-rich-editor) */
+.rich-text-field.theme-dark .email-rich-editor {
+  border-color: rgb(51 65 85);
+  background: rgb(2 6 23);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .tiptap-toolbar {
+  border-bottom-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .tiptap-toolbar-group {
+  border-right-color: rgb(51 65 85);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .tiptap-btn {
+  color: rgb(148 163 184);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .tiptap-btn:hover {
+  background: rgb(30 41 59);
+  color: rgb(241 245 249);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .tiptap-btn.is-active {
+  background: rgb(30 58 138);
+  color: rgb(147 197 253);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .editor-surface {
+  border-color: rgb(51 65 85);
+  background: rgb(2 6 23);
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.rich-text-field.theme-dark .email-rich-editor .ProseMirror {
+  color: rgb(241 245 249);
+  min-height: var(--rte-min-height, 160px);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(100 116 139);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .ProseMirror a {
+  color: rgb(96 165 250);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .ProseMirror blockquote {
+  border-left-color: rgb(71 85 105);
+  color: rgb(148 163 184);
+}
+
+.rich-text-field.theme-dark .email-rich-editor .editor-source {
+  border-color: rgb(51 65 85);
+  background: rgb(2 6 23);
+  color: rgb(226 232 240);
+  min-height: var(--rte-min-height, 160px);
+}
+
+.rich-text-field.compact .email-rich-editor .ProseMirror,
+.rich-text-field.compact .email-rich-editor .editor-source {
+  min-height: 100px;
+}
+
+.messaging-body-html p {
+  margin: 0.35em 0;
+}
+
+.messaging-body-html a {
+  color: rgb(96 165 250);
+  text-decoration: underline;
+}
+
+.messaging-body-html ul,
+.messaging-body-html ol {
+  padding-left: 1.25em;
+  margin: 0.35em 0;
+}

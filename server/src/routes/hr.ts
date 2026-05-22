@@ -14,8 +14,11 @@ import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { NotFoundError, BadRequestError } from "../middleware/error";
 import { getStaffById, listStaffForTenant } from "../lib/staff-query";
+import { listContractsForStaff, listLeaveForTenant } from "../lib/hr-query";
+import { tableExists } from "../lib/table-columns";
 
 async function findOverlappingLeave(tenantId: string, staffId: string, start: Date, end: Date, excludeId?: string) {
+  if (!(await tableExists("leave_requests"))) return [];
   const conditions = [
     eq(leaveRequests.tenantId, tenantId),
     eq(leaveRequests.staffId, staffId),
@@ -43,7 +46,7 @@ router.get("/staff", ...guard, requirePermission("hr.view"), async (req, res, ne
 router.get("/staff/export/csv", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const rows = await db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), isNull(staff.deletedAt)));
+    const rows = await listStaffForTenant(tenant.id);
     const header = "employeeNo,firstName,lastName,email,department\n";
     const body = rows.map((s) =>
       [s.employeeNo, s.firstName, s.lastName, s.email ?? "", s.department ?? ""].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
@@ -137,12 +140,9 @@ router.delete("/staff/:id", ...guard, requirePermission("hr.manage"), async (req
 router.get("/staff/:id/contracts", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [s] = await db.select().from(staff).where(and(eq(staff.id, req.params.id), eq(staff.tenantId, tenant.id), isNull(staff.deletedAt))).limit(1);
+    const s = await getStaffById(tenant.id, req.params.id);
     if (!s) throw new NotFoundError("Staff not found");
-    const rows = await db.select().from(staffContracts).where(and(
-      eq(staffContracts.staffId, s.id),
-      eq(staffContracts.tenantId, tenant.id),
-    )).orderBy(desc(staffContracts.startDate));
+    const rows = await listContractsForStaff(tenant.id, req.params.id);
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
@@ -152,7 +152,10 @@ router.post("/staff/:id/contracts", ...guard, requirePermission("hr.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const [s] = await db.select().from(staff).where(and(eq(staff.id, req.params.id), eq(staff.tenantId, tenant.id))).limit(1);
+      if (!(await tableExists("staff_contracts"))) {
+        throw new BadRequestError("Contracts table missing — run npm run db:repair on the server");
+      }
+      const s = await getStaffById(tenant.id, req.params.id);
       if (!s) throw new NotFoundError("Staff not found");
       const [row] = await db.insert(staffContracts).values({
         tenantId: tenant.id, staffId: s.id, salary: req.body.salary,
@@ -206,25 +209,7 @@ router.get("/leave", ...guard, requirePermission("hr.view"), async (req, res, ne
   try {
     const tenant = (req as any).tenant;
     const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
-    const conditions = [eq(leaveRequests.tenantId, tenant.id)];
-    if (statusFilter) conditions.push(eq(leaveRequests.status, statusFilter as any));
-    const rows = await db
-      .select({
-        id: leaveRequests.id,
-        staffId: leaveRequests.staffId,
-        startDate: leaveRequests.startDate,
-        endDate: leaveRequests.endDate,
-        reason: leaveRequests.reason,
-        status: leaveRequests.status,
-        createdAt: leaveRequests.createdAt,
-        staffFirstName: staff.firstName,
-        staffLastName: staff.lastName,
-        employeeNo: staff.employeeNo,
-      })
-      .from(leaveRequests)
-      .innerJoin(staff, eq(leaveRequests.staffId, staff.id))
-      .where(and(...conditions))
-      .orderBy(desc(leaveRequests.createdAt));
+    const rows = await listLeaveForTenant(tenant.id, statusFilter);
     res.json({ success: true, data: rows });
   } catch (e) { next(e); }
 });
@@ -234,6 +219,9 @@ router.post("/leave", ...guard, requirePermission("hr.view"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      if (!(await tableExists("leave_requests"))) {
+        throw new BadRequestError("Leave module tables missing — run npm run db:repair on the server");
+      }
       const start = new Date(req.body.startDate);
       const end = new Date(req.body.endDate);
       if (end < start) throw new BadRequestError("End date must be on or after start date");
@@ -304,19 +292,22 @@ router.get("/staff-attendance/today", ...guard, requirePermission("hr.view"), as
 router.get("/analytics", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const [counts] = await db.select({
-      staff: sql<number>`count(*)`,
-      onLeave: sql<number>`count(*) filter (where ${leaveRequests.status} = 'approved')`,
-    }).from(staff).leftJoin(leaveRequests, eq(leaveRequests.staffId, staff.id))
-      .where(and(eq(staff.tenantId, tenant.id), isNull(staff.deletedAt)));
-    res.json({ success: true, data: counts });
+    const staffRows = await listStaffForTenant(tenant.id);
+    let onLeave = 0;
+    if (await tableExists("leave_requests")) {
+      const [row] = await db.select({ n: sql<number>`count(*)` }).from(leaveRequests)
+        .where(and(eq(leaveRequests.tenantId, tenant.id), eq(leaveRequests.status, "approved")));
+      onLeave = Number(row?.n ?? 0);
+    }
+    res.json({ success: true, data: { staff: staffRows.length, onLeave } });
   } catch (e) { next(e); }
 });
 
 router.get("/tax-rules", ...guard, requirePermission("hr.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(payrollTaxRules).where(eq(payrollTaxRules.tenantId, tenant.id)) });
+    const { listPayrollTaxRules } = await import("../lib/payroll-query");
+    res.json({ success: true, data: await listPayrollTaxRules(tenant.id) });
   } catch (e) { next(e); }
 });
 
@@ -325,6 +316,9 @@ router.post("/tax-rules", ...guard, requirePermission("hr.manage"),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      if (!(await tableExists("payroll_tax_rules"))) {
+        throw new BadRequestError("Payroll tax rules table missing — run npm run db:repair on the server");
+      }
       const [row] = await db.insert(payrollTaxRules).values({ tenantId: tenant.id, ...req.body }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }

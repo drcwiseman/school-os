@@ -158,7 +158,7 @@ export const ExamResultsPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug 
   };
 
   return (
-    <div className="card p-4 space-y-4 max-w-xl">
+    <div className="card p-4 space-y-4 w-full max-w-none">
       <p className="text-slate-400 text-sm">Compute letter grades and remarks from scores, then publish to the student portal.</p>
       <select className="input" value={compute.examGroupId} onChange={(e) => setCompute({ ...compute, examGroupId: e.target.value })}>
         <option value="">Exam group (optional)</option>
@@ -199,7 +199,7 @@ export const ExamPrintingPanel: React.FC<{ schoolSlug: string }> = ({ schoolSlug
   };
 
   return (
-    <div className="card p-4 space-y-6 max-w-2xl">
+    <div className="card p-4 space-y-6 w-full max-w-none">
       <section className="space-y-3">
         <h3 className="text-white font-medium">Admit cards</h3>
         <select className="input" value={print.examGroupId} onChange={(e) => setPrint({ ...print, examGroupId: e.target.value })}>

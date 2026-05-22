@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 
 /** Tables cleared on operational reset (tenant shell, users, roles, settings preserved). */
 const RESET_TABLES = [
+  "parent_sessions", "student_sessions", "parent_accounts", "student_accounts",
   "gate_passes", "school_tickets", "staff_hostel_allocations", "staff_hostel_rooms", "staff_hostel_blocks",
   "facility_room_bookings", "facility_rooms", "library_loans", "library_fines", "library_cards",
   "library_copies", "library_books", "library_reservations", "library_ebooks",

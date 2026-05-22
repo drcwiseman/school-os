@@ -565,11 +565,11 @@ router.post("/settings/email/templates/:code/send-test", requirePlatformAuth, re
   async (req, res, next) => {
     try {
       const marketing = await getPlatformMarketing();
-      const base = (process.env.CLIENT_ORIGIN || marketing.siteUrl || "https://school.bclimaxtech.com").replace(/\/$/, "");
+      const { platformLoginPath } = await import("../lib/app-origin");
       const vars: Record<string, string> = {
         siteName: marketing.siteName,
         name: "Test Recipient",
-        loginUrl: `${base}/platform/login`,
+        loginUrl: await platformLoginPath(),
         email: req.body.to,
         password: "••••••••",
         newPassword: "••••••••",
@@ -1367,7 +1367,7 @@ router.get("/tenants/:slug", requirePlatformAuth, requirePlatformPermission("ten
         tenant,
         settings,
         plan: tp?.plan ?? null,
-        domain: getDomainInstructions(tenant),
+        domain: await getDomainInstructions(tenant),
         addons: await getTenantAddonsDetailed(tenant.id),
         features,
         usage: await getTenantUsage(tenant.id, cycle),
@@ -1403,7 +1403,7 @@ router.patch("/tenants/:slug/domain", requirePlatformAuth, requirePlatformPermis
         after: updated,
         ip: req.ip,
       });
-      res.json({ success: true, data: getDomainInstructions(updated!) });
+      res.json({ success: true, data: await getDomainInstructions(updated!) });
     } catch (err) { next(err); }
   },
 );
@@ -1414,7 +1414,17 @@ router.post("/tenants/:slug/domain/verify", requirePlatformAuth, requirePlatform
       const admin = (req as any).platformAdmin;
       const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, req.params.slug)).limit(1);
       if (!tenant) throw new NotFoundError("Tenant not found");
-      const updated = await verifyCustomDomain(tenant.id);
+      if (!tenant.customDomain) throw new NotFoundError("Set a custom domain first");
+      const { verifyDomainDns } = await import("../services/dns-verification");
+      const dns = await verifyDomainDns(tenant.id, tenant.customDomain);
+      const [updated] = await db.select().from(tenants).where(eq(tenants.id, tenant.id)).limit(1);
+      if (!dns.verified) {
+        return res.status(400).json({
+          success: false,
+          message: dns.error ?? "DNS not pointing to SchoolOS yet. Add CNAME or A record, then try again.",
+          data: { dns, domain: updated ? await getDomainInstructions(updated) : null },
+        });
+      }
       await createPlatformAuditLog({
         platformAdminId: admin.id,
         tenantId: tenant.id,
@@ -1423,7 +1433,7 @@ router.post("/tenants/:slug/domain/verify", requirePlatformAuth, requirePlatform
         entityId: tenant.id,
         ip: req.ip,
       });
-      res.json({ success: true, data: getDomainInstructions(updated!) });
+      res.json({ success: true, data: await getDomainInstructions(updated!) });
     } catch (err) { next(err); }
   },
 );
@@ -1435,12 +1445,15 @@ router.get("/tenants/:slug/logins", requirePlatformAuth, requirePlatformPermissi
     const { listSchoolErpUsers } = await import("../services/platform-school-logins");
     const { schoolLoginPath } = await import("../lib/app-origin");
     const users = await listSchoolErpUsers(tenant.id);
+    const { portalLoginPath } = await import("../lib/app-origin");
     res.json({
       success: true,
       data: {
         slug: tenant.slug,
         schoolName: tenant.name,
         loginUrl: await schoolLoginPath(tenant.slug),
+        parentPortalUrl: await portalLoginPath(tenant.slug),
+        studentPortalUrl: await portalLoginPath(tenant.slug),
         users,
       },
     });

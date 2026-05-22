@@ -1,3 +1,6 @@
+import { db } from "../db";
+import { tenantSettings } from "../db/schema";
+import { eq } from "drizzle-orm";
 import { DEFAULT_COUNTRY, DEFAULT_CURRENCY, defaultCurrencyForCountry } from "../lib/currencies";
 
 export type TenantLocale = {
@@ -15,4 +18,13 @@ export function resolveTenantLocale(settings?: {
   const rawCurrency = (settings?.currency ?? "").trim().toUpperCase();
   const currency = rawCurrency || (rawCountry ? defaultCurrencyForCountry(rawCountry) : DEFAULT_CURRENCY);
   return { country, currency };
+}
+
+export async function getTenantLocale(tenantId: string): Promise<TenantLocale> {
+  const [row] = await db
+    .select({ country: tenantSettings.country, currency: tenantSettings.currency })
+    .from(tenantSettings)
+    .where(eq(tenantSettings.tenantId, tenantId))
+    .limit(1);
+  return resolveTenantLocale(row);
 }

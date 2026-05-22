@@ -10,6 +10,7 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
+import { NotFoundError } from "../middleware/error";
 import { safeList } from "../lib/safe-route";
 
 const router = Router();
@@ -171,6 +172,18 @@ router.post("/assignments", ...guard, requirePermission("transport.manage"),
     } catch (e) { next(e); }
   }
 );
+
+router.delete("/assignments/:id", ...guard, requirePermission("transport.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(routeAssignments).where(and(
+      eq(routeAssignments.id, req.params.id),
+      eq(routeAssignments.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Assignment not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
 
 router.post("/alerts", ...guard, requirePermission("transport.manage"),
   validate({ body: z.object({ routeId: z.string().uuid().optional(), studentId: z.string().uuid().optional(), alertType: z.string(), message: z.string() }) }),

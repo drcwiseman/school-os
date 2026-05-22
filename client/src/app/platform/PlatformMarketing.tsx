@@ -255,7 +255,7 @@ export const PlatformMarketing: React.FC = () => {
           <label className="text-xs font-medium text-slate-600">Plausible domain</label>
           <input
             className="input text-sm mt-1 w-full"
-            placeholder="school.bclimaxtech.com"
+            placeholder="https://masomobest.com"
             value={form.plausibleDomain}
             onChange={(e) => set("plausibleDomain", e.target.value)}
           />

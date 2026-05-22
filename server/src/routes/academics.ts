@@ -256,6 +256,31 @@ router.post("/classes/:classId/streams", ...guard, requirePermission("academics.
   }
 );
 
+router.patch("/streams/:streamId", ...guard, requirePermission("academics.manage"),
+  validate({ body: z.object({ name: z.string().min(1) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const [row] = await db.update(streams).set({ name: req.body.name })
+        .where(and(eq(streams.id, req.params.streamId), eq(streams.tenantId, tenant.id)))
+        .returning();
+      if (!row) throw new NotFoundError("Section not found");
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/streams/:streamId", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.delete(streams)
+      .where(and(eq(streams.id, req.params.streamId), eq(streams.tenantId, tenant.id)))
+      .returning();
+    if (!row) throw new NotFoundError("Section not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
 router.get("/subjects", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;

@@ -1,18 +1,16 @@
-/** Format integer cents to a human-readable currency string */
+import { formatMoneyMinor } from "../lib/currencies";
+
+/** Format integer minor units (cents) using the tenant currency. */
 export function formatMoney(cents: number, currency = "UGX"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  }).format(cents / 100);
+  return formatMoneyMinor(cents, currency);
 }
 
-/** Convert a decimal amount to integer cents */
+/** Convert a decimal amount to integer minor units. */
 export function toCents(amount: number): number {
   return Math.round(amount * 100);
 }
 
-/** Convert cents to decimal */
+/** Convert minor units to decimal major amount. */
 export function fromCents(cents: number): number {
   return cents / 100;
 }

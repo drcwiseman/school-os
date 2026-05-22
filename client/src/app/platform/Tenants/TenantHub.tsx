@@ -14,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { api } from "../../api/client";
+import { absoluteSchoolUrl, normalizeAppUrl } from "../../lib/app-origin";
 import { useToast } from "../../components/Toast";
 import { COUNTRY_OPTIONS } from "../../../lib/currencies";
 import { SchoolFormModal, type TenantRow } from "../components/SchoolFormModal";
@@ -147,10 +148,10 @@ export const TenantHub: React.FC = () => {
     setLoginLoading(true);
     try {
       const res = await api.post(`/api/platform/tenants/${slug}/impersonate`, { readOnly });
-      const url = res.data.url?.startsWith("http")
+      const raw = res.data.url?.startsWith("http")
         ? res.data.url
         : `${window.location.origin}${res.data.url}`;
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(normalizeAppUrl(raw), "_blank", "noopener,noreferrer");
       toast(readOnly ? "Opened school (read-only shadow)" : "Opened school as administrator", "success");
       setLoginSlug(null);
     } catch (err: any) {
@@ -196,7 +197,9 @@ export const TenantHub: React.FC = () => {
   };
 
   const schoolUrl = (t: TenantListRow) =>
-    t.loginUrl?.startsWith("http") ? t.loginUrl : `${window.location.origin}/s/${t.slug}/login`;
+    normalizeAppUrl(
+      t.loginUrl?.startsWith("http") ? t.loginUrl : absoluteSchoolUrl(`/s/${t.slug}/login`),
+    );
 
   if (loading) {
     return (

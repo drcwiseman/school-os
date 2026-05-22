@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { resolveTenant } from "../middleware/tenant";
 import { blockWriteIfImpersonationReadOnly } from "../middleware/auth";
+import { canonicalizeSchoolHostSlug } from "../middleware/school-host-canonical";
 import { requireTenantFeature } from "../middleware/require-feature";
 import { API_ROUTE_FEATURES } from "../lib/feature-module-map";
 import authRoutes     from "./auth";
@@ -28,7 +29,9 @@ import hrRoutes from "./hr";
 import { hrEnhancementsRouter } from "./hr-enhancements";
 import payrollRoutes from "./payroll";
 import disciplineRoutes from "./discipline";
+import { disciplineEnhancementsRouter } from "./discipline-enhancements";
 import healthRoutes from "./health";
+import { healthEnhancementsRouter } from "./health-enhancements";
 import libraryRoutes from "./library";
 import { libraryEnhancementsRouter } from "./library-enhancements";
 import inventoryRoutes from "./inventory";
@@ -67,14 +70,8 @@ router.use("/api/webhooks", webhooksRoutes);
 // Platform-level routes (no school slug required)
 router.use("/api/platform", platformRoutes);
 
-// School-scoped routes — all require valid :schoolSlug
-router.use("/s/:schoolSlug", resolveTenant, (req, res, next) => {
-  // forward schoolSlug param into nested routers
-  req.params.schoolSlug = req.params.schoolSlug;
-  next();
-});
-
-const schoolApi = [resolveTenant, blockWriteIfImpersonationReadOnly];
+// School-scoped API only — resolveTenant must not run on SPA paths like /s/:slug/facilities
+const schoolApi = [resolveTenant, canonicalizeSchoolHostSlug, blockWriteIfImpersonationReadOnly];
 
 function featureGuard(routeKey: string) {
   const code = API_ROUTE_FEATURES[routeKey];
@@ -105,8 +102,8 @@ router.use("/s/:schoolSlug/api/security",   ...schoolApi, securityRoutes);
 router.use("/s/:schoolSlug/api/search",     ...schoolApi, searchRoutes);
 router.use("/s/:schoolSlug/api/hr",          ...schoolApi, ...featureGuard("hr"), hrRoutes, hrEnhancementsRouter);
 router.use("/s/:schoolSlug/api/payroll",     ...schoolApi, ...featureGuard("payroll"), payrollRoutes);
-router.use("/s/:schoolSlug/api/discipline",  ...schoolApi, ...featureGuard("discipline"), disciplineRoutes);
-router.use("/s/:schoolSlug/api/health",      ...schoolApi, ...featureGuard("health"), healthRoutes);
+router.use("/s/:schoolSlug/api/discipline",  ...schoolApi, ...featureGuard("discipline"), disciplineRoutes, disciplineEnhancementsRouter);
+router.use("/s/:schoolSlug/api/health",      ...schoolApi, ...featureGuard("health"), healthRoutes, healthEnhancementsRouter);
 router.use("/s/:schoolSlug/api/library",     ...schoolApi, ...featureGuard("library"), libraryRoutes, libraryEnhancementsRouter);
 router.use("/s/:schoolSlug/api/inventory",   ...schoolApi, ...featureGuard("inventory"), inventoryRoutes);
 router.use("/s/:schoolSlug/api/transport",   ...schoolApi, ...featureGuard("transport"), transportRoutes, transportEnhancementsRouter);

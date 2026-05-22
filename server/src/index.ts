@@ -1,7 +1,7 @@
+import "./load-env";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import { errorHandler } from "./middleware/error";
@@ -11,14 +11,11 @@ import { tick as processJobs } from "./services/queue";
 import { tickBackupScheduler } from "./services/backup-scheduler";
 import { ensureRuntimeSchema } from "./db/ensure-runtime-schema";
 import { warmRolePermissionsCache } from "./services/platform-role-settings";
-import { attachTenantFromHost, redirectSchoolHostToSlugPath } from "./middleware/host-tenant";
+import { attachTenantFromHost, isVerifiedCustomDomainHost, redirectSchoolHostToSlugPath } from "./middleware/host-tenant";
 
 function isApiPath(url: string) {
   return url.startsWith("/api") || /^\/s\/[^/]+\/api(\/|$)/.test(url);
 }
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -43,9 +40,30 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
-app.get("/api/health", (_req, res) => {
-  res.status(200).json({ success: true, message: "Server is healthy", timestamp: new Date().toISOString(), env: process.env.NODE_ENV || "development" });
+// Health check (includes DB — use to verify PM2 loaded DATABASE_URL)
+app.get("/api/health", async (_req, res) => {
+  const env = process.env.NODE_ENV || "development";
+  let database: { ok: boolean; user?: string; host?: string; error?: string } = { ok: false };
+  const raw = process.env.DATABASE_URL ?? "";
+  try {
+    const parsed = raw ? new URL(raw) : null;
+    database.user = parsed?.username;
+    database.host = parsed?.hostname;
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`select 1`);
+    database.ok = true;
+  } catch (err) {
+    database.error = (err as Error).message?.slice(0, 200);
+  }
+  const status = database.ok ? 200 : 503;
+  res.status(status).json({
+    success: database.ok,
+    message: database.ok ? "Server is healthy" : "Database connection failed",
+    timestamp: new Date().toISOString(),
+    env,
+    database,
+  });
 });
 
 // Rate limiting on API routes
@@ -64,6 +82,18 @@ if (fs.existsSync(indexHtml)) {
   app.use(express.static(clientDist));
   app.get("*", (req, res, next) => {
     if (isApiPath(req.path)) return next();
+    if (isVerifiedCustomDomainHost(req)) {
+      const tenant = (req as any).resolvedTenantFromHost;
+      const html = fs.readFileSync(indexHtml, "utf8");
+      const payload = JSON.stringify({
+        slug: tenant.slug,
+        customDomain: tenant.customDomain,
+        schoolName: tenant.name,
+      });
+      const script = `<script>window.__SCHOOLOS_TENANT__=${payload}</script>`;
+      const out = html.includes("</head>") ? html.replace("</head>", `${script}</head>`) : script + html;
+      return res.type("html").send(out);
+    }
     res.sendFile(indexHtml);
   });
 } else if (isProd) {

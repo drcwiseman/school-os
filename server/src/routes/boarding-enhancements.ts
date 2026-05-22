@@ -55,6 +55,19 @@ boardingEnhancementsRouter.get("/allocations/enriched", requirePermission("board
   } catch (e) { next(e); }
 });
 
+boardingEnhancementsRouter.post("/allocations/:id/checkout", requirePermission("boarding.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const [row] = await db.update(boardingAllocations).set({ toDate: new Date() }).where(and(
+      eq(boardingAllocations.id, req.params.id),
+      eq(boardingAllocations.tenantId, tenant.id),
+      isNull(boardingAllocations.toDate),
+    )).returning();
+    if (!row) return res.status(404).json({ success: false, message: "Active allocation not found" });
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
 boardingEnhancementsRouter.get("/rooms/grid", requirePermission("boarding.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;

@@ -17,6 +17,7 @@ import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 import { NotFoundError, ConflictError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
+import { resolveTenantLocale } from "../services/tenant-locale";
 import { paginationSchema, paginate, paginatedResponse } from "../utils/pagination";
 
 const router = Router();
@@ -259,7 +260,10 @@ router.get("/dashboard", ...guard, requirePermission("finance.view"), async (req
       totalPaid: sql<number>`coalesce(sum(${invoices.paidAmount}), 0)`,
       unpaidCount: sql<number>`count(*) filter (where ${invoices.status} = 'unpaid')`,
     }).from(invoices).where(and(eq(invoices.tenantId, tenant.id), isNull(invoices.deletedAt)));
-    res.json({ success: true, data: stats });
+    const [settingsRow] = await db.select({ country: tenantSettings.country, currency: tenantSettings.currency })
+      .from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+    const locale = resolveTenantLocale(settingsRow);
+    res.json({ success: true, data: { ...stats, country: locale.country, currency: locale.currency } });
   } catch (err) { next(err); }
 });
 
@@ -298,7 +302,8 @@ router.post("/payments/gateway/initiate", ...guard, requirePermission("finance.p
       const balance = invoice.totalAmount - invoice.paidAmount;
       if (balance <= 0) throw new ConflictError("Invoice is already paid");
 
-      const base = (process.env.CLIENT_ORIGIN || "").replace(/\/$/, "");
+      const { resolveClientOrigin } = await import("../lib/app-origin");
+      const base = await resolveClientOrigin();
       const redirectUrl = req.body.redirectUrl || `${base}/s/${tenant.slug}/finance`;
 
       const { initiateFlutterwavePayment, initiateMtnMomoCollection } = await import("../services/integration-runtime");

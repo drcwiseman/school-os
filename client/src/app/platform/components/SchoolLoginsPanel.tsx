@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Copy, KeyRound, Loader2, LogIn, UserCog } from "lucide-react";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api/client";
+import { absoluteSchoolUrl, normalizeAppUrl } from "../../lib/app-origin";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -22,11 +23,8 @@ type Props = {
 };
 
 function absoluteLoginUrl(url: string) {
-  if (/^https?:\/\//i.test(url)) return url;
-  if (typeof window !== "undefined" && url.startsWith("/")) {
-    return `${window.location.origin}${url}`;
-  }
-  return url;
+  const abs = /^https?:\/\//i.test(url) ? url : absoluteSchoolUrl(url);
+  return normalizeAppUrl(abs);
 }
 
 export const SchoolLoginsPanel: React.FC<Props> = ({ schools, onLogin, loginLoadingSlug }) => {

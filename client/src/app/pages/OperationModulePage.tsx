@@ -1,6 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ModuleCrud, type ColumnDef, type FieldDef } from "../components/ModuleCrud";
+import { DisciplinePanel } from "../components/discipline/DisciplinePanel";
+import { HealthPanel } from "../components/health/HealthPanel";
+import { InventoryCrudPanel } from "../components/operations/InventoryCrudPanel";
+import { loadSchoolStudents } from "../../lib/load-school-students";
 import { OPERATIONS_MODULES, type OperationsModuleId } from "./operations-modules";
 
 type OpsTab = { id: string; label: string; apiPath: string; columns: ColumnDef[]; fields: FieldDef[] };
@@ -83,13 +87,27 @@ export const OperationModulePage: React.FC<{ moduleId: OperationsModuleId }> = (
   const tabs = [{ id: "main", label: mod.label, apiPath: mod.path, columns: mod.columns, fields: mod.fields }, ...extras];
   const [tab, setTab] = useState(tabs[0].id);
   const active = tabs.find((t) => t.id === tab) ?? tabs[0];
+  const [students, setStudents] = useState<{ id: string; firstName: string; lastName: string; admissionNumber?: string }[]>([]);
+
+  useEffect(() => {
+    if (!schoolSlug || (moduleId !== "discipline" && moduleId !== "health")) return;
+    loadSchoolStudents(schoolSlug).then(setStudents).catch(() => setStudents([]));
+  }, [schoolSlug, moduleId]);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">{mod.label}</h1>
-          <p className="text-slate-400 mt-1">School operations — {schoolSlug}</p>
+          <p className="text-slate-400 mt-1">
+            {moduleId === "discipline"
+              ? "Log incidents, assign follow-up actions, and track severity"
+              : moduleId === "health"
+                ? "Sickbay visits, discharge tracking, and student health flags"
+                : moduleId === "inventory"
+                  ? "Stock items, adjustments, suppliers, and purchase requests"
+                  : `School operations — ${schoolSlug}`}
+          </p>
         </div>
       </div>
       {tabs.length > 1 && (
@@ -101,13 +119,26 @@ export const OperationModulePage: React.FC<{ moduleId: OperationsModuleId }> = (
           ))}
         </div>
       )}
-      <ModuleCrud
-        key={active.apiPath}
-        title={active.label}
-        apiPath={active.apiPath}
-        columns={[...active.columns]}
-        fields={[...active.fields]}
-      />
+      {moduleId === "discipline" ? (
+        <DisciplinePanel schoolSlug={schoolSlug!} students={students} />
+      ) : moduleId === "health" ? (
+        <HealthPanel schoolSlug={schoolSlug!} students={students} />
+      ) : moduleId === "inventory" ? (
+        <InventoryCrudPanel schoolSlug={schoolSlug!} />
+      ) : (
+        <ModuleCrud
+          key={active.apiPath}
+          title={active.label}
+          apiPath={active.apiPath}
+          columns={[...active.columns]}
+          fields={[...active.fields]}
+          allowEdit
+          allowDelete
+          createPermission={`${moduleId}.manage`}
+          editPermission={`${moduleId}.manage`}
+          deletePermission={`${moduleId}.manage`}
+        />
+      )}
     </div>
   );
 };

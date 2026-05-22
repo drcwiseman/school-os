@@ -42,7 +42,7 @@ export const PublicHeader: React.FC = () => {
             <Link to="/s/school-a/portal/login" className="btn-mkt-ghost text-sm" onClick={closeAll}>
               Parent / Student
             </Link>
-            <Link to="/contact" className="btn-mkt-primary text-sm" onClick={closeAll}>
+            <Link to="/contact" className="btn-mkt-primary bg-marketing-primary text-sm hover:bg-marketing-primary-light" onClick={closeAll}>
               Request Demo
             </Link>
           </div>
