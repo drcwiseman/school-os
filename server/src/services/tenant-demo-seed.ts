@@ -118,12 +118,81 @@ function demoEmail(slug: string, key: string) {
   return `${key}@${slug}.demo`;
 }
 
-function parentEmail(slug: string, admissionNumber: string) {
+export function parentEmail(slug: string, admissionNumber: string) {
   return `parent.${admissionNumber.toLowerCase().replace(/-/g, ".")}@${slug}.demo`;
 }
 
-function studentPortalEmail(slug: string, admissionNumber: string) {
+export function studentPortalEmail(slug: string, admissionNumber: string) {
   return `student.${admissionNumber.toLowerCase().replace(/-/g, ".")}@${slug}.demo`;
+}
+
+/** Create missing demo parent/student portal logins for every student (idempotent). */
+export async function ensureDemoPortalAccountsForTenant(tenantId: string, slug: string): Promise<string[]> {
+  const created: string[] = [];
+  const parentHash = await hashPassword(PARENT_PASSWORD);
+  const studentPortalHash = await hashPassword(STUDENT_PORTAL_PASSWORD);
+  const studs = await db.select().from(students).where(eq(students.tenantId, tenantId));
+
+  for (const stu of studs) {
+    if (!stu.admissionNumber?.trim()) continue;
+    const admissionNumber = stu.admissionNumber.trim();
+    const isMale = stu.gender === "male";
+
+    const pEmail = parentEmail(slug, admissionNumber);
+    let [guardian] = await db.select().from(guardians).where(and(
+      eq(guardians.tenantId, tenantId),
+      eq(guardians.email, pEmail),
+    )).limit(1);
+    if (!guardian) {
+      [guardian] = await db.insert(guardians).values({
+        tenantId,
+        firstName: stu.firstName,
+        lastName: stu.lastName,
+        relationship: isMale ? "father" : "mother",
+        phone: null,
+        email: pEmail,
+        address: null,
+      }).returning();
+      created.push(`guardian ${admissionNumber}`);
+    }
+
+    await db.insert(studentGuardians).values({
+      studentId: stu.id,
+      guardianId: guardian.id,
+      isPrimary: true,
+    }).onConflictDoNothing({ target: [studentGuardians.studentId, studentGuardians.guardianId] });
+
+    const [pAcct] = await db.select().from(parentAccounts).where(and(
+      eq(parentAccounts.tenantId, tenantId),
+      eq(parentAccounts.email, pEmail),
+    )).limit(1);
+    if (!pAcct) {
+      await db.insert(parentAccounts).values({
+        tenantId,
+        email: pEmail,
+        passwordHash: parentHash,
+        guardianId: guardian.id,
+      });
+      created.push(`parent account ${admissionNumber}`);
+    }
+
+    const sEmail = studentPortalEmail(slug, admissionNumber);
+    const [sAcct] = await db.select().from(studentAccounts).where(and(
+      eq(studentAccounts.tenantId, tenantId),
+      eq(studentAccounts.email, sEmail),
+    )).limit(1);
+    if (!sAcct) {
+      await db.insert(studentAccounts).values({
+        tenantId,
+        email: sEmail,
+        passwordHash: studentPortalHash,
+        studentId: stu.id,
+      });
+      created.push(`student portal ${admissionNumber}`);
+    }
+  }
+
+  return created;
 }
 
 async function demoStep<T>(phase: string, fn: () => Promise<T>): Promise<T> {
@@ -590,6 +659,9 @@ export async function seedDemoDataForTenant(
     });
     created.push("message template");
   }
+
+  const portalBackfill = await demoStep("portal accounts sync", () => ensureDemoPortalAccountsForTenant(tenantId, slug));
+  created.push(...portalBackfill);
 
   const [studentCount] = await db.select({ n: sql<number>`count(*)::int` }).from(students).where(eq(students.tenantId, tenantId));
   const [parentCount] = await db.select({ n: sql<number>`count(*)::int` }).from(guardians).where(eq(guardians.tenantId, tenantId));

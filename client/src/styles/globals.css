@@ -13,9 +13,11 @@
     @apply font-sans antialiased min-h-[100dvh];
   }
 
-  /* Dashboard / app shell (default) */
-  body:not(.marketing-active) {
-    @apply bg-surface text-slate-200;
+  /* Dashboard / app shell (default) — tokens in school-app-theme.css */
+  body:not(.marketing-active):not(.portal-route-active) {
+    @apply antialiased min-h-[100dvh];
+    background-color: rgb(var(--school-bg, 15 23 42));
+    color: rgb(var(--school-text, 226 232 240));
   }
 
   /* Public marketing site */
@@ -300,40 +302,58 @@
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 }
 
-/* Akkhor-inspired light admin preset (toggle in header) */
-html[data-theme="light"] body:not(.marketing-active):not(.platform-active) {
-  background-color: #eef1f6;
-  color: #1e293b;
+/* Light admin preset — complements school-app-theme.css */
+html[data-theme="light"] body:not(.marketing-active):not(.platform-active):not(.portal-route-active) {
+  background-color: rgb(var(--school-bg));
+  color: rgb(var(--school-text));
 }
-html[data-theme="light"] body:not(.marketing-active) .bg-surface {
-  background-color: #ffffff;
-}
-html[data-theme="light"] .card {
+html[data-theme="light"] .school-app .card,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .card {
   @apply bg-white border-slate-200 shadow-sm;
 }
-html[data-theme="light"] .page-title {
+html[data-theme="light"] .school-app .page-title,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .page-title {
   @apply text-slate-900;
 }
-html[data-theme="light"] .input {
+html[data-theme="light"] .school-app .input,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .input {
   @apply bg-white border-slate-300 text-slate-900 placeholder-slate-400;
 }
-html[data-theme="light"] .table th {
+html[data-theme="light"] .school-app .label,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .label {
+  @apply text-slate-600;
+}
+html[data-theme="light"] .school-app .table th,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .table th {
   @apply bg-slate-50 text-slate-600 border-slate-200;
 }
-html[data-theme="light"] .table td {
+html[data-theme="light"] .school-app .table td,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .table td {
   @apply text-slate-700 border-slate-100;
 }
-html[data-theme="light"] .nav-item {
+html[data-theme="light"] .school-app .table tr:hover td,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .table tr:hover td {
+  @apply bg-slate-50;
+}
+html[data-theme="light"] .school-app .nav-item,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .nav-item {
   @apply text-slate-600 hover:text-slate-900 hover:bg-slate-100;
 }
-html[data-theme="light"] .nav-item.active {
+html[data-theme="light"] .school-app .nav-item.active,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .nav-item.active {
   @apply bg-blue-50 text-blue-700 border-blue-200;
 }
-html[data-theme="light"] aside.bg-surface {
+html[data-theme="light"] .school-app aside.bg-surface,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) aside.bg-surface {
   @apply bg-white border-slate-200;
 }
-html[data-theme="light"] .btn-ghost {
+html[data-theme="light"] .school-app .btn-ghost,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .btn-ghost {
   @apply border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900;
+}
+html[data-theme="light"] .school-app .btn-ghost svg,
+html[data-theme="light"] body.school-app-active:not(.portal-route-active) .btn-ghost svg {
+  color: #475569;
 }
 
 /* Admin dashboard — Akkhor-style cards (works in light theme; readable in dark) */

@@ -5,6 +5,7 @@ import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
 import { Search, Loader2, Users, Mail, Phone, UserPlus, Shield, Pencil, Plus } from "lucide-react";
 import { ConfirmAction } from "../components/ConfirmAction";
+import { PasswordInput } from "../components/PasswordInput";
 
 const emptyGuardianForm = () => ({
   firstName: "", lastName: "", relationship: "parent", phone: "", email: "", address: "",
@@ -417,13 +418,13 @@ export const Parents: React.FC = () => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Temporary password</label>
-              <input
-                type="password"
+              <PasswordInput
                 required
                 minLength={8}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
                 value={portalForm.password}
                 onChange={(e) => setPortalForm({ ...portalForm, password: e.target.value })}
+                autoComplete="new-password"
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">

@@ -3,6 +3,7 @@ import { api } from "../../api/client";
 import { useToast } from "../Toast";
 import { ConfirmAction } from "../ConfirmAction";
 import { Loader2, Plus, Pencil, Shield, Users, Save } from "lucide-react";
+import { PasswordInput } from "../PasswordInput";
 
 type Role = { id: string; name: string; isSystem?: boolean };
 type Permission = { id: string; code: string; module: string };
@@ -228,7 +229,7 @@ export const AdminAccessPanel: React.FC<Props> = ({
           {showUserForm && canManageUsers && (
             <form onSubmit={createUser} className="card p-5 grid md:grid-cols-2 gap-3">
               <input className="input" required type="email" placeholder="Email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-              <input className="input" required type="password" minLength={8} placeholder="Password (min 8)" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
+              <PasswordInput className="input" required minLength={8} placeholder="Password (min 8)" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} autoComplete="new-password" />
               <input className="input" required placeholder="First name" value={userForm.firstName} onChange={(e) => setUserForm({ ...userForm, firstName: e.target.value })} />
               <input className="input" required placeholder="Last name" value={userForm.lastName} onChange={(e) => setUserForm({ ...userForm, lastName: e.target.value })} />
               <div className="md:col-span-2">

@@ -1,0 +1,164 @@
+/**
+ * School admin app + staff login — light/dark text & surfaces.
+ * Scoped to .school-app (not marketing, platform, or .portal-shell).
+ */
+
+:root,
+html.dark,
+html:not([data-theme="light"]) {
+  --school-bg: 15 23 42;
+  --school-surface: 15 23 42;
+  --school-surface-raised: 30 41 59;
+  --school-surface-overlay: 51 65 85;
+  --school-text: 226 232 240;
+  --school-text-strong: 248 250 252;
+  --school-text-muted: 148 163 184;
+  --school-text-subtle: 100 116 139;
+  --school-border: 51 65 85;
+}
+
+html[data-theme="light"] {
+  --school-bg: 238 241 246;
+  --school-surface: 255 255 255;
+  --school-surface-raised: 255 255 255;
+  --school-surface-overlay: 241 245 249;
+  --school-text: 51 65 85;
+  --school-text-strong: 15 23 42;
+  --school-text-muted: 71 85 105;
+  --school-text-subtle: 100 116 139;
+  --school-border: 226 232 240;
+}
+
+body.school-app-active:not(.marketing-active):not(.platform-active):not(.portal-route-active) {
+  background-color: rgb(var(--school-bg));
+  color: rgb(var(--school-text));
+}
+
+body.school-app-active:not(.marketing-active) ::-webkit-scrollbar-track {
+  background-color: rgb(var(--school-bg));
+}
+
+html[data-theme="light"] body.school-app-active:not(.marketing-active) ::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+}
+
+.school-app .text-app { color: rgb(var(--school-text)); }
+.school-app .text-app-strong { color: rgb(var(--school-text-strong)); }
+.school-app .text-app-muted { color: rgb(var(--school-text-muted)); }
+.school-app .text-app-subtle { color: rgb(var(--school-text-subtle)); }
+
+.school-app .app-tab-inactive {
+  background-color: rgb(var(--school-surface-overlay) / 0.55);
+  color: rgb(var(--school-text-muted));
+  border: 1px solid rgb(var(--school-border) / 0.65);
+}
+.school-app .app-tab-inactive:hover {
+  background-color: rgb(var(--school-surface-overlay));
+  color: rgb(var(--school-text-strong));
+}
+
+html[data-theme="light"] .school-app .app-tab-inactive {
+  background-color: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+html[data-theme="light"] .school-app .app-tab-inactive:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.school-app .app-mobile-label { color: rgb(var(--school-text-subtle)); }
+.school-app .app-mobile-value { color: rgb(var(--school-text)); }
+.school-app .app-mobile-divider { border-color: rgb(var(--school-border) / 0.55); }
+
+html[data-theme="light"] .school-app :where(.text-slate-100, .text-slate-200) {
+  color: rgb(51 65 85);
+}
+html[data-theme="light"] .school-app :where(.text-slate-300) {
+  color: rgb(71 85 105);
+}
+html[data-theme="light"] .school-app :where(.text-slate-400, .text-slate-500) {
+  color: rgb(100 116 139);
+}
+html[data-theme="light"] .school-app :where(.text-white):not(
+  :is(
+    .bg-primary-600,
+    .bg-primary-500,
+    .bg-primary-700,
+    .bg-teal-600,
+    .bg-teal-500,
+    .bg-emerald-600,
+    .bg-emerald-500,
+    .bg-red-600,
+    .bg-red-500,
+    .bg-amber-600,
+    .btn-primary,
+    .btn-danger
+  )
+) {
+  color: rgb(var(--school-text-strong));
+}
+
+html[data-theme="light"] .school-app :where(
+  .bg-slate-800,
+  .bg-slate-800\/80,
+  .bg-slate-800\/50,
+  .bg-slate-900,
+  .bg-slate-900\/80,
+  .bg-slate-900\/40,
+  .bg-slate-950,
+  .bg-slate-950\/60
+) {
+  background-color: rgb(241 245 249);
+}
+
+html[data-theme="light"] .school-app :where(
+  .border-slate-700,
+  .border-slate-700\/50,
+  .border-slate-700\/60,
+  .border-slate-800,
+  .border-slate-800\/40,
+  .border-white\/5,
+  .border-white\/8,
+  .border-white\/10
+) {
+  border-color: rgb(226 232 240);
+}
+
+html[data-theme="light"] .school-app .badge-blue {
+  @apply bg-blue-50 text-blue-800 border-blue-200;
+}
+html[data-theme="light"] .school-app .badge-green {
+  @apply bg-emerald-50 text-emerald-800 border-emerald-200;
+}
+html[data-theme="light"] .school-app .badge-red {
+  @apply bg-red-50 text-red-800 border-red-200;
+}
+html[data-theme="light"] .school-app .badge-yellow {
+  @apply bg-amber-50 text-amber-900 border-amber-200;
+}
+html[data-theme="light"] .school-app .badge-gray {
+  @apply bg-slate-100 text-slate-600 border-slate-200;
+}
+
+html[data-theme="light"] .school-app .hover\:bg-slate-700\/50:hover,
+html[data-theme="light"] .school-app .hover\:bg-slate-800\/40:hover {
+  background-color: rgb(241 245 249);
+}
+
+html[data-theme="light"] .school-app .hover\:text-white:hover {
+  color: rgb(15 23 42);
+}
+
+html[data-theme="light"] .school-app :where(.bg-red-900\/30, .bg-amber-900\/30) {
+  @apply bg-red-50 border-red-200 text-red-800;
+}
+html[data-theme="light"] .school-app :where(.bg-amber-900\/30) {
+  @apply bg-amber-50 border-amber-200 text-amber-900;
+}
+html[data-theme="light"] .school-app :where(.text-red-200) {
+  @apply text-red-800;
+}
+html[data-theme="light"] .school-app :where(.text-amber-100, .text-amber-200) {
+  @apply text-amber-900;
+}

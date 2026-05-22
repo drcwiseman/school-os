@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { Loader2, Sparkles, BookOpen, Calendar, LogOut } from "lucide-react";
 import { ParentPortalDashboard } from "./portal/parent/ParentPortalDashboard";
 import { getStoredPortalTheme } from "../utils/theme";
+import { usePortalRouteBodyClass } from "../hooks/useSchoolAppBodyClass";
 
 function formatMoney(cents: number | undefined, currency = "UGX") {
   if (cents == null) return "—";
@@ -12,6 +13,7 @@ function formatMoney(cents: number | undefined, currency = "UGX") {
 }
 
 export const PortalDashboard: React.FC = () => {
+  usePortalRouteBodyClass();
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -69,9 +71,15 @@ export const PortalDashboard: React.FC = () => {
     await downloadPdf(`/s/${schoolSlug}/api/portal/pdf/report-card/${id}`);
   };
 
+  const portalTheme = schoolSlug
+    ? (localStorage.getItem(`schoolos_portal_theme_${schoolSlug}`) as "light" | "dark" | null)
+      ?? (localStorage.getItem("schoolos_theme") as "light" | "dark" | null)
+      ?? "dark"
+    : "dark";
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0c1222]">
+      <div className="portal-shell min-h-screen flex items-center justify-center" data-portal-theme={portalTheme}>
         <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
       </div>
     );
@@ -96,14 +104,14 @@ export const PortalDashboard: React.FC = () => {
   const currency = data?.currency ?? "UGX";
 
   return (
-    <div className="min-h-screen bg-[#0c1222] text-slate-100">
-      <header className="sticky top-0 z-10 border-b border-white/5 bg-[#0c1222]/90 backdrop-blur">
+    <div className="portal-shell min-h-screen" data-portal-theme={portalTheme}>
+      <header className="portal-header sticky top-0 z-10 border-b backdrop-blur">
         <div className="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-teal-400 font-semibold">Student portal</p>
-            <h1 className="text-lg font-bold capitalize">{schoolSlug?.replace(/-/g, " ")}</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-teal-500 font-semibold">Student portal</p>
+            <h1 className="text-lg font-bold capitalize text-[var(--portal-fg-strong)]">{schoolSlug?.replace(/-/g, " ")}</h1>
           </div>
-          <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs" onClick={logout}>
+          <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--portal-border)] px-3 py-1.5 text-xs text-[var(--portal-muted)]" onClick={logout}>
             <LogOut className="w-3.5 h-3.5" /> Sign out
           </button>
         </div>
@@ -112,9 +120,9 @@ export const PortalDashboard: React.FC = () => {
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5 pb-12">
         {account?.type === "student" && data && (
           <>
-            <div className="rounded-2xl border border-white/8 bg-gradient-to-br from-slate-900/80 to-slate-950 p-4">
-              <p className="text-white font-semibold text-lg">{data.student?.firstName} {data.student?.lastName}</p>
-              <p className="text-slate-500 text-sm font-mono">{data.student?.admissionNumber}</p>
+            <div className="portal-panel rounded-2xl p-4 border border-[var(--portal-border)]">
+              <p className="portal-panel-title font-semibold text-lg">{data.student?.firstName} {data.student?.lastName}</p>
+              <p className="portal-panel-subtitle text-sm font-mono">{data.student?.admissionNumber}</p>
             </div>
 
             {summary && (
@@ -194,8 +202,8 @@ export const PortalDashboard: React.FC = () => {
             </PortalCard>
 
             <PortalCard title="AI tutor" icon={Sparkles}>
-              <textarea className="w-full rounded-lg bg-slate-900 border border-white/10 px-3 py-2 text-sm min-h-[80px]" value={tutorMsg} onChange={(e) => setTutorMsg(e.target.value)} placeholder="Ask a study question…" />
-              <button type="button" className="mt-2 rounded-lg border border-white/10 px-3 py-1.5 text-sm" onClick={async () => {
+              <textarea className="portal-input w-full rounded-lg px-3 py-2 text-sm min-h-[80px]" value={tutorMsg} onChange={(e) => setTutorMsg(e.target.value)} placeholder="Ask a study question…" />
+              <button type="button" className="mt-2 rounded-lg border border-[var(--portal-border)] px-3 py-1.5 text-sm text-[var(--portal-fg)]" onClick={async () => {
                 const res = await api.post(`/s/${schoolSlug}/api/portal/student/tutor`, { message: tutorMsg, subject: "General" });
                 setTutorReply(res.data?.reply ?? "");
               }}>Ask</button>
@@ -210,9 +218,9 @@ export const PortalDashboard: React.FC = () => {
 
 function PortalCard({ title, children, icon: Icon }: { title: string; children: React.ReactNode; icon?: React.ElementType }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-slate-900/40 p-5">
-      <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
-        {Icon && <Icon className="w-4 h-4 text-teal-400" />}
+    <div className="portal-panel rounded-2xl p-5">
+      <h2 className="portal-panel-title font-semibold mb-3 flex items-center gap-2">
+        {Icon && <Icon className="w-4 h-4 text-teal-500" />}
         {title}
       </h2>
       {children}
@@ -222,9 +230,9 @@ function PortalCard({ title, children, icon: Icon }: { title: string; children: 
 
 function StudentStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-xl border p-3 ${highlight ? "border-amber-500/30" : "border-white/8"}`}>
-      <p className="text-slate-500 text-xs">{label}</p>
-      <p className={`text-lg font-bold ${highlight ? "text-amber-300" : "text-white"}`}>{value}</p>
+    <div className={`portal-stat rounded-xl p-3 ${highlight ? "border-amber-500/30" : ""}`}>
+      <p className="portal-stat-label text-xs">{label}</p>
+      <p className={`portal-stat-value text-lg font-bold ${highlight ? "text-amber-600 dark:text-amber-300" : ""}`}>{value}</p>
     </div>
   );
 }

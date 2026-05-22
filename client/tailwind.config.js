@@ -36,9 +36,9 @@ export default {
           950: "#172554",
         },
         surface: {
-          DEFAULT: "#0f172a",
-          raised: "#1e293b",
-          overlay: "#334155",
+          DEFAULT: "rgb(var(--school-surface) / <alpha-value>)",
+          raised: "rgb(var(--school-surface-raised) / <alpha-value>)",
+          overlay: "rgb(var(--school-surface-overlay) / <alpha-value>)",
         },
       },
       fontFamily: {

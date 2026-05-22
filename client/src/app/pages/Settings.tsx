@@ -16,6 +16,7 @@ import {
 } from "../../lib/currencies";
 import { SchoolImageUpload, fileToBase64Payload } from "../components/SchoolImageUpload";
 import { DemoDataPanel } from "../components/admin/DemoDataPanel";
+import { PasswordInput } from "../components/PasswordInput";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -688,7 +689,7 @@ export const Settings: React.FC = () => {
             </div>
             <div>
               <label className="label">Consumer secret</label>
-              <input type="password" className="input font-mono text-sm" disabled={!canManage || !payPesapalEnabled} value={payPesapalSecret} onChange={(e) => setPayPesapalSecret(e.target.value)} placeholder={payPesapalSecretConfigured ? "•••••••• (leave blank to keep)" : "Consumer secret"} />
+              <PasswordInput className="input font-mono text-sm" disabled={!canManage || !payPesapalEnabled} value={payPesapalSecret} onChange={(e) => setPayPesapalSecret(e.target.value)} placeholder={payPesapalSecretConfigured ? "•••••••• (leave blank to keep)" : "Consumer secret"} autoComplete="off" />
             </div>
           </div>
           <div className="card p-6 space-y-4">
@@ -745,7 +746,7 @@ export const Settings: React.FC = () => {
                 </div>
                 <div>
                   <label className="label">Password</label>
-                  <input type="password" className="input" disabled={!canManage} autoComplete="new-password" placeholder={smtp.passwordConfigured ? "•••••••• (unchanged)" : "App password"} value={smtp.password} onChange={(e) => setSmtp({ ...smtp, password: e.target.value })} />
+                  <PasswordInput className="input" disabled={!canManage} autoComplete="new-password" placeholder={smtp.passwordConfigured ? "•••••••• (unchanged)" : "App password"} value={smtp.password} onChange={(e) => setSmtp({ ...smtp, password: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">From email</label>

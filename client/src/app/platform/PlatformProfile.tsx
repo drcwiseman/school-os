@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Loader2, Save } from "lucide-react";
+import { PasswordInput } from "../components/PasswordInput";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { usePlatformAuth } from "./hooks/usePlatformAuth";
@@ -85,8 +86,7 @@ export const PlatformProfile: React.FC = () => {
         <h2 className="text-base font-bold text-slate-900">Change password</h2>
         <div>
           <label className="text-xs font-medium text-slate-600">Current password</label>
-          <input
-            type="password"
+          <PasswordInput
             className="input text-sm mt-1 w-full"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
@@ -97,8 +97,7 @@ export const PlatformProfile: React.FC = () => {
         </div>
         <div>
           <label className="text-xs font-medium text-slate-600">New password</label>
-          <input
-            type="password"
+          <PasswordInput
             className="input text-sm mt-1 w-full"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}

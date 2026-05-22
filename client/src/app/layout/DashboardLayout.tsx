@@ -9,11 +9,13 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { HeaderNotifications } from "../components/HeaderNotifications";
 import { Loader2, Menu, X } from "lucide-react";
 import { schoolPath } from "../lib/tenant-host";
+import { useSchoolAppBodyClass } from "../hooks/useSchoolAppBodyClass";
 
 export const DashboardLayout: React.FC = () => {
   const { user, loading, schoolSlug, impersonationReadOnly } = useAuth();
   const location = useLocation();
   const [mobileNav, setMobileNav] = useState(false);
+  useSchoolAppBodyClass();
 
   useEffect(() => {
     setMobileNav(false);
@@ -34,7 +36,7 @@ export const DashboardLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-surface">
+    <div className="school-app flex h-[100dvh] overflow-hidden bg-surface">
       {mobileNav && (
         <button
           type="button"
@@ -55,8 +57,8 @@ export const DashboardLayout: React.FC = () => {
             {mobileNav ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-white truncate">School OS</p>
-            <p className="text-[10px] text-slate-500 uppercase truncate">{schoolSlug}</p>
+            <p className="text-sm font-bold text-app-strong truncate">School OS</p>
+            <p className="text-[10px] text-app-subtle uppercase truncate">{schoolSlug}</p>
           </div>
           <ThemeToggle />
         </header>

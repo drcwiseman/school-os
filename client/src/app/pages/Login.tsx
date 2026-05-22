@@ -5,8 +5,11 @@ import { useSchoolSlug } from "../hooks/useSchoolSlug";
 import { getTenantBootstrap, schoolPath } from "../lib/tenant-host";
 import { api } from "../api/client";
 import { Loader2, AlertCircle } from "lucide-react";
+import { PasswordInput } from "../components/PasswordInput";
+import { useSchoolAppBodyClass } from "../hooks/useSchoolAppBodyClass";
 
 export const Login: React.FC = () => {
+  useSchoolAppBodyClass();
   const schoolSlug = useSchoolSlug();
   const boot = getTenantBootstrap();
   const navigate = useNavigate();
@@ -41,14 +44,14 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface p-4">
+    <div className="school-app min-h-screen flex items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md card p-8 animate-fade-in">
         <div className="text-center mb-8">
           <div className="w-12 h-12 bg-primary-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
             <span className="text-white font-bold text-xl">{(displayName ?? schoolSlug)?.charAt(0).toUpperCase()}</span>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-1">School ERP sign in</h2>
-          <p className="text-slate-400 text-sm">Administrator or delegated staff account for <span className="text-slate-300">{displayName ?? schoolSlug}</span> — not the parent/student portal</p>
+          <h2 className="text-2xl font-bold text-app-strong mb-1">School ERP sign in</h2>
+          <p className="text-app-muted text-sm">Administrator or delegated staff account for <span className="text-app">{displayName ?? schoolSlug}</span> — not the parent/student portal</p>
         </div>
 
         {error && (
@@ -72,13 +75,13 @@ export const Login: React.FC = () => {
           </div>
           <div>
             <label className="label">Password</label>
-            <input
-              type="password"
+            <PasswordInput
               required
               className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              autoComplete="current-password"
             />
           </div>
           

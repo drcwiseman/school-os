@@ -4,6 +4,8 @@ import { api } from "../api/client";
 import { useSchoolSlug } from "../hooks/useSchoolSlug";
 import { getTenantBootstrap, schoolPath } from "../lib/tenant-host";
 import { Loader2, AlertCircle, Info } from "lucide-react";
+import { PasswordInput } from "../components/PasswordInput";
+import { useSchoolAppBodyClass } from "../hooks/useSchoolAppBodyClass";
 
 type PortalHint = { type: string; email: string; password: string | null };
 
@@ -14,6 +16,7 @@ function wrongDemoSlug(email: string, expectedSlug: string): string | null {
 }
 
 export const PortalLogin: React.FC = () => {
+  useSchoolAppBodyClass();
   const schoolSlug = useSchoolSlug();
   const boot = getTenantBootstrap();
   const navigate = useNavigate();
@@ -69,13 +72,13 @@ export const PortalLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface p-4">
+    <div className="school-app min-h-screen flex items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md card p-8">
-        <h2 className="text-2xl font-bold text-white mb-1">Parent / Student Portal</h2>
-        <p className="text-slate-400 text-sm mb-1">{boot?.schoolName ?? schoolSlug}</p>
+        <h2 className="text-2xl font-bold text-app-strong mb-1">Parent / Student Portal</h2>
+        <p className="text-app-muted text-sm mb-1">{boot?.schoolName ?? schoolSlug}</p>
         {schoolSlug && (
-          <p className="text-slate-500 text-xs mb-4">
-            School: <span className="text-slate-300 font-mono">{schoolSlug}</span> — accounts from another school will not work here.
+          <p className="text-app-subtle text-xs mb-4">
+            School: <span className="text-app font-mono">{schoolSlug}</span> — accounts from another school will not work here.
           </p>
         )}
         {!portalEnabled && (
@@ -121,9 +124,8 @@ export const PortalLogin: React.FC = () => {
             <label className="label" htmlFor="portal-password">
               Password
             </label>
-            <input
+            <PasswordInput
               id="portal-password"
-              type="password"
               name="password"
               autoComplete="current-password"
               required
@@ -137,8 +139,8 @@ export const PortalLogin: React.FC = () => {
           </button>
         </form>
         {hints.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-slate-700">
-            <p className="text-slate-400 text-xs mb-2">Example accounts for this school (tap to fill):</p>
+          <div className="mt-6 pt-6 border-t border-app">
+            <p className="text-app-muted text-xs mb-2">Example accounts for this school (tap to fill):</p>
             <ul className="space-y-2">
               {hints.map((h) => (
                 <li key={`${h.type}-${h.email}`}>

@@ -1,21 +1,17 @@
 import React, { useEffect } from "react";
 import { Moon, Sun } from "lucide-react";
-
-const KEY = "schoolos_theme";
+import { applyThemeMode } from "../utils/theme";
 
 export function applyTheme(mode: "light" | "dark") {
-  document.documentElement.dataset.theme = mode;
-  document.documentElement.classList.toggle("dark", mode === "dark");
-  document.documentElement.classList.toggle("light", mode === "light");
-  localStorage.setItem(KEY, mode);
+  applyThemeMode(mode);
 }
 
 export const ThemeToggle: React.FC = () => {
   const [mode, setMode] = React.useState<"light" | "dark">(() =>
-    (localStorage.getItem(KEY) as "light" | "dark") || "dark",
+    (localStorage.getItem("schoolos_theme") as "light" | "dark") || "dark",
   );
 
-  useEffect(() => { applyTheme(mode); }, [mode]);
+  useEffect(() => { applyThemeMode(mode); }, [mode]);
 
   return (
     <button type="button" className="btn-ghost text-sm" onClick={() => setMode(mode === "dark" ? "light" : "dark")} title="Toggle theme">

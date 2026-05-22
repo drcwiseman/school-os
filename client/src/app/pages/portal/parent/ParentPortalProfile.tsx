@@ -14,6 +14,7 @@ import {
   Trash2,
   Loader2,
 } from "lucide-react";
+import { PasswordInput } from "../../../components/PasswordInput";
 
 type PortalTheme = "light" | "dark";
 
@@ -465,16 +466,27 @@ function ProfileField({
   required?: boolean;
   className?: string;
 }) {
+  const fieldClass = "portal-input mt-1 w-full rounded-lg px-3 py-2 text-sm";
+
   return (
     <label className={`block text-xs text-[var(--portal-subtle)] ${className}`}>
       {label}
-      <input
-        type={type}
-        required={required}
-        className="portal-input mt-1 w-full rounded-lg px-3 py-2 text-sm"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {type === "password" ? (
+        <PasswordInput
+          required={required}
+          className={fieldClass}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <input
+          type={type}
+          required={required}
+          className={fieldClass}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
     </label>
   );
 }

@@ -14,6 +14,7 @@ import {
 import { api } from "../../api/client";
 import { useToast } from "../../components/Toast";
 import { usePlatformAuth } from "../hooks/usePlatformAuth";
+import { PasswordInput } from "../../components/PasswordInput";
 
 const CARD = "rounded-lg border border-slate-200 bg-white shadow-sm";
 
@@ -380,7 +381,7 @@ export const PlatformUsersHub: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-600">Initial password (min 8)</label>
-                  <input type="password" required minLength={8} className="input text-sm mt-1 w-full" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} />
+                  <PasswordInput required minLength={8} className="input text-sm mt-1 w-full" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} autoComplete="new-password" />
                 </div>
                 <button type="submit" disabled={saving} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                   {saving ? "Creating…" : "Create user"}
@@ -412,7 +413,7 @@ export const PlatformUsersHub: React.FC = () => {
                 <p className="text-sm text-slate-600">Set a new password for <strong>{editRow.name}</strong>. Active sessions will be revoked.</p>
                 <div>
                   <label className="text-xs font-medium text-slate-600">New password (min 8)</label>
-                  <input type="password" required minLength={8} className="input text-sm mt-1 w-full" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} />
+                  <PasswordInput required minLength={8} className="input text-sm mt-1 w-full" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} autoComplete="new-password" />
                 </div>
                 <button type="submit" disabled={saving} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                   {saving ? "Resetting…" : "Reset password"}

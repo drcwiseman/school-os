@@ -6,6 +6,7 @@ import { createParentSession, createStudentSession } from "../middleware/portal-
 import { isFeatureAllowedForTenant } from "./plan-features";
 import { ForbiddenError, UnauthorizedError } from "../middleware/error";
 import { portalLoginPath } from "../lib/app-origin";
+import { parentEmail, studentPortalEmail } from "./tenant-demo-seed";
 
 export function normalizePortalEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -23,37 +24,52 @@ export async function getPortalLoginHints(tenantId: string, slug: string) {
   const enabled = await isFeatureAllowedForTenant(tenantId, "portal_enabled");
   const portalUrl = await portalLoginPath(slug);
 
-  const [parentSample] = await db
-    .select({ email: parentAccounts.email })
-    .from(parentAccounts)
-    .where(eq(parentAccounts.tenantId, tenantId))
-    .limit(1);
-
-  const [studentSample] = await db
-    .select({ email: studentAccounts.email })
-    .from(studentAccounts)
-    .where(eq(studentAccounts.tenantId, tenantId))
-    .limit(1);
-
   const demoSuffix = `@${slug}.demo`;
   const hints: { type: string; email: string; password: string | null }[] = [];
+  const seen = new Set<string>();
 
-  if (parentSample?.email) {
+  async function addHint(type: "parent" | "student", email: string) {
+    const key = email.toLowerCase();
+    if (seen.has(key)) return;
+    const [row] = type === "parent"
+      ? await db.select({ email: parentAccounts.email }).from(parentAccounts).where(and(
+        eq(parentAccounts.tenantId, tenantId),
+        sql`lower(${parentAccounts.email}) = ${key}`,
+      )).limit(1)
+      : await db.select({ email: studentAccounts.email }).from(studentAccounts).where(and(
+        eq(studentAccounts.tenantId, tenantId),
+        sql`lower(${studentAccounts.email}) = ${key}`,
+      )).limit(1);
+    if (!row) return;
+    seen.add(key);
     hints.push({
-      type: "parent",
-      email: parentSample.email,
-      password: parentSample.email.endsWith(demoSuffix) ? "Parent123!" : null,
+      type,
+      email: row.email,
+      password: row.email.endsWith(demoSuffix) ? (type === "parent" ? "Parent123!" : "Student123!") : null,
     });
   }
-  if (studentSample?.email) {
-    hints.push({
-      type: "student",
-      email: studentSample.email,
-      password: studentSample.email.endsWith(demoSuffix) ? "Student123!" : null,
-    });
+
+  for (const admission of ["S1-01", "S6-05", "S1-02"]) {
+    await addHint("student", studentPortalEmail(slug, admission));
+    await addHint("parent", parentEmail(slug, admission));
   }
 
-  if (!parentSample?.email && slug === "school-a") {
+  if (!hints.some((h) => h.type === "student")) {
+    const studentRows = await db.select({ email: studentAccounts.email })
+      .from(studentAccounts)
+      .where(eq(studentAccounts.tenantId, tenantId))
+      .limit(3);
+    for (const r of studentRows) await addHint("student", r.email);
+  }
+  if (!hints.some((h) => h.type === "parent")) {
+    const parentRows = await db.select({ email: parentAccounts.email })
+      .from(parentAccounts)
+      .where(eq(parentAccounts.tenantId, tenantId))
+      .limit(3);
+    for (const r of parentRows) await addHint("parent", r.email);
+  }
+
+  if (!hints.length && slug === "school-a") {
     hints.push({ type: "parent", email: "parent@school-a.com", password: "Parent123!" });
     hints.push({ type: "student", email: "student@school-a.com", password: "Student123!" });
   }
@@ -126,8 +142,11 @@ export async function authenticatePortalLogin(
 
   const hasDemoOther = email.includes(".demo");
   if (hasDemoOther) {
+    const isStudentDemo = email.startsWith("student.");
     throw new UnauthorizedError(
-      `No portal account for "${email}" at ${tenant.slug}. Check Administration → Portal for valid emails, or use the correct school URL.`,
+      isStudentDemo
+        ? `No student portal login for "${email}" at ${tenant.slug}. Ask staff to run Settings → Demo data (or "Sync portal logins"), or create a login on the student profile. Demo password is usually Student123! once the account exists.`
+        : `No portal account for "${email}" at ${tenant.slug}. Check Administration → Portal for valid emails, or use the correct school URL.`,
     );
   }
   throw new UnauthorizedError("Invalid email or password");

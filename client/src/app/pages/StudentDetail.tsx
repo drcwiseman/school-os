@@ -5,6 +5,7 @@ import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Student360Tabs, DOC_TYPES } from "../components/Student360Tabs";
+import { PasswordInput } from "../components/PasswordInput";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -307,7 +308,7 @@ export const StudentDetail: React.FC = () => {
           ) : hasPermission("students.edit") ? (
             <form onSubmit={createStudentPortal} className="grid md:grid-cols-3 gap-3">
               <input className="w-full px-3 py-2 bg-slate-950 border border-slate-750 rounded-xl text-slate-100 placeholder-slate-550 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" type="email" required placeholder="Portal email" value={studentPortalForm.email} onChange={(e) => setStudentPortalForm({ ...studentPortalForm, email: e.target.value })} />
-              <input className="w-full px-3 py-2 bg-slate-950 border border-slate-750 rounded-xl text-slate-100 placeholder-slate-550 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" type="password" required minLength={8} placeholder="Temporary password" value={studentPortalForm.password} onChange={(e) => setStudentPortalForm({ ...studentPortalForm, password: e.target.value })} />
+              <PasswordInput className="w-full px-3 py-2 bg-slate-950 border border-slate-750 rounded-xl text-slate-100 placeholder-slate-550 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" required minLength={8} placeholder="Temporary password" value={studentPortalForm.password} onChange={(e) => setStudentPortalForm({ ...studentPortalForm, password: e.target.value })} autoComplete="new-password" />
               <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition-all duration-200">
                 Create Student Login
               </button>
@@ -377,7 +378,7 @@ export const StudentDetail: React.FC = () => {
         {portalTarget && hasPermission("students.edit") && (
           <form onSubmit={createParentPortal} className="grid md:grid-cols-3 gap-3 p-4 bg-slate-950/40 rounded-xl border border-blue-500/20 shadow-md">
             <input className="w-full px-3 py-2 bg-slate-950 border border-slate-750 rounded-xl text-slate-100 placeholder-slate-550 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" type="email" required placeholder="Portal email" value={portalForm.email} onChange={(e) => setPortalForm({ ...portalForm, email: e.target.value })} />
-            <input className="w-full px-3 py-2 bg-slate-950 border border-slate-750 rounded-xl text-slate-100 placeholder-slate-550 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" type="password" required minLength={8} placeholder="Temporary password" value={portalForm.password} onChange={(e) => setPortalForm({ ...portalForm, password: e.target.value })} />
+            <PasswordInput className="w-full px-3 py-2 bg-slate-950 border border-slate-750 rounded-xl text-slate-100 placeholder-slate-550 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" required minLength={8} placeholder="Temporary password" value={portalForm.password} onChange={(e) => setPortalForm({ ...portalForm, password: e.target.value })} autoComplete="new-password" />
             <div className="flex gap-2 items-center">
               <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition-all duration-200">Create Account</button>
               <button type="button" className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-350 hover:text-white text-xs font-semibold transition-all" onClick={() => setPortalTarget(null)}>Cancel</button>

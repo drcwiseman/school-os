@@ -44,7 +44,7 @@ export function PageTabs<T extends string>({
               className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
                 value === t.id
                   ? "bg-primary-600 text-white shadow-sm"
-                  : "bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700/50"
+                  : "app-tab-inactive hover:border-slate-600"
               }`}
             >
               {t.label}
@@ -63,7 +63,7 @@ export function PageTabs<T extends string>({
             type="button"
             onClick={() => onChange(t.id)}
             className={`snap-start shrink-0 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap ${
-              value === t.id ? "bg-primary-600 text-white" : "bg-slate-800 text-slate-400"
+              value === t.id ? "bg-primary-600 text-white" : "app-tab-inactive"
             }`}
           >
             {t.label}

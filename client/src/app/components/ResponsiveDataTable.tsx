@@ -53,7 +53,7 @@ export function ResponsiveDataTable<T extends { id?: string }>({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + (actions ? 1 : 0)} className="text-center py-10 text-slate-400">
+                  <td colSpan={columns.length + (actions ? 1 : 0)} className="text-center py-10 text-app-muted">
                     {emptyMessage}
                   </td>
                 </tr>
@@ -76,7 +76,7 @@ export function ResponsiveDataTable<T extends { id?: string }>({
 
       <div className="md:hidden space-y-3">
         {rows.length === 0 ? (
-          <div className="card p-6 text-center text-slate-400 text-sm">{emptyMessage}</div>
+          <div className="card p-6 text-center text-app-muted text-sm">{emptyMessage}</div>
         ) : (
           rows.map((row, i) => (
             <div key={row.id ?? i} className="card p-4 space-y-2 min-w-0">
@@ -84,12 +84,12 @@ export function ResponsiveDataTable<T extends { id?: string }>({
                 .filter((c) => !c.hideOnMobile)
                 .map((c) => (
                   <div key={c.key} className="flex justify-between gap-3 text-sm">
-                    <span className="text-slate-500 shrink-0">{c.mobileLabel ?? c.label}</span>
-                    <span className="text-slate-200 text-right break-words">{cell(row, c)}</span>
+                    <span className="app-mobile-label shrink-0">{c.mobileLabel ?? c.label}</span>
+                    <span className="app-mobile-value text-right break-words">{cell(row, c)}</span>
                   </div>
                 ))}
               {actions && (
-                <div className="pt-2 border-t border-slate-700/50 flex flex-wrap gap-2">{actions(row)}</div>
+                <div className="pt-2 border-t app-mobile-divider flex flex-wrap gap-2">{actions(row)}</div>
               )}
             </div>
           ))

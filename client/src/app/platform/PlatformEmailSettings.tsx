@@ -20,6 +20,7 @@ import {
 import { api } from "../api/client";
 import { PlatformEmailCampaignsPanel } from "./components/PlatformEmailCampaignsPanel";
 import { useToast } from "../components/Toast";
+import { PasswordInput } from "../components/PasswordInput";
 import {
   EmailRichTextEditor,
   type EmailRichTextEditorHandle,
@@ -580,13 +581,13 @@ export const PlatformEmailSettings: React.FC = () => {
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600">Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   className="input text-sm mt-1 w-full"
                   placeholder={smtp.passwordConfigured ? "•••••••• (unchanged)" : "App password"}
                   value={smtp.password}
                   disabled={readOnly}
                   onChange={(e) => setSmtp({ ...smtp, password: e.target.value })}
+                  autoComplete="new-password"
                 />
               </div>
               <div>

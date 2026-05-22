@@ -16,7 +16,7 @@ import { getSetupWizardStatus } from "../services/setup-wizard";
 import { RBAC_PRESETS } from "../services/rbac-presets";
 import { createAuditLog } from "../services/audit";
 import { isTenantFeatureEnabled } from "../services/tenant-features";
-import { seedDemoDataForTenant } from "../services/tenant-demo-seed";
+import { ensureDemoPortalAccountsForTenant, seedDemoDataForTenant } from "../services/tenant-demo-seed";
 
 export const adminEnhancementsRouter = Router();
 adminEnhancementsRouter.use(requireAuth, requireTenantMatch);
@@ -376,6 +376,22 @@ adminEnhancementsRouter.post("/data-reset", requirePermission("settings.manage")
       });
       res.json({ success: true, data: result, message: "Operational data cleared. Users, roles, and settings kept." });
     } catch (e) { next(e); }
+  },
+);
+
+adminEnhancementsRouter.post("/demo-seed/portal-accounts", requirePermission("settings.manage"),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const created = await ensureDemoPortalAccountsForTenant(tenant.id, tenant.slug);
+      res.json({
+        success: true,
+        data: { created, message: created.length ? "Portal logins created or repaired." : "All demo portal logins already exist." },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Portal account sync failed";
+      next(new BadRequestError(msg));
+    }
   },
 );
 

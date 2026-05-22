@@ -10,6 +10,7 @@ import {
   currencyForCountry,
 } from "../../../lib/currencies";
 import { slugifySchoolName } from "../../../lib/slug";
+import { PasswordInput } from "../../components/PasswordInput";
 
 export type TenantRow = {
   id: string;
@@ -167,9 +168,8 @@ export const SchoolFormModal: React.FC<{
                 value={createForm.adminEmail}
                 onChange={(e) => setCreateForm({ ...createForm, adminEmail: e.target.value })}
               />
-              <input
+              <PasswordInput
                 className="input text-sm sm:col-span-2"
-                type="password"
                 placeholder="Admin password (min 8)"
                 autoComplete="new-password"
                 required
