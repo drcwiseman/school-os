@@ -4,6 +4,7 @@ import { App } from './app/App'
 import './styles/globals.css'
 import './styles/school-app-theme.css'
 import './styles/parent-portal-theme.css'
+import './styles/student-portal-theme.css'
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

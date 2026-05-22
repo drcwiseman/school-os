@@ -295,9 +295,27 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
         eq(studentLeaveRequests.studentId, student.id),
       )).orderBy(desc(studentLeaveRequests.createdAt)).limit(10);
 
+      const { buildStudentPortalExtras } = await import("../services/portal-student-data");
+      const extras = await buildStudentPortalExtras(tenant.id, student.id);
+      const [settings] = await db.select({
+        currency: tenantSettings.currency,
+      }).from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+
       res.json({
         success: true,
-        data: { student, assignments: classAssignments, submissions: mySubmissions, reportCard, attendance, noticeboard, leaves: myLeaves },
+        data: {
+          student,
+          assignments: classAssignments,
+          submissions: mySubmissions,
+          reportCard,
+          attendance,
+          noticeboard,
+          leaves: myLeaves,
+          currency: settings?.currency ?? "UGX",
+          resultsVisible,
+          feesMustBeClear,
+          ...extras,
+        },
       });
     }
   } catch (e) { next(e); }
@@ -545,7 +563,18 @@ router.get("/student/timetable", requirePortalAuth, async (req, res, next) => {
     if (principal.kind !== "student") throw new ForbiddenError("Students only");
     const [acc] = await db.select().from(studentAccounts).where(eq(studentAccounts.id, principal.account.id)).limit(1);
     if (!acc) throw new NotFoundError("Account not found");
-    const periods = await db.select().from(timetablePeriods).where(eq(timetablePeriods.tenantId, tenant.id)).limit(50);
+    const studentId = principal.account.studentId;
+    const [enrollment] = await db.select({ classId: studentClassHistory.classId })
+      .from(studentClassHistory)
+      .where(and(
+        eq(studentClassHistory.studentId, studentId),
+        eq(studentClassHistory.tenantId, tenant.id),
+        isNull(studentClassHistory.toDate),
+      ))
+      .orderBy(desc(studentClassHistory.fromDate))
+      .limit(1);
+    const { listStudentTimetableEnriched } = await import("../services/portal-student-data");
+    const periods = await listStudentTimetableEnriched(tenant.id, enrollment?.classId ?? null);
     res.json({ success: true, data: periods });
   } catch (e) { next(e); }
 });

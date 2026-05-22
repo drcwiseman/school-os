@@ -1,0 +1,145 @@
+/* Student portal — university-style accents on shared portal-shell tokens */
+
+/* One page scroll: sidebar grows with layout; no nested scroll on desktop */
+.student-portal.portal-shell {
+  min-height: 100vh;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+.student-portal .student-portal-layout {
+  align-items: flex-start;
+}
+
+@media (min-width: 1024px) {
+  .student-portal .student-portal-sidebar {
+    position: sticky;
+    top: 7.25rem;
+    align-self: flex-start;
+    overflow: visible !important;
+    max-height: none;
+  }
+
+  .student-portal .student-portal-main {
+    overflow: visible;
+    min-height: 0;
+  }
+}
+
+body.portal-route-active {
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: auto;
+  min-height: 100%;
+}
+
+.student-portal .student-portal-sidebar {
+  background: linear-gradient(180deg, #0f3d2e 0%, #0c1222 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-sidebar {
+  background: linear-gradient(180deg, #ecfdf5 0%, #f8fafc 100%);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+.student-portal-profile-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-profile-card {
+  background: #fff;
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-profile-card p {
+  color: var(--portal-fg-strong);
+}
+
+.student-portal-quick-btn {
+  background: rgba(5, 150, 105, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-quick-btn {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.student-portal-quick-btn:hover {
+  background: rgba(5, 150, 105, 0.28);
+}
+
+.student-portal-status-ribbon {
+  background: var(--portal-bg-elevated);
+  border-color: var(--portal-border);
+}
+
+.student-portal-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.student-portal-pill--ok {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-pill--ok {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.student-portal-pill--warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-pill--warn {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.student-portal-pill--danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-pill--danger {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.student-portal-pill--neutral {
+  background: var(--portal-bg-muted);
+  color: var(--portal-muted);
+  border-color: var(--portal-border);
+}
+
+.student-portal-nav-active {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #6ee7b7 !important;
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-nav-active {
+  background: #d1fae5 !important;
+  color: #047857 !important;
+}
+
+.student-portal[data-portal-theme="light"] .student-portal-sidebar .portal-nav-btn {
+  color: var(--portal-muted);
+}

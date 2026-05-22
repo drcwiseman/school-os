@@ -1,0 +1,906 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { api, downloadPdf } from "../../../api/client";
+import {
+  LayoutDashboard,
+  GraduationCap,
+  Wallet,
+  Calendar,
+  BookOpen,
+  ClipboardList,
+  Library,
+  FolderOpen,
+  Video,
+  Bell,
+  Bus,
+  Sparkles,
+  LogOut,
+  Menu,
+  X,
+  UserCircle,
+  Clock,
+  FileText,
+  Download,
+  CheckCircle,
+  AlertCircle,
+  CalendarOff,
+  Megaphone,
+  ChevronRight,
+  RefreshCw,
+} from "lucide-react";
+import { applyPortalTheme, getStoredPortalTheme } from "../../../utils/theme";
+
+type TabId =
+  | "overview"
+  | "programme"
+  | "results"
+  | "fees"
+  | "timetable"
+  | "homework"
+  | "exams"
+  | "library"
+  | "resources"
+  | "calendar"
+  | "notices"
+  | "leave"
+  | "transport"
+  | "tutor";
+
+type PortalTheme = "light" | "dark";
+
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "overview", label: "Home", icon: LayoutDashboard },
+  { id: "programme", label: "My programme", icon: GraduationCap },
+  { id: "results", label: "Results", icon: FileText },
+  { id: "fees", label: "Fees & invoices", icon: Wallet },
+  { id: "timetable", label: "Timetable", icon: Clock },
+  { id: "homework", label: "Homework", icon: ClipboardList },
+  { id: "exams", label: "CBT exams", icon: BookOpen },
+  { id: "library", label: "Library", icon: Library },
+  { id: "resources", label: "Materials", icon: FolderOpen },
+  { id: "calendar", label: "Calendar", icon: Calendar },
+  { id: "notices", label: "Noticeboard", icon: Megaphone },
+  { id: "leave", label: "Leave", icon: CalendarOff },
+  { id: "transport", label: "Transport", icon: Bus },
+  { id: "tutor", label: "AI tutor", icon: Sparkles },
+];
+
+const QUICK_LINKS: { tab: TabId; label: string }[] = [
+  { tab: "results", label: "View results" },
+  { tab: "fees", label: "View invoices" },
+  { tab: "timetable", label: "Timetable" },
+  { tab: "exams", label: "CBT exams" },
+  { tab: "library", label: "Library" },
+  { tab: "homework", label: "Homework" },
+];
+
+function formatMoney(cents: number | undefined, currency = "UGX") {
+  if (cents == null) return "—";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0 }).format(cents / 100);
+}
+
+function statusPill(status: string) {
+  const s = status.toLowerCase();
+  const map: Record<string, string> = {
+    paid: "student-portal-pill--ok",
+    pending: "student-portal-pill--warn",
+    approved: "student-portal-pill--ok",
+    rejected: "student-portal-pill--danger",
+    active: "student-portal-pill--ok",
+    present: "student-portal-pill--ok",
+    absent: "student-portal-pill--danger",
+    submitted: "student-portal-pill--ok",
+  };
+  return map[s] ?? "student-portal-pill--neutral";
+}
+
+function initials(first?: string, last?: string) {
+  return `${(first ?? "?")[0]}${(last ?? "")[0] ?? ""}`.toUpperCase();
+}
+
+export const StudentPortalDashboard: React.FC<{
+  schoolSlug: string;
+  account: { email: string };
+  data: any;
+  summary: any;
+  onLogout: () => void;
+  payMsg?: string;
+}> = ({ schoolSlug, account, data, summary, onLogout, payMsg }) => {
+  const [tab, setTab] = useState<TabId>("overview");
+  const [portalTheme, setPortalTheme] = useState<PortalTheme>(() => getStoredPortalTheme(schoolSlug));
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [timetable, setTimetable] = useState<any[]>([]);
+  const [onlineClasses, setOnlineClasses] = useState<any[]>([]);
+  const [curriculum, setCurriculum] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [tutorMsg, setTutorMsg] = useState("");
+  const [tutorReply, setTutorReply] = useState("");
+  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`student_portal_notif_${schoolSlug}`) ?? "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const student = data?.student;
+  const studentId = student?.id;
+  const currency = data?.currency ?? "UGX";
+  const notifications: any[] = data?.notifications ?? [];
+  const unreadCount = notifications.filter((n) => !readNotifIds.includes(n.id)).length;
+
+  useEffect(() => {
+    applyPortalTheme(portalTheme, schoolSlug);
+  }, [portalTheme, schoolSlug]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [tab]);
+
+  useEffect(() => {
+    if (!schoolSlug) return;
+    Promise.all([
+      api.get(`/s/${schoolSlug}/api/portal/student/materials`).catch(() => ({ data: [] })),
+      api.get(`/s/${schoolSlug}/api/portal/student/timetable`).catch(() => ({ data: [] })),
+      api.get(`/s/${schoolSlug}/api/portal/student/online-classes`).catch(() => ({ data: [] })),
+      api.get(`/s/${schoolSlug}/api/portal/curriculum`).catch(() => ({ data: null })),
+    ]).then(([m, t, o, c]) => {
+      setMaterials(m.data ?? []);
+      setTimetable(t.data ?? data?.timetable ?? []);
+      setOnlineClasses(o.data ?? []);
+      setCurriculum(c.data);
+    });
+  }, [schoolSlug]);
+
+  useEffect(() => {
+    if (!schoolSlug || !studentId) return;
+    api.get(`/s/${schoolSlug}/api/portal/messages/${studentId}`)
+      .then((r) => setMessages(r.data ?? []))
+      .catch(() => setMessages([]));
+  }, [schoolSlug, studentId]);
+
+  const selectTab = (id: TabId) => {
+    setTab(id);
+    setMobileNavOpen(false);
+  };
+
+  const markNotifRead = (id: string) => {
+    const next = [...new Set([...readNotifIds, id])];
+    setReadNotifIds(next);
+    localStorage.setItem(`student_portal_notif_${schoolSlug}`, JSON.stringify(next));
+  };
+
+  const enrollment = data?.enrollment;
+  const currentTerm = data?.currentTerm;
+  const academicYear = data?.currentAcademicYear;
+  const feeDueMinor = summary?.feeDueMinor ?? data?.feeDueMinor ?? 0;
+  const programmeLabel = enrollment?.className
+    ? `${enrollment.className}${enrollment.streamName ? ` · ${enrollment.streamName}` : ""}`
+    : "Not assigned to a class";
+
+  const attendanceRate = useMemo(() => {
+    const rows = data?.attendance ?? [];
+    const present = rows.filter((r: any) => r.status === "present").length;
+    if (!rows.length) return null;
+    return Math.round((present / rows.length) * 100);
+  }, [data?.attendance]);
+
+  const timetableByDay = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const p of timetable) {
+      const key = p.dayLabel ?? `Day ${p.dayOfWeek}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(p);
+    }
+    return map;
+  }, [timetable]);
+
+  const downloadReportCard = async (id: string) => {
+    await downloadPdf(`/s/${schoolSlug}/api/portal/pdf/report-card/${id}`);
+  };
+
+  const downloadInvoice = async (id: string) => {
+    await downloadPdf(`/s/${schoolSlug}/api/portal/pdf/invoice/${id}`);
+  };
+
+  const subByAssignment = Object.fromEntries((data?.submissions ?? []).map((s: any) => [s.assignmentId, s]));
+
+  return (
+    <div className="portal-shell student-portal min-h-screen" data-portal-theme={portalTheme}>
+      {mobileNavOpen && (
+        <button type="button" className="fixed inset-0 z-40 bg-black/50 lg:hidden" aria-label="Close menu" onClick={() => setMobileNavOpen(false)} />
+      )}
+
+      <header className="portal-header sticky top-0 z-30 border-b backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <button
+              type="button"
+              className="portal-mobile-menu-btn lg:hidden shrink-0 rounded-lg border p-2"
+              onClick={() => setMobileNavOpen((o) => !o)}
+              aria-expanded={mobileNavOpen}
+            >
+              {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400 font-semibold">Student portal</p>
+              <h1 className="text-base sm:text-lg font-bold truncate capitalize text-[var(--portal-fg-strong)]">{schoolSlug.replace(/-/g, " ")}</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setNotifOpen((o) => !o)}
+              className="relative rounded-lg border border-[var(--portal-border)] p-2 text-[var(--portal-muted)]"
+              aria-label="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-emerald-600 text-[10px] font-bold text-white flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+            <span className="hidden md:inline text-xs text-[var(--portal-subtle)]">Hi, {student?.firstName ?? "Student"}</span>
+            <button type="button" onClick={onLogout} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--portal-border)] px-3 py-1.5 text-xs text-[var(--portal-muted)]">
+              <LogOut className="w-3.5 h-3.5" /> Sign out
+            </button>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 pb-3 overflow-x-auto">
+          <div className="flex gap-2 min-w-max">
+            {QUICK_LINKS.map(({ tab: t, label }) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => selectTab(t)}
+                className="student-portal-quick-btn shrink-0 rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <div className="student-portal-layout max-w-7xl mx-auto px-4 pb-28 lg:pb-8 lg:flex lg:items-start lg:gap-6 lg:pt-6">
+        <aside
+          className={`
+            student-portal-sidebar flex flex-col w-[min(300px,88vw)] shrink-0 gap-1 z-50 border-r
+            max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:top-0 max-lg:pt-[5.5rem] max-lg:px-3 max-lg:pb-6 max-lg:overflow-y-auto
+            transition-transform duration-200
+            lg:relative lg:translate-x-0 lg:w-56 lg:pt-0 lg:px-0 lg:pb-0 lg:border-r-0 lg:overflow-visible
+            ${mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          `}
+        >
+          <div className="student-portal-profile-card rounded-xl p-4 mb-3 lg:mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-700/30 text-emerald-100 flex items-center justify-center font-bold text-lg">
+                {initials(student?.firstName, student?.lastName)}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate text-white">{student?.firstName} {student?.lastName}</p>
+                <p className="text-[11px] text-emerald-100/80 font-mono truncate">{student?.admissionNumber}</p>
+              </div>
+            </div>
+          </div>
+
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => selectTab(id)}
+              className={`portal-nav-btn flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium ${
+                tab === id ? "portal-nav-btn-active student-portal-nav-active" : ""
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="truncate">{label}</span>
+              {id === "fees" && feeDueMinor > 0 && (
+                <span className="ml-auto text-[10px] bg-red-500 text-white rounded-full px-1.5">!</span>
+              )}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => setPortalTheme((t) => (t === "dark" ? "light" : "dark"))}
+            className="mt-4 portal-nav-btn rounded-lg px-3 py-2 text-xs"
+          >
+            {portalTheme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
+        </aside>
+
+        <main className="student-portal-main flex-1 min-w-0 space-y-5 pt-4 lg:pt-0">
+          {payMsg && (
+            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3">
+              <CheckCircle className="w-4 h-4" /> {payMsg}
+            </div>
+          )}
+
+          {notifOpen && (
+            <Panel title="Notifications" icon={Bell} onClose={() => setNotifOpen(false)}>
+              {notifications.length === 0 ? (
+                <p className="portal-empty text-sm">No notifications.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {notifications.map((n) => (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          markNotifRead(n.id);
+                          if (n.linkTab) selectTab(n.linkTab as TabId);
+                          setNotifOpen(false);
+                        }}
+                        className={`w-full text-left rounded-xl px-3 py-2 border text-sm ${
+                          readNotifIds.includes(n.id) ? "border-[var(--portal-border-soft)]" : "border-emerald-500/40 bg-emerald-500/10"
+                        }`}
+                      >
+                        <p className="font-medium text-[var(--portal-fg-strong)]">{n.title}</p>
+                        <p className="text-xs text-[var(--portal-muted)] mt-0.5">{n.body}</p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          )}
+
+          {/* Status ribbon — inspired by university portal summary bar */}
+          <div className="student-portal-status-ribbon rounded-xl border p-3 sm:p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[var(--portal-subtle)]">Programme</p>
+                <p className="font-semibold text-[var(--portal-fg-strong)]">{programmeLabel}</p>
+              </div>
+              <span className="student-portal-pill student-portal-pill--ok">Active</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {academicYear && (
+                <span className="student-portal-pill student-portal-pill--ok text-[11px]">
+                  YR {academicYear.name}
+                </span>
+              )}
+              {currentTerm && (
+                <span className="student-portal-pill student-portal-pill--ok text-[11px]">{currentTerm.name}</span>
+              )}
+              <span className={`student-portal-pill text-[11px] ${enrollment ? "student-portal-pill--ok" : "student-portal-pill--danger"}`}>
+                {enrollment ? "Enrolled" : "Not enrolled"}
+              </span>
+              {feeDueMinor > 0 ? (
+                <span className="student-portal-pill student-portal-pill--danger text-[11px]">
+                  Fees due {formatMoney(feeDueMinor, currency)}
+                </span>
+              ) : (
+                <span className="student-portal-pill student-portal-pill--ok text-[11px]">Fees clear</span>
+              )}
+              {attendanceRate != null && (
+                <span className="student-portal-pill student-portal-pill--warn text-[11px]">Attendance {attendanceRate}%</span>
+              )}
+            </div>
+          </div>
+
+          {tab === "overview" && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <StatCard label="Fees due" value={formatMoney(feeDueMinor, currency)} alert={feeDueMinor > 0} />
+                <StatCard label="Present days" value={String(summary?.attendancePresent ?? 0)} />
+                <StatCard label="Homework done" value={String(summary?.submissionsCount ?? 0)} />
+                <StatCard label="CBT exams" value={String((data?.cbtExams ?? []).length)} />
+              </div>
+
+              {(data?.reportCard || (data?.reportCards ?? []).length > 0) && data?.resultsVisible !== false && (
+                <Panel title="Latest results" icon={GraduationCap}>
+                  <button type="button" className="text-emerald-600 dark:text-emerald-400 text-sm font-medium" onClick={() => selectTab("results")}>
+                    View all results <ChevronRight className="w-4 h-4 inline" />
+                  </button>
+                </Panel>
+              )}
+
+              <Panel title="Today's timetable" icon={Clock}>
+                {timetable.length === 0 ? (
+                  <p className="portal-empty text-sm">No timetable published yet.</p>
+                ) : (
+                  <ul className="text-sm space-y-2">
+                    {timetable.slice(0, 6).map((p: any) => (
+                      <li key={p.id} className="flex justify-between gap-2 border-b border-[var(--portal-border-soft)] pb-2">
+                        <span className="text-[var(--portal-fg-strong)]">{p.subjectName ?? "Period"}</span>
+                        <span className="text-[var(--portal-subtle)] text-xs">{p.dayLabel} P{p.periodNo}{p.startTime ? ` · ${p.startTime}` : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button type="button" onClick={() => selectTab("timetable")} className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">Full timetable →</button>
+              </Panel>
+
+              <Panel title="Noticeboard" icon={Megaphone}>
+                <NoticeList items={data?.noticeboard ?? []} limit={4} onMore={() => selectTab("notices")} />
+              </Panel>
+            </div>
+          )}
+
+          {tab === "programme" && (
+            <div className="space-y-5">
+              <Panel title="Bio data" icon={UserCircle}>
+                <dl className="grid sm:grid-cols-2 gap-3 text-sm">
+                  <Field label="Name" value={`${student?.firstName ?? ""} ${student?.lastName ?? ""}`} />
+                  <Field label="Admission no." value={student?.admissionNumber} />
+                  <Field label="Gender" value={student?.gender} />
+                  <Field label="Status" value={student?.status} />
+                  <Field label="Class" value={enrollment?.className ?? "—"} />
+                  <Field label="Stream" value={enrollment?.streamName ?? "—"} />
+                  <Field label="Email" value={account.email} />
+                </dl>
+              </Panel>
+              {curriculum?.framework && (
+                <Panel title="Curriculum" icon={BookOpen}>
+                  <p className="text-sm font-medium text-[var(--portal-fg-strong)]">{curriculum.framework.name}</p>
+                  <ul className="mt-2 text-sm text-[var(--portal-muted)] space-y-1">
+                    {(curriculum.units ?? []).map((u: any) => (
+                      <li key={u.id}>{u.title}</li>
+                    ))}
+                  </ul>
+                </Panel>
+              )}
+              {(data?.schoolTermFees ?? []).length > 0 && (
+                <Panel title="Fee structure (school)" icon={Wallet}>
+                  {(data.schoolTermFees as any[]).map((f: any) => (
+                    <div key={f.termId} className="mb-4 last:mb-0">
+                      <p className="font-medium text-sm text-[var(--portal-fg-strong)]">{f.termName}{f.isCurrent ? " · Current" : ""}</p>
+                      <ul className="mt-2 text-sm space-y-1">
+                        {f.items.map((it: any, i: number) => (
+                          <li key={i} className="flex justify-between text-[var(--portal-muted)]">
+                            <span>{it.feeHeadName}</span>
+                            <span>{formatMoney(it.amountMinor, currency)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-xs font-semibold mt-2 text-[var(--portal-fg-strong)]">Total {formatMoney(f.totalMinor, currency)}</p>
+                    </div>
+                  ))}
+                </Panel>
+              )}
+            </div>
+          )}
+
+          {tab === "results" && (
+            <Panel title="Report cards & results" icon={GraduationCap}>
+              {data?.resultsVisible === false ? (
+                <p className="portal-empty text-sm">Results are hidden by your school. Contact the office.</p>
+              ) : (data?.reportCards ?? []).length === 0 && !data?.reportCard ? (
+                <p className="portal-empty text-sm">No published report cards yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {(data.reportCards?.length ? data.reportCards : data.reportCard ? [data.reportCard] : []).map((rc: any) => (
+                    <li key={rc.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--portal-border)] px-4 py-3">
+                      <div>
+                        <p className="font-medium text-sm text-[var(--portal-fg-strong)]">Report card</p>
+                        <p className="text-xs text-[var(--portal-subtle)]">{rc.createdAt ? new Date(rc.createdAt).toLocaleDateString() : ""}</p>
+                      </div>
+                      <button type="button" className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium" onClick={() => downloadReportCard(rc.id)}>
+                        <Download className="w-3.5 h-3.5" /> PDF
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          )}
+
+          {tab === "fees" && (
+            <div className="space-y-5">
+              <Panel title="Invoices & balance" icon={Wallet}>
+                <p className="text-2xl font-bold text-[var(--portal-fg-strong)] mb-4">{formatMoney(feeDueMinor, currency)} <span className="text-sm font-normal text-[var(--portal-subtle)]">total due</span></p>
+                {(data?.feeByTerm ?? []).length > 0 && (
+                  <div className="grid sm:grid-cols-2 gap-3 mb-4">
+                    {(data.feeByTerm as any[]).map((t: any) => (
+                      <div key={t.termId ?? "general"} className="rounded-lg border border-[var(--portal-border)] p-3 text-sm">
+                        <p className="font-medium">{t.termName}</p>
+                        <p className="text-[var(--portal-muted)]">Remaining {formatMoney(t.remainingMinor, currency)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <ul className="space-y-2">
+                  {(data?.statements ?? []).map((inv: any) => (
+                    <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--portal-border)] px-4 py-3 text-sm">
+                      <div>
+                        <p className="font-medium text-[var(--portal-fg-strong)]">{inv.invoiceNo ?? "Invoice"}</p>
+                        <p className="text-xs text-[var(--portal-subtle)]">Balance {formatMoney(Math.max(0, inv.totalAmount - inv.paidAmount), currency)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`student-portal-pill text-[10px] ${statusPill(inv.status)}`}>{inv.status}</span>
+                        <button type="button" className="text-xs text-emerald-600 dark:text-emerald-400" onClick={() => downloadInvoice(inv.id)}>PDF</button>
+                      </div>
+                    </li>
+                  ))}
+                  {!(data?.statements ?? []).length && <p className="portal-empty text-sm">No invoices on file.</p>}
+                </ul>
+              </Panel>
+            </div>
+          )}
+
+          {tab === "timetable" && (
+            <Panel title="Teaching timetable" icon={Clock} action={<button type="button" className="text-xs text-[var(--portal-muted)]" onClick={() => window.location.reload()}><RefreshCw className="w-3.5 h-3.5 inline" /> Reload</button>}>
+              {Object.keys(timetableByDay).length === 0 ? (
+                <p className="portal-empty text-sm">No periods scheduled. Ask your class teacher to publish the timetable.</p>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(timetableByDay).map(([day, periods]) => (
+                    <div key={day}>
+                      <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-2">{day}</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-[var(--portal-subtle)] border-b border-[var(--portal-border)]">
+                              <th className="py-2 pr-3">Period</th>
+                              <th className="py-2 pr-3">Subject</th>
+                              <th className="py-2 pr-3">Teacher</th>
+                              <th className="py-2">Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {periods.map((p: any) => (
+                              <tr key={p.id} className="border-b border-[var(--portal-border-soft)]">
+                                <td className="py-2 pr-3 font-mono text-xs">P{p.periodNo}</td>
+                                <td className="py-2 pr-3 text-[var(--portal-fg-strong)]">{p.subjectName ?? "—"}</td>
+                                <td className="py-2 pr-3 text-[var(--portal-muted)]">{p.teacherName ?? "—"}</td>
+                                <td className="py-2 text-[var(--portal-muted)] text-xs">{p.startTime && p.endTime ? `${p.startTime}–${p.endTime}` : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
+          )}
+
+          {tab === "homework" && (
+            <Panel title="Homework & assignments" icon={ClipboardList}>
+              <HomeworkList
+                schoolSlug={schoolSlug}
+                assignments={data?.assignments ?? []}
+                subByAssignment={subByAssignment}
+              />
+            </Panel>
+          )}
+
+          {tab === "exams" && (
+            <Panel title="CBT exams & tests" icon={BookOpen}>
+              <p className="text-sm text-[var(--portal-muted)] mb-4">Computer-based tests assigned by your teachers. Open an exam when it is published and within the allowed window.</p>
+              {(data?.cbtExams ?? []).length === 0 ? (
+                <p className="portal-empty text-sm">No published CBT papers right now.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {(data.cbtExams as any[]).map((paper: any) => (
+                    <li key={paper.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--portal-border)] px-4 py-3">
+                      <div>
+                        <p className="font-medium text-[var(--portal-fg-strong)]">{paper.title}</p>
+                        <p className="text-xs text-[var(--portal-subtle)]">{paper.durationMinutes ?? 60} minutes</p>
+                      </div>
+                      <Link
+                        to={`/s/${schoolSlug}/exam?paperId=${paper.id}&studentId=${studentId}`}
+                        className="rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-4 py-2"
+                      >
+                        Start exam
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          )}
+
+          {tab === "library" && (
+            <div className="space-y-5">
+              <Panel title="Library membership" icon={Library}>
+                {data?.libraryCard ? (
+                  <p className="text-sm">Card <span className="font-mono font-semibold text-[var(--portal-fg-strong)]">{data.libraryCard.cardNumber}</span> · {data.libraryCard.status}</p>
+                ) : (
+                  <p className="portal-empty text-sm">No library card on file. Visit the school library.</p>
+                )}
+                {(data?.libraryStats?.overdueLoans ?? 0) > 0 && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {data.libraryStats.overdueLoans} overdue loan(s)</p>
+                )}
+              </Panel>
+              <Panel title="My loans" icon={BookOpen}>
+                {(data?.libraryLoans ?? []).length === 0 ? (
+                  <p className="portal-empty text-sm">No library loans recorded.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm">
+                    {(data.libraryLoans as any[]).map((l: any) => (
+                      <li key={l.id} className="rounded-xl border border-[var(--portal-border)] px-4 py-3">
+                        <p className="font-medium text-[var(--portal-fg-strong)]">{l.bookTitle}</p>
+                        <p className="text-xs text-[var(--portal-subtle)]">{l.bookAuthor} · {l.barcode}</p>
+                        <p className="text-xs mt-1">
+                          Due {l.dueAt ? new Date(l.dueAt).toLocaleDateString() : "—"}
+                          {l.returnedAt ? " · Returned" : l.dueAt && new Date(l.dueAt) < new Date() ? " · Overdue" : " · On loan"}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+            </div>
+          )}
+
+          {tab === "resources" && (
+            <div className="space-y-5">
+              <Panel title="Study materials" icon={FolderOpen}>
+                {materials.length === 0 ? (
+                  <p className="portal-empty text-sm">No materials uploaded yet.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm">
+                    {materials.map((m: any) => (
+                      <li key={m.id} className="flex justify-between gap-2 rounded-lg border border-[var(--portal-border)] px-3 py-2">
+                        <span className="text-[var(--portal-fg-strong)]">{m.title}</span>
+                        {m.filePath && (
+                          <a href={`/s/${schoolSlug}/api/portal/student/materials/${m.id}/file`} className="text-emerald-600 dark:text-emerald-400 text-xs shrink-0" target="_blank" rel="noreferrer">Download</a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+              <Panel title="Online classes" icon={Video}>
+                {onlineClasses.length === 0 ? (
+                  <p className="portal-empty text-sm">No online class links.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {onlineClasses.map((c: any) => (
+                      <li key={c.id}>
+                        <a href={c.url} target="_blank" rel="noreferrer" className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">{c.title}</a>
+                        <p className="text-xs text-[var(--portal-subtle)]">{c.scheduledAt ? new Date(c.scheduledAt).toLocaleString() : ""}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+            </div>
+          )}
+
+          {tab === "calendar" && (
+            <Panel title="Academic calendar & events" icon={Calendar}>
+              <ul className="space-y-3 text-sm">
+                {(data?.calendar?.upcoming ?? []).map((e: any) => (
+                  <li key={e.id} className="rounded-xl border border-[var(--portal-border)] px-4 py-3">
+                    <p className="font-medium text-[var(--portal-fg-strong)]">{e.title}</p>
+                    <p className="text-xs text-[var(--portal-subtle)]">{new Date(e.startsAt).toLocaleString()}{e.venue ? ` · ${e.venue}` : ""}</p>
+                    {e.description && <p className="text-xs text-[var(--portal-muted)] mt-1 line-clamp-2">{e.description}</p>}
+                  </li>
+                ))}
+                {!(data?.calendar?.upcoming ?? []).length && <p className="portal-empty">No upcoming events.</p>}
+              </ul>
+            </Panel>
+          )}
+
+          {tab === "notices" && (
+            <Panel title="Noticeboard & announcements" icon={Megaphone}>
+              <NoticeList items={data?.noticeboard ?? []} />
+            </Panel>
+          )}
+
+          {tab === "leave" && (
+            <StudentLeaveSection schoolSlug={schoolSlug} studentId={studentId!} leaves={data?.leaves ?? []} />
+          )}
+
+          {tab === "transport" && (
+            <Panel title="Transport" icon={Bus}>
+              {!data?.transport ? (
+                <p className="portal-empty text-sm">You are not assigned to a bus route.</p>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-[var(--portal-fg-strong)]">Route: {data.transport.routeName}</p>
+                  <ul className="mt-3 text-sm text-[var(--portal-muted)] space-y-1">
+                    {(data.transport.stops ?? []).map((s: any, i: number) => (
+                      <li key={i}>{s.orderNo}. {s.name}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Panel>
+          )}
+
+          {tab === "tutor" && (
+            <Panel title="AI study tutor" icon={Sparkles}>
+              <textarea
+                className="portal-input w-full rounded-lg px-3 py-2 text-sm min-h-[100px]"
+                value={tutorMsg}
+                onChange={(e) => setTutorMsg(e.target.value)}
+                placeholder="Ask about a topic, exam prep, or homework help…"
+              />
+              <button
+                type="button"
+                className="mt-2 rounded-lg bg-emerald-700 text-white text-sm px-4 py-2 font-medium"
+                onClick={async () => {
+                  const res = await api.post(`/s/${schoolSlug}/api/portal/student/tutor`, { message: tutorMsg, subject: "General" });
+                  setTutorReply(res.data?.reply ?? "");
+                }}
+              >
+                Ask tutor
+              </button>
+              {tutorReply && <p className="mt-3 text-sm text-[var(--portal-fg)] whitespace-pre-wrap rounded-xl border border-[var(--portal-border)] p-4">{tutorReply}</p>}
+            </Panel>
+          )}
+
+          {messages.length > 0 && (
+            <Panel title="Messages from school" icon={Bell}>
+              <ul className="text-sm space-y-2">
+                {messages.map((m: any) => (
+                  <li key={m.id} className={`rounded-lg px-3 py-2 border ${m.senderType === "staff" ? "border-emerald-500/30" : "border-[var(--portal-border)]"}`}>
+                    <p className="text-[10px] uppercase text-[var(--portal-subtle)]">{m.senderType}</p>
+                    <p className="text-[var(--portal-fg)]">{m.body}</p>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+function Panel({
+  title,
+  icon: Icon,
+  children,
+  action,
+  onClose,
+}: {
+  title: string;
+  icon?: React.ElementType;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  onClose?: () => void;
+}) {
+  return (
+    <section className="portal-panel rounded-2xl p-5">
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <h2 className="portal-panel-title font-semibold flex items-center gap-2">
+          {Icon && <Icon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
+          {title}
+        </h2>
+        <div className="flex items-center gap-2">
+          {action}
+          {onClose && (
+            <button type="button" onClick={onClose} className="text-[var(--portal-subtle)]"><X className="w-4 h-4" /></button>
+          )}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StatCard({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
+  return (
+    <div className={`portal-stat rounded-xl p-3 border ${alert ? "border-amber-500/40" : "border-[var(--portal-border)]"}`}>
+      <p className="portal-stat-label text-xs">{label}</p>
+      <p className={`portal-stat-value text-lg font-bold ${alert ? "text-amber-600 dark:text-amber-300" : ""}`}>{value}</p>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <dt className="text-[10px] uppercase tracking-wide text-[var(--portal-subtle)]">{label}</dt>
+      <dd className="text-[var(--portal-fg-strong)] capitalize">{value ?? "—"}</dd>
+    </div>
+  );
+}
+
+function NoticeList({ items, limit, onMore }: { items: any[]; limit?: number; onMore?: () => void }) {
+  const list = limit ? items.slice(0, limit) : items;
+  if (!list.length) return <p className="portal-empty text-sm">No announcements.</p>;
+  return (
+    <>
+      <ul className="space-y-3 text-sm">
+        {list.map((a: any) => (
+          <li key={a.id}>
+            <p className="font-medium text-[var(--portal-fg-strong)]">{a.title}</p>
+            <p className="text-[var(--portal-muted)] text-xs mt-0.5 line-clamp-3">{a.body}</p>
+          </li>
+        ))}
+      </ul>
+      {onMore && items.length > (limit ?? 0) && (
+        <button type="button" onClick={onMore} className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">View all →</button>
+      )}
+    </>
+  );
+}
+
+function HomeworkList({
+  schoolSlug,
+  assignments,
+  subByAssignment,
+}: {
+  schoolSlug: string;
+  assignments: any[];
+  subByAssignment: Record<string, any>;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const submit = async (assignmentId: string) => {
+    const content = drafts[assignmentId]?.trim();
+    if (!content) return;
+    await api.post(`/s/${schoolSlug}/api/portal/student/assignments/${assignmentId}/submit`, { content });
+    window.location.reload();
+  };
+  if (!assignments.length) return <p className="portal-empty text-sm">No homework assigned.</p>;
+  return (
+    <ul className="space-y-4">
+      {assignments.map((a: any) => {
+        const sub = subByAssignment[a.id];
+        return (
+          <li key={a.id} className="rounded-xl border border-[var(--portal-border)] p-4">
+            <p className="font-medium text-[var(--portal-fg-strong)]">{a.title}</p>
+            {a.dueDate && <p className="text-xs text-[var(--portal-subtle)] mt-0.5">Due {new Date(a.dueDate).toLocaleDateString()}</p>}
+            {a.description && <p className="text-sm text-[var(--portal-muted)] mt-2">{a.description}</p>}
+            {sub ? (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Submitted · {sub.status}</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                <textarea className="portal-input w-full rounded-lg min-h-[72px] text-sm" value={drafts[a.id] ?? ""} onChange={(e) => setDrafts({ ...drafts, [a.id]: e.target.value })} placeholder="Your answer…" />
+                <button type="button" className="rounded-lg bg-emerald-700 text-white text-xs px-3 py-1.5" onClick={() => submit(a.id)}>Submit</button>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function StudentLeaveSection({ schoolSlug, studentId, leaves: initial }: { schoolSlug: string; studentId: string; leaves: any[] }) {
+  const [form, setForm] = useState({ startDate: "", endDate: "", reason: "" });
+  const [leaves, setLeaves] = useState(initial);
+  useEffect(() => {
+    api.get(`/s/${schoolSlug}/api/portal/leaves`).then((r) => {
+      const all = r.data ?? [];
+      setLeaves(all.filter((l: any) => l.studentId === studentId));
+    }).catch(() => {});
+  }, [schoolSlug, studentId]);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await api.post(`/s/${schoolSlug}/api/portal/leaves`, { ...form, studentId });
+    setForm({ startDate: "", endDate: "", reason: "" });
+    const r = await api.get(`/s/${schoolSlug}/api/portal/leaves`);
+    setLeaves((r.data ?? []).filter((l: any) => l.studentId === studentId));
+  };
+  return (
+    <Panel title="Leave requests" icon={CalendarOff}>
+      <form onSubmit={submit} className="grid sm:grid-cols-2 gap-3 mb-6">
+        <label className="text-xs text-[var(--portal-subtle)]">
+          From
+          <input type="date" className="portal-input w-full mt-1 rounded-lg text-sm" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+        </label>
+        <label className="text-xs text-[var(--portal-subtle)]">
+          To
+          <input type="date" className="portal-input w-full mt-1 rounded-lg text-sm" required value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+        </label>
+        <label className="text-xs text-[var(--portal-subtle)] sm:col-span-2">
+          Reason
+          <input className="portal-input w-full mt-1 rounded-lg text-sm" required value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+        </label>
+        <button type="submit" className="sm:col-span-2 rounded-lg bg-emerald-700 text-white text-sm py-2 font-medium">Submit request</button>
+      </form>
+      <ul className="text-sm space-y-2">
+        {leaves.map((l: any) => (
+          <li key={l.id} className="flex justify-between gap-2 rounded-lg border border-[var(--portal-border)] px-3 py-2">
+            <span>{new Date(l.startDate).toLocaleDateString()} – {new Date(l.endDate).toLocaleDateString()}</span>
+            <span className={`student-portal-pill text-[10px] ${statusPill(l.status)}`}>{l.status}</span>
+          </li>
+        ))}
+        {!leaves.length && <p className="portal-empty">No leave requests yet.</p>}
+      </ul>
+    </Panel>
+  );
+}
