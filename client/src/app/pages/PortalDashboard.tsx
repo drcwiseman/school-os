@@ -4,6 +4,7 @@ import { api, downloadPdf } from "../api/client";
 import { Link } from "react-router-dom";
 import { Loader2, Sparkles, BookOpen, Calendar, LogOut } from "lucide-react";
 import { ParentPortalDashboard } from "./portal/parent/ParentPortalDashboard";
+import { getStoredPortalTheme } from "../utils/theme";
 
 function formatMoney(cents: number | undefined, currency = "UGX") {
   if (cents == null) return "—";
@@ -77,6 +78,7 @@ export const PortalDashboard: React.FC = () => {
   }
 
   if (account?.type === "parent" && data) {
+    const initialTheme = account.preferences?.theme === "light" ? "light" : getStoredPortalTheme(schoolSlug!);
     return (
       <ParentPortalDashboard
         schoolSlug={schoolSlug!}
@@ -85,6 +87,8 @@ export const PortalDashboard: React.FC = () => {
         summary={summary}
         onLogout={logout}
         payMsg={payMsg}
+        initialTheme={initialTheme}
+        onAccountEmailChange={(email) => setAccount((a: any) => (a ? { ...a, email } : a))}
       />
     );
   }

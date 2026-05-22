@@ -44,12 +44,18 @@ router.post("/logout", requirePortalAuth, async (req, res) => {
 router.get("/me", requirePortalAuth, async (req, res, next) => {
   try {
     const principal = (req as any).portalPrincipal;
+    const prefs = principal.kind === "parent"
+      ? ((principal.account.preferencesJson ?? {}) as { theme?: "light" | "dark" })
+      : {};
     res.json({
       success: true,
       account: {
         id: principal.account.id,
         email: principal.account.email,
         type: principal.kind,
+        preferences: principal.kind === "parent"
+          ? { theme: prefs.theme === "light" ? "light" : "dark" }
+          : undefined,
       },
     });
   } catch (e) { next(e); }
@@ -77,18 +83,6 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
       const paidOk = !feesMustBeClear || statements.every((i) => i.status === "paid");
       const publishedCards = resultsVisible && paidOk && studentIds.length
         ? await db.select().from(reportCards).where(and(eq(reportCards.tenantId, tenant.id), inArray(reportCards.studentId, studentIds), eq(reportCards.published, true)))
-        : [];
-      const attendance = studentIds.length
-        ? await db.select({
-          studentId: attendanceRecords.studentId,
-          status: attendanceRecords.status,
-          date: attendanceSessions.date,
-        })
-          .from(attendanceRecords)
-          .innerJoin(attendanceSessions, eq(attendanceRecords.sessionId, attendanceSessions.id))
-          .where(and(eq(attendanceRecords.tenantId, tenant.id), inArray(attendanceRecords.studentId, studentIds)))
-          .orderBy(desc(attendanceSessions.date))
-          .limit(30)
         : [];
       const receiptRows = studentIds.length
         ? await db.select({
@@ -143,6 +137,19 @@ router.get("/dashboard", requirePortalAuth, async (req, res, next) => {
 
       const { buildParentPortalExtras } = await import("../services/portal-parent-data");
       const parentExtras = await buildParentPortalExtras(tenant.id, studentIds, principal);
+
+      const attendance = studentIds.flatMap((sid) =>
+        (parentExtras.classAttendanceByStudent[sid] ?? []).map((r) => ({
+          studentId: sid,
+          id: r.id,
+          status: r.status,
+          date: r.date,
+          className: r.className,
+          streamName: r.streamName,
+          note: r.note,
+          inCurrentTerm: r.inCurrentTerm,
+        })),
+      );
 
       const leaves = studentIds.length
         ? await db.select().from(studentLeaveRequests)

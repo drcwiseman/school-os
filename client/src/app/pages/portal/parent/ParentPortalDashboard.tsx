@@ -18,16 +18,21 @@ import {
   CheckCircle,
   CalendarOff,
   ChevronRight,
-  User,
+  UserCheck,
   Mail,
   Calendar,
   Users,
   Trophy,
   MapPin,
   X,
+  UserCircle,
+  Menu,
 } from "lucide-react";
+import { applyPortalTheme, getStoredPortalTheme } from "../../../utils/theme";
+import { ParentPortalProfile } from "./ParentPortalProfile";
 
-type TabId = "overview" | "academics" | "fees" | "records" | "messages" | "calendar" | "family" | "manage";
+type TabId = "overview" | "attendance" | "academics" | "fees" | "records" | "messages" | "calendar" | "family" | "manage" | "profile";
+type PortalTheme = "light" | "dark";
 
 const READ_NOTIF_KEY = "portal_notif_read";
 
@@ -58,6 +63,7 @@ function statusPill(status: string) {
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
+  { id: "attendance", label: "Attendance", icon: UserCheck },
   { id: "academics", label: "Results", icon: GraduationCap },
   { id: "fees", label: "Fees", icon: Wallet },
   { id: "calendar", label: "Calendar", icon: Calendar },
@@ -65,6 +71,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "records", label: "Records", icon: FolderOpen },
   { id: "messages", label: "Messages", icon: MessageCircle },
   { id: "manage", label: "Manage", icon: Settings2 },
+  { id: "profile", label: "Profile", icon: UserCircle },
 ];
 
 export const ParentPortalDashboard: React.FC<{
@@ -74,7 +81,9 @@ export const ParentPortalDashboard: React.FC<{
   summary: any;
   onLogout: () => void;
   payMsg: string;
-}> = ({ schoolSlug, account, data, summary, onLogout, payMsg }) => {
+  initialTheme?: PortalTheme;
+  onAccountEmailChange?: (email: string) => void;
+}> = ({ schoolSlug, account, data, summary, onLogout, payMsg, initialTheme, onAccountEmailChange }) => {
   const [tab, setTab] = useState<TabId>("overview");
   const [activeChildId, setActiveChildId] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
@@ -83,6 +92,24 @@ export const ParentPortalDashboard: React.FC<{
   const [payerPhone, setPayerPhone] = useState("");
   const [localPayMsg, setLocalPayMsg] = useState(payMsg);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [attendanceScope, setAttendanceScope] = useState<"term" | "all">("term");
+  const [portalTheme, setPortalTheme] = useState<PortalTheme>(
+    () => initialTheme ?? getStoredPortalTheme(schoolSlug),
+  );
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    applyPortalTheme(portalTheme, schoolSlug);
+  }, [portalTheme, schoolSlug]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [tab]);
+
+  const selectTab = (id: TabId) => {
+    setTab(id);
+    setMobileNavOpen(false);
+  };
   const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(`${READ_NOTIF_KEY}-${schoolSlug}`) ?? "[]");
@@ -132,13 +159,21 @@ export const ParentPortalDashboard: React.FC<{
 
   const openNotif = (n: any) => {
     markNotifRead(n.id);
-    if (n.linkTab) setTab(n.linkTab as TabId);
+    if (n.linkTab) selectTab(n.linkTab as TabId);
     if (n.studentId) setActiveChildId(n.studentId);
     setNotifOpen(false);
   };
 
   const childStatements = filterChild(data?.statements ?? []);
-  const childAttendance = filterChild(data?.attendance ?? []);
+  const childClassAttendance: any[] = (data?.classAttendanceByStudent ?? {})[activeChildId]
+    ?? filterChild(data?.attendance ?? []);
+  const childAttendanceFiltered = attendanceScope === "term"
+    ? childClassAttendance.filter((a: any) => a.inCurrentTerm === true)
+    : childClassAttendance;
+  const childSchoolTermFees: any[] = (data?.schoolTermFeesByStudent ?? {})[activeChildId] ?? [];
+  const currentTermSchoolFees = childSchoolTermFees.find((f: any) => f.isCurrent)
+    ?? childSchoolTermFees[0];
+  const currentTermInvoice = childFeeTerms.find((f: any) => f.termId === currentTerm?.id);
   const childReceipts = filterChild(data?.receipts ?? []);
   const childLeaves = filterChild(data?.leaves ?? []);
   const childGatePasses = filterChild(data?.gatePasses ?? []);
@@ -147,11 +182,12 @@ export const ParentPortalDashboard: React.FC<{
   const childTransport = (data?.transport ?? []).find((t: any) => t.studentId === activeChildId);
 
   const attendanceRate = useMemo(() => {
-    const present = childAttendance.filter((a: any) => a.status === "present").length;
-    const total = childAttendance.length;
+    const rows = childClassAttendance.filter((a: any) => a.inCurrentTerm === true);
+    const present = rows.filter((a: any) => a.status === "present").length;
+    const total = rows.length;
     if (!total) return null;
     return Math.round((present / total) * 100);
-  }, [childAttendance]);
+  }, [childClassAttendance]);
 
   const payInvoice = async (invoiceId: string, provider: "flutterwave" | "mtn_momo" | "paypal" | "pesapal") => {
     setPayingId(invoiceId);
@@ -184,18 +220,38 @@ export const ParentPortalDashboard: React.FC<{
   };
 
   return (
-    <div className="min-h-screen bg-[#0c1222] text-slate-100">
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-[#0c1222]/90 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-teal-400/90 font-semibold">Parent portal</p>
-            <h1 className="text-lg font-bold truncate capitalize">{schoolSlug?.replace(/-/g, " ")}</h1>
+    <div className="portal-shell min-h-screen" data-portal-theme={portalTheme}>
+      {mobileNavOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          aria-label="Close menu"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+
+      <header className="portal-header sticky top-0 z-30 border-b backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <button
+              type="button"
+              className="portal-mobile-menu-btn lg:hidden shrink-0 rounded-lg border p-2"
+              onClick={() => setMobileNavOpen((o) => !o)}
+              aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileNavOpen}
+            >
+              {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-teal-500 font-semibold">Parent portal</p>
+              <h1 className="text-base sm:text-lg font-bold truncate capitalize text-[var(--portal-fg-strong)]">{schoolSlug?.replace(/-/g, " ")}</h1>
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setNotifOpen((o) => !o)}
-              className="relative rounded-lg border border-white/10 p-2 text-slate-300 hover:bg-white/5"
+              className="relative rounded-lg border border-[var(--portal-border)] p-2 text-[var(--portal-muted)] hover:bg-[var(--portal-bg-muted)]"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
@@ -205,8 +261,15 @@ export const ParentPortalDashboard: React.FC<{
                 </span>
               )}
             </button>
-            <span className="hidden sm:inline text-xs text-slate-500 truncate max-w-[180px]">{account.email}</span>
-            <button type="button" onClick={onLogout} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5">
+            <button
+              type="button"
+              onClick={() => selectTab("profile")}
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-[var(--portal-border)] px-3 py-1.5 text-xs text-[var(--portal-muted)] hover:bg-[var(--portal-bg-muted)]"
+            >
+              <UserCircle className="w-3.5 h-3.5" /> Profile
+            </button>
+            <span className="hidden md:inline text-xs text-[var(--portal-subtle)] truncate max-w-[180px]">{account.email}</span>
+            <button type="button" onClick={onLogout} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--portal-border)] px-3 py-1.5 text-xs text-[var(--portal-muted)] hover:bg-[var(--portal-bg-muted)]">
               <LogOut className="w-3.5 h-3.5" /> Sign out
             </button>
           </div>
@@ -214,14 +277,25 @@ export const ParentPortalDashboard: React.FC<{
       </header>
 
       <div className="max-w-6xl mx-auto px-4 pb-28 lg:pb-8 lg:flex lg:gap-6 lg:pt-6">
-        <nav className="hidden lg:flex flex-col w-52 shrink-0 gap-1 sticky top-20 self-start">
+        <nav
+          className={`
+            flex flex-col w-[min(280px,85vw)] shrink-0 gap-1 z-50
+            fixed inset-y-0 left-0 top-0 pt-[4.5rem] px-4 pb-6 overflow-y-auto
+            border-r backdrop-blur-md transition-transform duration-200 ease-out
+            lg:static lg:translate-x-0 lg:w-52 lg:pt-0 lg:px-0 lg:pb-0 lg:border-r-0
+            lg:sticky lg:top-20 lg:self-start lg:bg-transparent
+            ${mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          `}
+          style={{ backgroundColor: "var(--portal-bg)", borderColor: "var(--portal-border)" }}
+        >
+          <p className="lg:hidden text-xs font-semibold uppercase tracking-wide text-[var(--portal-subtle)] mb-2 px-1">Menu</p>
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
-              onClick={() => setTab(id)}
-              className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                tab === id ? "bg-teal-500/20 text-teal-200" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+              onClick={() => selectTab(id)}
+              className={`portal-nav-btn flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                tab === id ? "portal-nav-btn-active" : ""
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -356,15 +430,15 @@ export const ParentPortalDashboard: React.FC<{
                 <Panel title="Quick actions" icon={ChevronRight}>
                   <div className="grid grid-cols-2 gap-2">
                     {[
+                      { label: "Class attendance", tab: "attendance" as TabId },
                       { label: "View fees", tab: "fees" as TabId },
                       { label: "Results", tab: "academics" as TabId },
                       { label: "Message school", tab: "messages" as TabId },
-                      { label: "Request leave", tab: "manage" as TabId },
                     ].map((q) => (
                       <button
                         key={q.label}
                         type="button"
-                        onClick={() => setTab(q.tab)}
+                        onClick={() => selectTab(q.tab)}
                         className="text-left rounded-xl border border-white/8 bg-white/[0.02] px-3 py-3 text-sm text-slate-200 hover:border-teal-500/30 hover:bg-teal-500/5 transition-colors"
                       >
                         {q.label}
@@ -374,10 +448,50 @@ export const ParentPortalDashboard: React.FC<{
                 </Panel>
               </div>
 
-              <Panel title="Recent attendance" icon={User}>
-                <AttendanceMini rows={childAttendance.slice(0, 8)} />
+              <Panel title="Recent class attendance" icon={UserCheck}>
+                <AttendanceMini rows={childClassAttendance.slice(0, 8)} />
+                <button type="button" className="mt-3 text-xs text-teal-500 hover:text-teal-600" onClick={() => selectTab("attendance")}>
+                  View full attendance →
+                </button>
               </Panel>
             </>
+          )}
+
+          {tab === "attendance" && (
+            <Panel
+              title="Class attendance"
+              icon={UserCheck}
+              subtitle={
+                enrollment
+                  ? `${enrollment.className}${enrollment.streamName ? ` · ${enrollment.streamName}` : ""}${currentTerm?.name ? ` · ${currentTerm.name}` : ""}`
+                  : "Daily register taken in class"
+              }
+            >
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setAttendanceScope("term")}
+                  className={`text-xs px-3 py-1.5 rounded-lg border ${attendanceScope === "term" ? "border-teal-500/40 bg-teal-500/10 text-teal-300" : "border-white/10 text-slate-400"}`}
+                >
+                  Current term
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAttendanceScope("all")}
+                  className={`text-xs px-3 py-1.5 rounded-lg border ${attendanceScope === "all" ? "border-teal-500/40 bg-teal-500/10 text-teal-300" : "border-white/10 text-slate-400"}`}
+                >
+                  All records
+                </button>
+              </div>
+              {attendanceRate != null && attendanceScope === "term" && (
+                <p className="text-sm text-slate-400 mb-4">
+                  Present rate this term: <strong className="text-teal-300">{attendanceRate}%</strong>
+                  {" "}({childClassAttendance.filter((a: any) => a.inCurrentTerm === true && a.status === "present").length} present
+                  {" "}of {childClassAttendance.filter((a: any) => a.inCurrentTerm === true).length} days recorded)
+                </p>
+              )}
+              <AttendanceTable rows={childAttendanceFiltered} />
+            </Panel>
           )}
 
           {tab === "academics" && (
@@ -419,16 +533,77 @@ export const ParentPortalDashboard: React.FC<{
                   </div>
                 )}
               </Panel>
-
-              <Panel title="Attendance history" icon={GraduationCap} subtitle="Recorded by class teachers">
-                <AttendanceMini rows={childAttendance} full />
-              </Panel>
             </>
           )}
 
           {tab === "fees" && (
             <>
-            <Panel title="Fee balance by term" icon={Wallet} subtitle={`${activeChild?.firstName ?? "Student"} · all terms`}>
+            <Panel
+              title="School fees for the term"
+              icon={Wallet}
+              subtitle="Fee schedule set by the school (before payments & adjustments)"
+            >
+              {!currentTermSchoolFees ? (
+                <Empty text={currentTerm ? `No fee schedule published for ${currentTerm.name} yet.` : "No fee schedule on file for this class."} />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-white font-medium">{currentTermSchoolFees.termName}</span>
+                    {currentTermSchoolFees.isCurrent && (
+                      <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border border-teal-500/30 text-teal-300">Current</span>
+                    )}
+                    <span className="text-slate-500">· {currentTermSchoolFees.structureName}</span>
+                    {currentTermSchoolFees.className && (
+                      <span className="text-slate-500">· {currentTermSchoolFees.className}</span>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-slate-500 border-b border-white/10">
+                          <th className="py-2 pr-3">Fee item</th>
+                          <th className="py-2 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentTermSchoolFees.items.map((item: any, idx: number) => (
+                          <tr key={idx} className="border-b border-white/5">
+                            <td className="py-2.5 text-slate-200">{item.feeHeadName}</td>
+                            <td className="py-2.5 text-right text-slate-300">{formatMoney(item.amountMinor, currency)}</td>
+                          </tr>
+                        ))}
+                        <tr className="font-semibold">
+                          <td className="py-2.5 text-white">Total for term</td>
+                          <td className="py-2.5 text-right text-teal-300">{formatMoney(currentTermSchoolFees.totalMinor, currency)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  {currentTermInvoice && (
+                    <p className="text-xs text-slate-500 border-t border-white/5 pt-3">
+                      On your account for this term: invoiced {formatMoney(currentTermInvoice.totalMinor, currency)},
+                      {" "}paid {formatMoney(currentTermInvoice.paidMinor, currency)},
+                      {" "}remaining {formatMoney(currentTermInvoice.remainingMinor, currency)}.
+                    </p>
+                  )}
+                  {childSchoolTermFees.length > 1 && (
+                    <details className="text-sm text-slate-400">
+                      <summary className="cursor-pointer text-teal-400/90 hover:text-teal-300">Other terms</summary>
+                      <ul className="mt-2 space-y-2">
+                        {childSchoolTermFees.filter((f: any) => !f.isCurrent).map((f: any) => (
+                          <li key={f.termId} className="rounded-lg border border-white/5 px-3 py-2">
+                            <span className="text-white">{f.termName}</span>
+                            <span className="text-slate-500 ml-2">— {formatMoney(f.totalMinor, currency)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Fee balance by term" icon={Wallet} subtitle={`${activeChild?.firstName ?? "Student"} · invoiced amounts`}>
               {childFeeTerms.length === 0 ? (
                 <Empty text="No fee invoices on record." />
               ) : (
@@ -675,6 +850,15 @@ export const ParentPortalDashboard: React.FC<{
             </Panel>
           )}
 
+          {tab === "profile" && (
+            <ParentPortalProfile
+              schoolSlug={schoolSlug}
+              theme={portalTheme}
+              onThemeChange={setPortalTheme}
+              onAccountEmailChange={onAccountEmailChange}
+            />
+          )}
+
           {tab === "manage" && (
             <div className="space-y-4">
               <Panel title="What you can manage" icon={Settings2}>
@@ -683,6 +867,8 @@ export const ParentPortalDashboard: React.FC<{
                     { ok: true, text: "Pay school fees online (when enabled)" },
                     { ok: true, text: "Send messages to school staff" },
                     { ok: true, text: "Submit leave requests for your child" },
+                    { ok: true, text: "Update your profile, theme, and family contacts" },
+                    { ok: true, text: "View class attendance and school fee schedules" },
                     { ok: true, text: "Download invoices, receipts & report cards" },
                     { ok: false, text: "Edit grades or attendance (school staff only)" },
                     { ok: false, text: "Approve gate passes or discipline (view only)" },
@@ -714,14 +900,14 @@ export const ParentPortalDashboard: React.FC<{
         </main>
       </div>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0c1222]/95 backdrop-blur pb-safe">
+      <nav className="portal-bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-30 border-t backdrop-blur pb-safe">
         <div className="flex overflow-x-auto gap-0.5 px-1 py-2 no-scrollbar">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
-              onClick={() => setTab(id)}
-              className={`flex flex-col items-center gap-0.5 shrink-0 min-w-[52px] px-2 py-1 text-[10px] ${tab === id ? "text-teal-400" : "text-slate-500"}`}
+              onClick={() => selectTab(id)}
+              className={`flex flex-col items-center gap-0.5 shrink-0 min-w-[52px] px-2 py-1 text-[10px] ${tab === id ? "text-teal-500" : "text-[var(--portal-subtle)]"}`}
             >
               <Icon className="w-5 h-5" />
               {label}
@@ -754,13 +940,13 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-white/8 bg-slate-900/40 p-5 shadow-lg shadow-black/10">
+    <section className="portal-panel rounded-2xl p-5">
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-white flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-teal-400" />}
+        <h2 className="portal-panel-title text-base font-semibold flex items-center gap-2">
+          {Icon && <Icon className="w-4 h-4 text-teal-500" />}
           {title}
         </h2>
-        {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
+        {subtitle && <p className="portal-panel-subtitle text-xs mt-1">{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -768,21 +954,59 @@ function Panel({
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="text-slate-500 text-sm py-4 text-center">{text}</p>;
+  return <p className="portal-empty text-sm py-4 text-center">{text}</p>;
 }
 
-function AttendanceMini({ rows, full }: { rows: any[]; full?: boolean }) {
-  if (!rows.length) return <Empty text="No attendance records yet." />;
-  const list = full ? rows : rows;
+function AttendanceMini({ rows }: { rows: any[] }) {
+  if (!rows.length) return <Empty text="No class attendance records yet." />;
   return (
-    <ul className={`text-sm space-y-1.5 ${full ? "max-h-64 overflow-y-auto" : ""}`}>
-      {list.map((r, i) => (
-        <li key={i} className="flex justify-between items-center rounded-lg px-2 py-1.5 hover:bg-white/[0.02]">
-          <span className="text-slate-400">{r.date ? new Date(r.date).toLocaleDateString() : "—"}</span>
-          <span className={`text-xs px-2 py-0.5 rounded border capitalize ${statusPill(r.status)}`}>{r.status}</span>
+    <ul className="text-sm space-y-1.5">
+      {rows.map((r, i) => (
+        <li key={r.id ?? i} className="flex justify-between items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/[0.02]">
+          <div className="min-w-0">
+            <span className="text-slate-400 block">{r.date ? new Date(r.date).toLocaleDateString() : "—"}</span>
+            {(r.className || r.streamName) && (
+              <span className="text-[11px] text-slate-500 truncate block">
+                {r.className}{r.streamName ? ` · ${r.streamName}` : ""}
+              </span>
+            )}
+          </div>
+          <span className={`text-xs px-2 py-0.5 rounded border capitalize shrink-0 ${statusPill(r.status)}`}>{r.status}</span>
         </li>
       ))}
     </ul>
+  );
+}
+
+function AttendanceTable({ rows }: { rows: any[] }) {
+  if (!rows.length) return <Empty text="No class attendance records for this period." />;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-slate-500 border-b border-white/10">
+            <th className="py-2 pr-3">Date</th>
+            <th className="py-2 pr-3">Class</th>
+            <th className="py-2 pr-3">Stream</th>
+            <th className="py-2 pr-3">Status</th>
+            <th className="py-2">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className="border-b border-white/5">
+              <td className="py-2.5 text-slate-300 whitespace-nowrap">{r.date ? new Date(r.date).toLocaleDateString() : "—"}</td>
+              <td className="py-2.5 text-white">{r.className ?? "—"}</td>
+              <td className="py-2.5 text-slate-400">{r.streamName ?? "—"}</td>
+              <td className="py-2.5">
+                <span className={`text-xs px-2 py-0.5 rounded border capitalize ${statusPill(r.status)}`}>{r.status}</span>
+              </td>
+              <td className="py-2.5 text-slate-500 text-xs max-w-[140px] truncate">{r.note ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

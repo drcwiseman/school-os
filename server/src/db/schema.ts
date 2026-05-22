@@ -1836,6 +1836,7 @@ export const parentAccounts = pgTable("parent_accounts", {
   email:        text("email").notNull(),
   passwordHash: text("password_hash").notNull(),
   guardianId:   uuid("guardian_id").notNull().references(() => guardians.id, { onDelete: "cascade" }),
+  preferencesJson: jsonb("preferences_json").$type<{ theme?: "light" | "dark" }>().notNull().default({}),
   status:       userStatusEnum("status").notNull().default("active"),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
   updatedAt:    timestamp("updated_at").notNull().defaultNow(),

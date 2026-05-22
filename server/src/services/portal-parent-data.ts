@@ -3,6 +3,11 @@ import { db } from "../db";
 import {
   academicYears,
   announcements,
+  attendanceRecords,
+  attendanceSessions,
+  feeHeads,
+  feeStructureItems,
+  feeStructures,
   guardians,
   invoices,
   parentAccounts,
@@ -38,6 +43,42 @@ type FeeTermRow = {
   remainingMinor: number;
   invoiceCount: number;
 };
+
+export type ClassAttendanceRow = {
+  id: string;
+  date: string;
+  status: string;
+  className: string;
+  streamName: string | null;
+  note: string | null;
+  inCurrentTerm: boolean;
+};
+
+export type SchoolTermFeeSchedule = {
+  termId: string;
+  termName: string;
+  isCurrent: boolean;
+  structureId: string;
+  structureName: string;
+  className: string | null;
+  items: { feeHeadName: string; amountMinor: number }[];
+  totalMinor: number;
+};
+
+function feeStructureMatchScore(
+  fs: { termId: string | null; classId: string | null },
+  termId: string,
+  classId: string | null,
+): number {
+  if (fs.termId != null && fs.termId !== termId) return -1;
+  if (fs.classId != null && fs.classId !== classId) return -1;
+  let score = 0;
+  if (fs.termId === termId) score += 4;
+  else if (fs.termId == null) score += 1;
+  if (fs.classId === classId) score += 4;
+  else if (fs.classId == null) score += 1;
+  return score;
+}
 
 function eventCategory(eventType: string, title: string): "games" | "trip" | "academic" | "cultural" | "other" {
   const t = eventType.toLowerCase();
@@ -215,6 +256,137 @@ export async function buildParentPortalExtras(
       ))
     : [];
 
+  const classIdByStudent = new Map<string, string | null>();
+  const classNameByStudent = new Map<string, string | null>();
+  for (const sid of studentIds) {
+    const rows = enrollmentsEnhanced.filter((e) => e.studentId === sid);
+    const cur = rows.find((e) => e.termId === currentTerm?.id) ?? rows[0];
+    classIdByStudent.set(sid, cur?.classId ?? null);
+    classNameByStudent.set(sid, cur?.className ?? null);
+  }
+
+  const classAttendanceByStudent: Record<string, ClassAttendanceRow[]> = {};
+  if (studentIds.length) {
+    const termStart = currentTerm?.startDate ? new Date(currentTerm.startDate) : null;
+    const termEnd = currentTerm?.endDate ? new Date(currentTerm.endDate) : null;
+
+    const attRows = await db.select({
+      id: attendanceRecords.id,
+      studentId: attendanceRecords.studentId,
+      status: attendanceRecords.status,
+      note: attendanceRecords.note,
+      date: attendanceSessions.date,
+      className: classes.name,
+      streamName: streams.name,
+    })
+      .from(attendanceRecords)
+      .innerJoin(attendanceSessions, eq(attendanceRecords.sessionId, attendanceSessions.id))
+      .innerJoin(classes, eq(classes.id, attendanceSessions.classId))
+      .leftJoin(streams, eq(streams.id, attendanceSessions.streamId))
+      .where(and(
+        eq(attendanceRecords.tenantId, tenantId),
+        inArray(attendanceRecords.studentId, studentIds),
+      ))
+      .orderBy(desc(attendanceSessions.date))
+      .limit(500);
+
+    for (const row of attRows) {
+      const sid = row.studentId;
+      if (!classAttendanceByStudent[sid]) classAttendanceByStudent[sid] = [];
+      if (classAttendanceByStudent[sid].length >= 90) continue;
+      const d = new Date(row.date);
+      const inCurrentTerm = !!(termStart && termEnd && d >= termStart && d <= termEnd);
+      classAttendanceByStudent[sid].push({
+        id: row.id,
+        date: d.toISOString(),
+        status: row.status,
+        className: row.className,
+        streamName: row.streamName,
+        note: row.note,
+        inCurrentTerm,
+      });
+    }
+  }
+
+  const schoolTermFeesByStudent: Record<string, SchoolTermFeeSchedule[]> = {};
+  if (studentIds.length && allTerms.length) {
+    const structures = await db.select({
+      id: feeStructures.id,
+      name: feeStructures.name,
+      termId: feeStructures.termId,
+      classId: feeStructures.classId,
+      className: classes.name,
+    })
+      .from(feeStructures)
+      .leftJoin(classes, eq(classes.id, feeStructures.classId))
+      .where(and(
+        eq(feeStructures.tenantId, tenantId),
+        eq(feeStructures.isActive, true),
+        isNull(feeStructures.deletedAt),
+      ));
+
+    const structureIds = structures.map((s) => s.id);
+    const itemsByStructure = new Map<string, { feeHeadName: string; amountMinor: number }[]>();
+
+    if (structureIds.length) {
+      const itemRows = await db.select({
+        feeStructureId: feeStructureItems.feeStructureId,
+        amount: feeStructureItems.amount,
+        feeHeadName: feeHeads.name,
+      })
+        .from(feeStructureItems)
+        .innerJoin(feeHeads, eq(feeHeads.id, feeStructureItems.feeHeadId))
+        .where(and(
+          eq(feeStructureItems.tenantId, tenantId),
+          inArray(feeStructureItems.feeStructureId, structureIds),
+        ));
+
+      for (const it of itemRows) {
+        const list = itemsByStructure.get(it.feeStructureId) ?? [];
+        list.push({ feeHeadName: it.feeHeadName, amountMinor: it.amount });
+        itemsByStructure.set(it.feeStructureId, list);
+      }
+    }
+
+    for (const sid of studentIds) {
+      const classId = classIdByStudent.get(sid) ?? null;
+      const schedules: SchoolTermFeeSchedule[] = [];
+
+      for (const term of allTerms) {
+        let best: (typeof structures)[0] | null = null;
+        let bestScore = -1;
+        for (const fs of structures) {
+          const score = feeStructureMatchScore(fs, term.id, classId);
+          if (score > bestScore) {
+            bestScore = score;
+            best = fs;
+          }
+        }
+        if (!best || bestScore < 0) continue;
+        const items = itemsByStructure.get(best.id) ?? [];
+        if (!items.length) continue;
+        const totalMinor = items.reduce((s, i) => s + i.amountMinor, 0);
+        schedules.push({
+          termId: term.id,
+          termName: term.name,
+          isCurrent: term.id === currentTerm?.id,
+          structureId: best.id,
+          structureName: best.name,
+          className: best.className ?? classNameByStudent.get(sid) ?? null,
+          items,
+          totalMinor,
+        });
+      }
+
+      schedules.sort((a, b) => {
+        if (a.isCurrent) return -1;
+        if (b.isCurrent) return 1;
+        return a.termName.localeCompare(b.termName);
+      });
+      schoolTermFeesByStudent[sid] = schedules;
+    }
+  }
+
   const reportCardsByTerm = studentIds.length
     ? await db.select({
       id: reportCards.id,
@@ -303,6 +475,8 @@ export async function buildParentPortalExtras(
     familyByStudent,
     emergencyByStudent,
     enrollmentsEnhanced,
+    classAttendanceByStudent,
+    schoolTermFeesByStudent,
     reportCardsByTerm,
     calendar,
     notifications,

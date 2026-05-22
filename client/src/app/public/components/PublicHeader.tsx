@@ -51,9 +51,10 @@ export const PublicHeader: React.FC = () => {
 
       {/* Main navigation */}
       <div className="mkt-main-nav border-b border-slate-200/80 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 lg:px-8 lg:py-3.5">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 lg:px-8 lg:py-3.5">
           <OrgBrandMark onNavigate={closeAll} />
 
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
           <nav className="hidden items-center gap-0.5 xl:flex xl:gap-1">
             <NavLink to="/" end className={navLinkClass} onClick={closeAll}>
               Home
@@ -107,13 +108,14 @@ export const PublicHeader: React.FC = () => {
 
           <button
             type="button"
-            className="rounded-lg border border-slate-200 p-2 text-marketing-navy xl:hidden"
+            className="shrink-0 rounded-lg border border-slate-200 p-2 text-marketing-navy hover:bg-slate-50 xl:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
+          </div>
         </div>
 
         {featuresOpen && (
