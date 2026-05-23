@@ -49,6 +49,16 @@ sleep 3
 echo ""
 pm2 describe school-os 2>/dev/null | grep -E 'script path|status|restarts' || pm2 list
 echo ""
+echo "==> Client bundle on disk:"
+if [[ -f ../client/dist/index.html ]]; then
+  grep -o 'assets/index-[^"]*\.js' ../client/dist/index.html | head -1 || echo "(parse failed)"
+else
+  echo "MISSING ../client/dist/index.html — run deploy-from-mac.sh on your Mac"
+fi
+echo ""
+echo "==> Schema / migrations (idempotent)"
+node -e "require('./dist/db/ensure-runtime-schema').ensureRuntimeSchema().then(()=>console.log('schema ok')).catch(e=>{console.error(e);process.exit(1)})"
+echo ""
 echo "==> Health:"
 if curl -sS "http://127.0.0.1:5000/api/health"; then
   echo ""

@@ -1,5 +1,5 @@
 import "./load-env";
-import express from "express";
+import express, { type Response } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "path";
@@ -15,6 +15,27 @@ import { attachTenantFromHost, isVerifiedCustomDomainHost, redirectSchoolHostToS
 
 function isApiPath(url: string) {
   return url.startsWith("/api") || /^\/s\/[^/]+\/api(\/|$)/.test(url);
+}
+
+const clientDist = path.join(__dirname, "../../client/dist");
+const indexHtml = path.join(clientDist, "index.html");
+
+function readClientBuildId(): string | null {
+  try {
+    if (!fs.existsSync(indexHtml)) return null;
+    const html = fs.readFileSync(indexHtml, "utf8");
+    const m = html.match(/assets\/(index-[A-Za-z0-9_-]+\.js)/);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function sendSpaIndexHtml(res: Response) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.sendFile(indexHtml);
 }
 
 const app = express();
@@ -57,12 +78,17 @@ app.get("/api/health", async (_req, res) => {
     database.error = (err as Error).message?.slice(0, 200);
   }
   const status = database.ok ? 200 : 503;
+  const clientBuild = readClientBuildId();
   res.status(status).json({
     success: database.ok,
     message: database.ok ? "Server is healthy" : "Database connection failed",
     timestamp: new Date().toISOString(),
     env,
     database,
+    clientBuild,
+    deployHint: clientBuild
+      ? `Hard-refresh the portal (Ctrl+Shift+R). UI bundle should be ${clientBuild}.`
+      : "client/dist missing on server — rebuild client",
   });
 });
 
@@ -76,10 +102,17 @@ app.use(routes);
 app.use(redirectSchoolHostToSlugPath);
 
 // Serve built React SPA when dist exists (production or single-port deploy)
-const clientDist = path.join(__dirname, "../../client/dist");
-const indexHtml = path.join(clientDist, "index.html");
 if (fs.existsSync(indexHtml)) {
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    etag: true,
+    setHeaders(res, filePath) {
+      if (filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
   app.get("*", (req, res, next) => {
     if (isApiPath(req.path)) return next();
     if (isVerifiedCustomDomainHost(req)) {
@@ -92,9 +125,10 @@ if (fs.existsSync(indexHtml)) {
       });
       const script = `<script>window.__SCHOOLOS_TENANT__=${payload}</script>`;
       const out = html.includes("</head>") ? html.replace("</head>", `${script}</head>`) : script + html;
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       return res.type("html").send(out);
     }
-    res.sendFile(indexHtml);
+    sendSpaIndexHtml(res);
   });
 } else if (isProd) {
   console.warn("⚠️  client/dist not found — run: npm run build --prefix client");
