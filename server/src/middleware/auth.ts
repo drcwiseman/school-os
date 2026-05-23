@@ -83,7 +83,12 @@ export function blockWriteIfImpersonationReadOnly(req: Request, res: Response, n
   const session = (req as any).session;
   if (!session) return next();
   if (!isReadOnlyImpersonation(session)) return next();
-  if (req.path.endsWith("/impersonate/switch")) return next();
+  const p = req.path || "";
+  const u = req.originalUrl || "";
+  if (p.includes("impersonate-switch") || p.includes("impersonate/switch")
+    || u.includes("impersonate-switch") || u.includes("impersonate/switch")) {
+    return next();
+  }
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
   return next(new UnauthorizedError("Read-only impersonation — changes are not allowed"));

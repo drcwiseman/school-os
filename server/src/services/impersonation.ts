@@ -139,11 +139,13 @@ export function impersonationSessionPayload(readOnly: boolean) {
 
 export function getPlatformImpersonationContext(session: { metadata?: Record<string, unknown> | null }) {
   const m = (session.metadata ?? {}) as Record<string, unknown>;
-  if (!m.impersonation || typeof m.platformAdminId !== "string" || !m.platformAdminId) {
-    return null;
-  }
+  if (!m.impersonation) return null;
+  const platformAdminId =
+    typeof m.platformAdminId === "string" && m.platformAdminId
+      ? m.platformAdminId
+      : "platform-impersonation";
   return {
-    platformAdminId: m.platformAdminId,
+    platformAdminId,
     readOnly: m.readOnly === true,
   };
 }

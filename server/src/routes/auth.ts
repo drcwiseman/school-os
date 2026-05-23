@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword, createSession, deleteSession } from "../m
 import { requireAuth } from "../middleware/auth";
 import { validate } from "../utils/validate";
 import { registerSchema, loginSchema } from "./auth.schemas";
-import { BadRequestError, ConflictError, UnauthorizedError, NotFoundError } from "../middleware/error";
+import { ConflictError, UnauthorizedError, NotFoundError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
 import { getUserPermissions } from "../middleware/rbac";
 import { getTenantModuleAccess } from "../services/plan-features";
@@ -18,8 +18,8 @@ import {
   getPlatformImpersonationContext,
   impersonationSessionPayload,
   resolveImpersonationLandingPath,
-  switchPlatformImpersonation,
 } from "../services/impersonation";
+import { impersonateSwitchRoute } from "./auth-impersonate-switch";
 import { isPlatformImpersonation, isReadOnlyImpersonation } from "../middleware/auth";
 import { z } from "zod";
 
@@ -181,92 +181,9 @@ router.get("/impersonate", async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 });
 
-// POST /s/:schoolSlug/api/auth/impersonate/switch — change impersonation target while in school ERP
-router.post(
-  "/impersonate/switch",
-  requireAuth,
-  validate({
-    body: z.object({
-      userId: z.string().uuid().optional(),
-      staffId: z.string().uuid().optional(),
-      roleName: z.string().min(1).optional(),
-      provisionStaffLogin: z.boolean().optional(),
-    }),
-  }),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const tenant = (req as any).tenant;
-      const session = (req as any).session;
-      const token = req.cookies?.session_token as string | undefined;
-      if (!tenant?.id || !token) throw new UnauthorizedError("Not signed in");
-
-      const ctx = getPlatformImpersonationContext(session);
-      if (!ctx) {
-        throw new UnauthorizedError(
-          "Only available during platform impersonation — open the school from Platform → Schools",
-        );
-      }
-      if (!req.body?.userId && !req.body?.staffId) {
-        throw new BadRequestError("userId or staffId is required");
-      }
-
-      const result = await switchPlatformImpersonation({
-        tenantId: tenant.id,
-        slug: tenant.slug,
-        currentSessionToken: token,
-        platformAdminId: ctx.platformAdminId,
-        readOnly: ctx.readOnly,
-        target: {
-          userId: req.body.userId,
-          staffId: req.body.staffId,
-          roleName: req.body.roleName,
-          provisionStaffLogin: req.body.provisionStaffLogin === true,
-        },
-        ip: req.ip,
-        ua: req.headers["user-agent"],
-      });
-
-      const [dbUser] = await db
-        .select(userAuthColumns)
-        .from(users)
-        .where(and(eq(users.id, result.user.id), eq(users.tenantId, tenant.id)))
-        .limit(1);
-      if (!dbUser) throw new NotFoundError("User not found");
-      const { passwordHash, ...safeUser } = dbUser;
-      const permissions = await getUserPermissions(dbUser.id, dbUser.tenantId);
-      const roleRows = await db
-        .select({ id: roles.id, name: roles.name })
-        .from(userRoles)
-        .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, dbUser.id));
-      const modules = await getTenantModuleAccess(dbUser.tenantId);
-      const locale = await localeForTenant(dbUser.tenantId);
-
-      res.cookie("session_token", result.session.token, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
-
-      res.json({
-        success: true,
-        redirect: result.redirect,
-        user: safeUser,
-        permissions,
-        roles: roleRows,
-        modules,
-        country: locale.country,
-        currency: locale.currency,
-        impersonation: {
-          ...impersonationSessionPayload(ctx.readOnly),
-          canSwitchUser: true,
-        },
-      });
-    } catch (err) { next(err); }
-  },
-);
+// POST …/api/auth/impersonate-switch — change impersonation target while in school ERP
+router.post("/impersonate-switch", ...impersonateSwitchRoute);
+router.post("/impersonate/switch", ...impersonateSwitchRoute);
 
 router.post(
   "/profile/photo",

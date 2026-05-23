@@ -5,6 +5,7 @@ import { canonicalizeSchoolHostSlug } from "../middleware/school-host-canonical"
 import { requireTenantFeature } from "../middleware/require-feature";
 import { API_ROUTE_FEATURES } from "../lib/feature-module-map";
 import authRoutes     from "./auth";
+import { impersonateSwitchRoute } from "./auth-impersonate-switch";
 import tenantRoutes   from "./tenant";
 import studentRoutes  from "./students";
 import studentMgmtRoutes from "./student-mgmt";
@@ -80,6 +81,7 @@ function featureGuard(routeKey: string) {
   return code ? [requireTenantFeature(code)] : [];
 }
 
+router.post("/s/:schoolSlug/api/auth/impersonate-switch", ...schoolApi, ...impersonateSwitchRoute);
 router.use("/s/:schoolSlug/api/auth",       ...schoolApi, authRoutes);
 router.use("/s/:schoolSlug/api/admin",      ...schoolApi, tenantRoutes, adminEnhancementsRouter);
 router.use("/s/:schoolSlug/api/dashboard",   ...schoolApi, dashboardRoutes);
