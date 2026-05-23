@@ -281,5 +281,12 @@ export async function ensureRuntimeSchema() {
     console.warn("[ensureRuntimeSchema] plan features:", (err as Error).message?.slice(0, 120));
   }
 
+  try {
+    const { ensureTeacherRolePermissions } = await import("../services/ensure-teacher-role-permissions");
+    await ensureTeacherRolePermissions();
+  } catch (err) {
+    console.warn("[ensureRuntimeSchema] teacher permissions:", (err as Error).message?.slice(0, 120));
+  }
+
   await runAllSqlMigrationFiles(false);
 }

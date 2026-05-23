@@ -29,7 +29,6 @@ export function requirePermission(permissionCode: string) {
       const user = (req as any).user;
       if (!user) return next(new UnauthorizedError("Authentication required"));
 
-      // Cache on the request object to avoid repeated DB calls in composed middlewares
       if (!(req as any)._permissions) {
         (req as any)._permissions = await getUserPermissions(user.id, user.tenantId);
       }
@@ -37,6 +36,28 @@ export function requirePermission(permissionCode: string) {
       const perms: string[] = (req as any)._permissions;
       if (!perms.includes(permissionCode)) {
         return next(new ForbiddenError(`Permission denied: '${permissionCode}' required`));
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+/** Pass if the user has any one of the listed permissions. */
+export function requireAnyPermission(...permissionCodes: string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return next(new UnauthorizedError("Authentication required"));
+
+      if (!(req as any)._permissions) {
+        (req as any)._permissions = await getUserPermissions(user.id, user.tenantId);
+      }
+
+      const perms: string[] = (req as any)._permissions;
+      if (!permissionCodes.some((code) => perms.includes(code))) {
+        return next(new ForbiddenError(`Permission denied: one of [${permissionCodes.join(", ")}] required`));
       }
       next();
     } catch (err) {

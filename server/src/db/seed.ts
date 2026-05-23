@@ -28,6 +28,7 @@ const PERMISSION_DEFS = [
   { code: "attendance.edit",         module: "attendance",  description: "Edit attendance records" },
   // academics
   { code: "academics.view",          module: "academics",   description: "View academic setup" },
+  { code: "academics.teach",         module: "academics",   description: "Manage own lesson plans, schemes, meetings, and class CBT" },
   { code: "academics.manage",        module: "academics",   description: "Manage classes/subjects/terms" },
   // exams
   { code: "exams.view",              module: "exams",       description: "View exams and marks" },
@@ -207,7 +208,14 @@ async function seed() {
     await seedTenantRole(resolvedTenant.id, "Bursar",
       allPerms.filter((p: any) => p.module === "finance" || p.code === "reports.view"));
     await seedTenantRole(resolvedTenant.id, "Teacher",
-      allPerms.filter((p: any) => ["attendance.view","attendance.take","academics.view","exams.view","exams.enter_marks","students.view"].includes(p.code)));
+      allPerms.filter((p: any) => [
+        "attendance.view", "attendance.take", "attendance.edit",
+        "academics.view", "academics.teach",
+        "exams.view", "exams.enter_marks",
+        "students.view",
+        "messaging.view", "messaging.send",
+        "reports.view",
+      ].includes(p.code)));
     await seedTenantRole(resolvedTenant.id, "HR Manager",
       allPerms.filter((p: any) => p.module === "hr" || p.code === "payroll.view"));
     await seedTenantRole(resolvedTenant.id, "Librarian", allPerms.filter((p: any) => p.module === "library"));

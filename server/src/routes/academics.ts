@@ -25,7 +25,7 @@ import {
 import { getTableColumns } from "../lib/table-columns";
 import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
-import { requirePermission } from "../middleware/rbac";
+import { requirePermission, requireAnyPermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
 
 const router = Router();
@@ -546,7 +546,7 @@ router.get("/assignments/:id/submissions", ...guard, requirePermission("academic
   } catch (e) { next(e); }
 });
 
-router.patch("/assignments/submissions/:submissionId/grade", ...guard, requirePermission("academics.manage"),
+router.patch("/assignments/submissions/:submissionId/grade", ...guard, requireAnyPermission("academics.manage", "academics.teach", "exams.enter_marks"),
   validate({
     body: z.object({
       score: z.number().min(0),

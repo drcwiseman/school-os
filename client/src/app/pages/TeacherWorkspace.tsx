@@ -1,166 +1,134 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../state/AuthContext";
 import { useToast } from "../components/Toast";
 import {
-  Calendar, BookOpen, UserCheck, ClipboardList, Megaphone, Loader2, Sparkles,
-  MessageSquare,
+  BookOpen, UserCheck, ClipboardList, Megaphone, Loader2, Sparkles, MessageSquare,
 } from "lucide-react";
+import { TeacherSimpleCrud } from "./teacher/TeacherSimpleCrud";
 
 type Tab = "overview" | "lessons" | "scheme" | "gradebook" | "cbt" | "substitute" | "performance" | "messages" | "meetings";
+
+type LessonPlan = { id: string; title: string; content?: string; weekNo?: number; updatedAt?: string };
+type SchemeRow = { id: string; weekNo: number; topic: string; objectives?: string };
+type Meeting = { id: string; title: string; scheduledAt: string; notes?: string };
+type CbtPaper = { id: string; title: string; durationMinutes?: number; published?: boolean };
+type CbtQuestion = { id: string; prompt: string; optionsJson?: string[] };
+type Substitute = { id: string; date: string; absentUserId: string; substituteUserId: string; notes?: string };
+type Colleague = { userId: string; firstName: string; lastName: string; employeeNo?: string };
+type Recipient = { studentId: string; studentName: string; className?: string };
+type MyClass = { classId: string; className: string; subjectName?: string };
 
 export const TeacherWorkspace: React.FC = () => {
   const { schoolSlug, user, moduleEnabled } = useAuth();
   const { toast } = useToast();
   const base = `/s/${schoolSlug}`;
+  const apiBase = `/s/${schoolSlug}/api/teacher`;
+
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [ws, setWs] = useState<any>(null);
-  const [lessonPlans, setLessonPlans] = useState<any[]>([]);
-  const [scheme, setScheme] = useState<any[]>([]);
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState("");
-  const [msgBody, setMsgBody] = useState("");
-  const [lessonForm, setLessonForm] = useState({ title: "", topic: "", subject: "", className: "" });
-  const [schemeForm, setSchemeForm] = useState({ topic: "", weekNo: "1", objectives: "" });
-  const [meetingForm, setMeetingForm] = useState({ title: "", scheduledAt: "", notes: "" });
-  const [aiComment, setAiComment] = useState("");
+  const [lessonPlans, setLessonPlans] = useState<LessonPlan[]>([]);
+  const [scheme, setScheme] = useState<SchemeRow[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [cbtPapers, setCbtPapers] = useState<CbtPaper[]>([]);
+  const [substitutes, setSubstitutes] = useState<Substitute[]>([]);
   const [gradebook, setGradebook] = useState<any[]>([]);
-  const [cbtPapers, setCbtPapers] = useState<any[]>([]);
-  const [substitutes, setSubstitutes] = useState<any[]>([]);
   const [performance, setPerformance] = useState<any>(null);
-  const [cbtForm, setCbtForm] = useState({ title: "", durationMinutes: "60" });
-  const [questionForm, setQuestionForm] = useState({ paperId: "", prompt: "", options: "A,B,C,D", correctIndex: "0" });
-  const [subForm, setSubForm] = useState({ absentUserId: "", substituteUserId: "", date: "", notes: "" });
-
+  const [colleagues, setColleagues] = useState<Colleague[]>([]);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [myClasses, setMyClasses] = useState<MyClass[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState("");
+  const [messages, setMessages] = useState<any[]>([]);
+  const [msgBody, setMsgBody] = useState("");
+  const [selectedPaper, setSelectedPaper] = useState("");
+  const [paperQuestions, setPaperQuestions] = useState<CbtQuestion[]>([]);
+  const [subAbsent, setSubAbsent] = useState("");
+  const [subCover, setSubCover] = useState("");
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const emptyWs = {
-    myClasses: [],
-    periodsToday: [],
-    upcomingAssignments: [],
-    gradingQueue: [],
-    draftMarks: [],
-    announcements: [],
-    meetings: [],
-    unreadParentMessages: 0,
-    overloaded: false,
-  };
-
-  const load = async () => {
+  const reload = useCallback(async () => {
+    if (!schoolSlug) return;
     setLoading(true);
     setApiError(null);
     try {
-      const w = await api.get(`/s/${schoolSlug}/api/teacher/workspace`);
-      setWs(w.data ?? emptyWs);
-      const [lp, sw, mt] = await Promise.all([
-        api.get(`/s/${schoolSlug}/api/teacher/lesson-plans`).catch(() => ({ data: [] })),
-        api.get(`/s/${schoolSlug}/api/teacher/scheme-of-work`).catch(() => ({ data: [] })),
-        api.get(`/s/${schoolSlug}/api/teacher/meetings`).catch(() => ({ data: [] })),
+      const [w, lp, sw, mt, meta] = await Promise.all([
+        api.get(`${apiBase}/workspace`),
+        api.get(`${apiBase}/lesson-plans`),
+        api.get(`${apiBase}/scheme-of-work`),
+        api.get(`${apiBase}/meetings`),
+        Promise.all([
+          api.get(`${apiBase}/colleagues`).catch(() => ({ data: [] })),
+          api.get(`${apiBase}/my-classes`).catch(() => ({ data: [] })),
+          api.get(`${apiBase}/messages/recipients`).catch(() => ({ data: [] })),
+        ]),
       ]);
+      setWs(w.data ?? null);
       setLessonPlans(lp.data ?? []);
       setScheme(sw.data ?? []);
       setMeetings(mt.data ?? []);
-    } catch (err: any) {
-      const msg = err.message ?? "Could not load teacher workspace";
+      setColleagues(meta[0].data ?? []);
+      setMyClasses(meta[1].data ?? []);
+      setRecipients(meta[2].data ?? []);
+      if (user?.id) setSubAbsent(user.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not load workspace";
       setApiError(msg);
-      setWs(emptyWs);
       toast(msg, "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [schoolSlug, apiBase, toast, user?.id]);
 
-  const loadTab = async (t: Tab) => {
+  useEffect(() => { void reload(); }, [reload]);
+
+  const loadTab = useCallback(async (t: Tab) => {
     if (!schoolSlug) return;
     try {
-      if (t === "gradebook") setGradebook((await api.get(`/s/${schoolSlug}/api/teacher/gradebook`)).data ?? []);
-      if (t === "cbt") setCbtPapers((await api.get(`/s/${schoolSlug}/api/teacher/cbt-papers`)).data ?? []);
-      if (t === "substitute") setSubstitutes((await api.get(`/s/${schoolSlug}/api/teacher/substitutes`)).data ?? []);
-      if (t === "performance") setPerformance((await api.get(`/s/${schoolSlug}/api/teacher/performance`)).data);
-    } catch (err: any) {
-      toast(err.message, "error");
+      if (t === "gradebook") setGradebook((await api.get(`${apiBase}/gradebook`)).data ?? []);
+      if (t === "cbt") setCbtPapers((await api.get(`${apiBase}/cbt-papers`)).data ?? []);
+      if (t === "substitute") setSubstitutes((await api.get(`${apiBase}/substitutes`)).data ?? []);
+      if (t === "performance") setPerformance((await api.get(`${apiBase}/performance`)).data);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Load failed", "error");
     }
-  };
-
-  useEffect(() => { if (schoolSlug) load(); }, [schoolSlug]);
+  }, [schoolSlug, apiBase, toast]);
 
   useEffect(() => {
     if (!schoolSlug || loading) return;
-    if (tab !== "overview" && tab !== "lessons" && tab !== "scheme" && tab !== "messages" && tab !== "meetings") {
-      loadTab(tab);
+    if (!["overview", "lessons", "scheme", "messages", "meetings"].includes(tab)) {
+      void loadTab(tab);
     }
-  }, [tab, schoolSlug, loading]);
+  }, [tab, schoolSlug, loading, loadTab]);
+
+  const loadPaperQuestions = async (paperId: string) => {
+    setSelectedPaper(paperId);
+    const res = await api.get(`${apiBase}/cbt-papers/${paperId}/questions`);
+    setPaperQuestions(res.data ?? []);
+  };
 
   const loadMessages = async (studentId: string) => {
     setSelectedStudent(studentId);
-    const res = await api.get(`/s/${schoolSlug}/api/teacher/messages/${studentId}`);
+    const res = await api.get(`${apiBase}/messages/${studentId}`);
     setMessages(res.data ?? []);
   };
 
   const sendMessage = async () => {
     if (!selectedStudent || !msgBody.trim()) return;
     try {
-      await api.post(`/s/${schoolSlug}/api/teacher/messages`, { studentId: selectedStudent, body: msgBody });
+      await api.post(`${apiBase}/messages`, { studentId: selectedStudent, body: msgBody });
       setMsgBody("");
-      loadMessages(selectedStudent);
+      await loadMessages(selectedStudent);
       toast("Message sent", "success");
-    } catch (err: any) { toast(err.message, "error"); }
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Send failed", "error");
+    }
   };
 
-  const aiLesson = async () => {
-    if (!moduleEnabled("ai_homework")) return toast("AI feature not enabled for this school", "error");
-    try {
-      const res = await api.post(`/s/${schoolSlug}/api/teacher/lesson-plans/ai-generate`, {
-        topic: lessonForm.topic,
-        subject: lessonForm.subject,
-        className: lessonForm.className,
-      });
-      await api.post(`/s/${schoolSlug}/api/teacher/lesson-plans`, {
-        title: res.data.title,
-        content: res.data.content,
-      });
-      toast("AI lesson plan saved", "success");
-      load();
-    } catch (err: any) { toast(err.message, "error"); }
-  };
-
-  const addScheme = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.post(`/s/${schoolSlug}/api/teacher/scheme-of-work`, {
-        topic: schemeForm.topic,
-        weekNo: Number(schemeForm.weekNo),
-        objectives: schemeForm.objectives,
-      });
-      setSchemeForm({ topic: "", weekNo: "1", objectives: "" });
-      load();
-      toast("Scheme entry added", "success");
-    } catch (err: any) { toast(err.message, "error"); }
-  };
-
-  const addMeeting = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.post(`/s/${schoolSlug}/api/teacher/meetings`, meetingForm);
-      setMeetingForm({ title: "", scheduledAt: "", notes: "" });
-      load();
-      toast("Meeting scheduled", "success");
-    } catch (err: any) { toast(err.message, "error"); }
-  };
-
-  const genComment = async () => {
-    if (!moduleEnabled("ai_homework")) return toast("AI not enabled", "error");
-    try {
-      const res = await api.post(`/s/${schoolSlug}/api/teacher/ai/report-comment`, {
-        studentName: "Student",
-        averageScore: 62,
-        attendanceRate: 0.88,
-      });
-      setAiComment(res.data.comment);
-    } catch (err: any) { toast(err.message, "error"); }
+  const colleagueName = (id: string) => {
+    const c = colleagues.find((x) => x.userId === id);
+    return c ? `${c.firstName} ${c.lastName}` : id.slice(0, 8);
   };
 
   const tabs: { id: Tab; label: string }[] = [
@@ -168,7 +136,7 @@ export const TeacherWorkspace: React.FC = () => {
     { id: "lessons", label: "Lesson plans" },
     { id: "scheme", label: "Scheme of work" },
     { id: "gradebook", label: "Gradebook" },
-    { id: "cbt", label: "CBT author" },
+    { id: "cbt", label: "CBT papers" },
     { id: "substitute", label: "Substitutes" },
     { id: "performance", label: "Performance" },
     { id: "messages", label: "Parent chat" },
@@ -176,27 +144,28 @@ export const TeacherWorkspace: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 relative">
+    <div className="space-y-6 relative pb-10">
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/60 rounded-xl">
           <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
         </div>
       )}
+
       {apiError && (
         <div className="card p-4 border border-red-900/50 text-sm text-slate-300">
-          Teacher workspace API error: <strong className="text-red-400">{apiError}</strong>. On the server run{" "}
-          <code className="text-xs bg-slate-800 px-1 rounded">npm run db:repair --prefix server</code> then restart.
+          {apiError}. Ask admin to assign you to classes (Academics → teacher assignments) and restart the server after deploy.
         </div>
       )}
-      <div className="page-header">
+
+      <header className="page-header">
         <div>
-          <h1 className="page-title">Teacher workspace</h1>
-          <p className="text-slate-400 mt-1">Daily tools for {user?.firstName} — timetable, grading, lesson planning, parent messages.</p>
+          <h1 className="page-title">My workspace</h1>
+          <p className="text-slate-400 mt-1">Daily teaching tools for {user?.firstName} — attendance, lessons, marks, parent messages.</p>
         </div>
-        {ws?.overloaded ? (
-          <span className="text-xs px-3 py-1 rounded-full bg-amber-900/40 text-amber-300">High workload — {ws?.myClasses?.length ?? 0} class assignments</span>
-        ) : null}
-      </div>
+        {myClasses.length === 0 && !loading && (
+          <span className="text-xs px-3 py-1 rounded-full bg-amber-900/40 text-amber-200">No class assignments yet</span>
+        )}
+      </header>
 
       <div className="flex gap-2 flex-wrap">
         {tabs.map((t) => (
@@ -213,8 +182,8 @@ export const TeacherWorkspace: React.FC = () => {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <QuickLink to={`${base}/attendance`} icon={UserCheck} label="Attendance" sub="Take register" />
-            <QuickLink to={`${base}/exams`} icon={ClipboardList} label="Gradebook" sub={`${ws?.draftMarks?.length ?? 0} drafts`} />
-            <QuickLink to={`${base}/academics`} icon={BookOpen} label="Assignments" sub={`${ws?.upcomingAssignments?.length ?? 0} due soon`} />
+            <QuickLink to={`${base}/exams`} icon={ClipboardList} label="Enter marks" sub={`${ws?.draftMarks?.length ?? 0} drafts`} />
+            <QuickLink to={`${base}/academics`} icon={BookOpen} label="Homework" sub={`${ws?.upcomingAssignments?.length ?? 0} due soon`} />
             <QuickLink to={`${base}/messaging`} icon={Megaphone} label="Announcements" sub="School notices" />
           </div>
           <div className="grid lg:grid-cols-2 gap-6">
@@ -233,19 +202,21 @@ export const TeacherWorkspace: React.FC = () => {
               )}
             </Card>
             <Card title="My classes">
-              <ul className="flex flex-wrap gap-2">
-                {(ws?.myClasses ?? []).map((c: any) => (
-                  <li key={c.id} className="px-3 py-1 rounded-full bg-slate-800 text-sm text-slate-300">
-                    {c.className} — {c.subjectName}
-                  </li>
-                ))}
-              </ul>
+              {myClasses.length === 0 ? <p className="text-sm text-slate-500">Admin must assign you in Academics.</p> : (
+                <ul className="flex flex-wrap gap-2">
+                  {myClasses.map((c) => (
+                    <li key={`${c.classId}-${c.subjectName}`} className="px-3 py-1 rounded-full bg-slate-800 text-sm text-slate-300">
+                      {c.className}{c.subjectName ? ` — ${c.subjectName}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Card>
             <Card title="Grading queue">
               {(ws?.gradingQueue ?? []).length === 0 ? <p className="text-sm text-slate-500">No submissions pending.</p> : (
                 <ul className="text-sm text-slate-300 space-y-1">
                   {ws.gradingQueue.slice(0, 8).map((g: any) => (
-                    <li key={g.submissionId}>{g.assignmentTitle} · student {g.studentId.slice(0, 8)}</li>
+                    <li key={g.submissionId}>{g.assignmentTitle}</li>
                   ))}
                 </ul>
               )}
@@ -262,42 +233,111 @@ export const TeacherWorkspace: React.FC = () => {
       )}
 
       {tab === "lessons" && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="card p-5 space-y-3">
-            <h3 className="font-semibold text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary-400" /> AI lesson generator</h3>
-            <input className="input" placeholder="Topic" value={lessonForm.topic} onChange={(e) => setLessonForm({ ...lessonForm, topic: e.target.value })} />
-            <input className="input" placeholder="Subject" value={lessonForm.subject} onChange={(e) => setLessonForm({ ...lessonForm, subject: e.target.value })} />
-            <input className="input" placeholder="Class name" value={lessonForm.className} onChange={(e) => setLessonForm({ ...lessonForm, className: e.target.value })} />
-            <button type="button" className="btn-primary" onClick={aiLesson}>Generate & save</button>
-          </div>
-          <div className="card p-5">
-            <h3 className="font-semibold text-white mb-3">Saved lesson plans</h3>
-            <ul className="text-sm text-slate-300 space-y-2">
-              {lessonPlans.map((lp) => (
-                <li key={lp.id}><strong>{lp.title}</strong><p className="text-slate-500 line-clamp-2">{lp.content?.slice(0, 120)}</p></li>
-              ))}
-            </ul>
-          </div>
+        <div className="space-y-4">
+          {moduleEnabled("ai_homework") && (
+            <div className="card p-4 flex flex-wrap gap-2 items-end">
+              <p className="text-sm text-slate-400 w-full flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary-400" /> AI draft (optional)</p>
+              <AiLessonDraft apiBase={apiBase} onSaved={reload} />
+            </div>
+          )}
+          <TeacherSimpleCrud<LessonPlan>
+            title="Your lesson plans"
+            items={lessonPlans}
+            loading={loading}
+            emptyMessage="Add your first lesson plan."
+            columns={[
+              { key: "title", label: "Title" },
+              { key: "weekNo", label: "Week" },
+              { key: "content", label: "Preview", render: (r) => <span className="line-clamp-1 text-slate-400">{r.content?.slice(0, 60)}</span> },
+            ]}
+            fields={[
+              { name: "title", label: "Title", required: true },
+              { name: "weekNo", label: "Week number", type: "number" },
+              { name: "content", label: "Content", type: "textarea" },
+            ]}
+            onCreate={async (body) => {
+              await api.post(`${apiBase}/lesson-plans`, body);
+              toast("Lesson plan saved", "success");
+              await reload();
+            }}
+            onUpdate={async (id, body) => {
+              await api.patch(`${apiBase}/lesson-plans/${id}`, body);
+              toast("Updated", "success");
+              await reload();
+            }}
+            onDelete={async (id) => {
+              await api.delete(`${apiBase}/lesson-plans/${id}`);
+              toast("Removed", "success");
+              await reload();
+            }}
+          />
         </div>
       )}
 
       {tab === "scheme" && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <form onSubmit={addScheme} className="card p-5 space-y-3">
-            <h3 className="font-semibold text-white">Scheme of work</h3>
-            <input className="input" placeholder="Week" type="number" value={schemeForm.weekNo} onChange={(e) => setSchemeForm({ ...schemeForm, weekNo: e.target.value })} />
-            <input className="input" placeholder="Topic" required value={schemeForm.topic} onChange={(e) => setSchemeForm({ ...schemeForm, topic: e.target.value })} />
-            <textarea className="input min-h-[80px]" placeholder="Objectives" value={schemeForm.objectives} onChange={(e) => setSchemeForm({ ...schemeForm, objectives: e.target.value })} />
-            <button type="submit" className="btn-primary">Add week</button>
-          </form>
-          <div className="card p-5">
-            <ul className="text-sm text-slate-300 space-y-2">
-              {scheme.map((s) => (
-                <li key={s.id}>W{s.weekNo}: <strong>{s.topic}</strong> — {s.objectives?.slice(0, 60)}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        <TeacherSimpleCrud<SchemeRow>
+          title="Scheme of work"
+          items={scheme}
+          loading={loading}
+          columns={[
+            { key: "weekNo", label: "Week" },
+            { key: "topic", label: "Topic" },
+            { key: "objectives", label: "Objectives" },
+          ]}
+          fields={[
+            { name: "weekNo", label: "Week", type: "number", required: true },
+            { name: "topic", label: "Topic", required: true },
+            { name: "objectives", label: "Objectives", type: "textarea" },
+          ]}
+          onCreate={async (body) => {
+            await api.post(`${apiBase}/scheme-of-work`, body);
+            toast("Added", "success");
+            await reload();
+          }}
+          onUpdate={async (id, body) => {
+            await api.patch(`${apiBase}/scheme-of-work/${id}`, body);
+            toast("Updated", "success");
+            await reload();
+          }}
+          onDelete={async (id) => {
+            await api.delete(`${apiBase}/scheme-of-work/${id}`);
+            toast("Removed", "success");
+            await reload();
+          }}
+        />
+      )}
+
+      {tab === "meetings" && (
+        <TeacherSimpleCrud<Meeting>
+          title="Meetings & appointments"
+          items={meetings}
+          loading={loading}
+          columns={[
+            { key: "title", label: "Title" },
+            { key: "scheduledAt", label: "When", render: (r) => new Date(r.scheduledAt).toLocaleString() },
+            { key: "notes", label: "Notes" },
+          ]}
+          fields={[
+            { name: "title", label: "Title", required: true },
+            { name: "scheduledAt", label: "Date & time", type: "datetime-local", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          onCreate={async (body) => {
+            await api.post(`${apiBase}/meetings`, body);
+            toast("Scheduled", "success");
+            await reload();
+          }}
+          onUpdate={async (id, body) => {
+            await api.patch(`${apiBase}/meetings/${id}`, body);
+            toast("Updated", "success");
+            await reload();
+          }}
+          onDelete={async (id) => {
+            await api.delete(`${apiBase}/meetings/${id}`);
+            toast("Removed", "success");
+            await reload();
+          }}
+        />
       )}
 
       {tab === "gradebook" && (
@@ -309,77 +349,99 @@ export const TeacherWorkspace: React.FC = () => {
               {gradebook.map((g: any) => <li key={g.id}>{g.className} · {g.subjectName} — {g.name}</li>)}
             </ul>
           </div>
-          <div className="card p-5">
-            <h3 className="font-semibold text-white mb-3">Draft marks</h3>
-            <ul className="text-sm text-slate-300 space-y-1">
-              {(ws?.draftMarks ?? []).map((m: any) => (
-                <li key={m.markId}>{m.assessmentName} — score {m.score ?? "—"}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="card p-5 space-y-3">
-            <h3 className="font-semibold text-white flex items-center gap-2"><Sparkles className="w-4 h-4" /> Report comment AI</h3>
-            <button type="button" className="btn-secondary" onClick={genComment}>Generate sample comment</button>
-            {aiComment && <p className="text-sm text-slate-300 border border-slate-700 rounded-lg p-3">{aiComment}</p>}
-          </div>
         </div>
       )}
 
       {tab === "cbt" && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <form className="card p-5 space-y-3" onSubmit={async (e) => {
-            e.preventDefault();
-            await api.post(`/s/${schoolSlug}/api/teacher/cbt-papers`, { title: cbtForm.title, durationMinutes: Number(cbtForm.durationMinutes) });
-            toast("CBT paper created", "success");
-            loadTab("cbt");
-          }}>
-            <h3 className="font-semibold text-white">CBT paper</h3>
-            <input className="input" placeholder="Title" required value={cbtForm.title} onChange={(e) => setCbtForm({ ...cbtForm, title: e.target.value })} />
-            <input className="input" type="number" placeholder="Duration (min)" value={cbtForm.durationMinutes} onChange={(e) => setCbtForm({ ...cbtForm, durationMinutes: e.target.value })} />
-            <button type="submit" className="btn-primary">Create paper</button>
-          </form>
-          <form className="card p-5 space-y-3" onSubmit={async (e) => {
-            e.preventDefault();
-            await api.post(`/s/${schoolSlug}/api/teacher/cbt-papers/${questionForm.paperId}/questions`, {
-              prompt: questionForm.prompt,
-              options: questionForm.options.split(","),
-              correctIndex: Number(questionForm.correctIndex),
-            });
-            toast("Question added", "success");
-          }}>
-            <h3 className="font-semibold text-white">Add MCQ</h3>
-            <input className="input" placeholder="Paper UUID" required value={questionForm.paperId} onChange={(e) => setQuestionForm({ ...questionForm, paperId: e.target.value })} />
-            <input className="input" placeholder="Question" required value={questionForm.prompt} onChange={(e) => setQuestionForm({ ...questionForm, prompt: e.target.value })} />
-            <input className="input" placeholder="Options comma-separated" value={questionForm.options} onChange={(e) => setQuestionForm({ ...questionForm, options: e.target.value })} />
-            <button type="submit" className="btn-secondary">Add question</button>
-          </form>
-          <div className="card p-5 lg:col-span-2 text-sm text-slate-300">{cbtPapers.map((p) => <p key={p.id}>{p.title} — {p.durationMinutes} min</p>)}</div>
+        <div className="space-y-6">
+          <TeacherSimpleCrud<CbtPaper>
+            title="CBT exam papers"
+            items={cbtPapers}
+            columns={[
+              { key: "title", label: "Title" },
+              { key: "durationMinutes", label: "Minutes" },
+              { key: "published", label: "Published", render: (r) => (r.published ? "Yes" : "Draft") },
+            ]}
+            fields={[
+              { name: "title", label: "Title", required: true },
+              { name: "durationMinutes", label: "Duration (minutes)", type: "number" },
+            ]}
+            onCreate={async (body) => {
+              await api.post(`${apiBase}/cbt-papers`, body);
+              toast("Paper created", "success");
+              await loadTab("cbt");
+            }}
+            onUpdate={async (id, body) => {
+              await api.patch(`${apiBase}/cbt-papers/${id}`, body);
+              toast("Updated", "success");
+              await loadTab("cbt");
+            }}
+            onDelete={async (id) => {
+              await api.delete(`${apiBase}/cbt-papers/${id}`);
+              toast("Removed", "success");
+              await loadTab("cbt");
+            }}
+          />
+          {cbtPapers.length > 0 && (
+            <div className="card p-4 space-y-3">
+              <label className="label">Questions for paper</label>
+              <select className="input" value={selectedPaper} onChange={(e) => void loadPaperQuestions(e.target.value)}>
+                <option value="">Select paper…</option>
+                {cbtPapers.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+              {selectedPaper && (
+                <CbtQuestionForm
+                  paperId={selectedPaper}
+                  apiBase={apiBase}
+                  questions={paperQuestions}
+                  onSaved={() => void loadPaperQuestions(selectedPaper)}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {tab === "substitute" && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <form className="card p-5 space-y-3" onSubmit={async (e) => {
-            e.preventDefault();
-            await api.post(`/s/${schoolSlug}/api/teacher/substitutes`, subForm);
-            toast("Substitute scheduled", "success");
-            loadTab("substitute");
-          }}>
-            <h3 className="font-semibold text-white">Substitute teacher</h3>
-            <input className="input" placeholder="Absent user UUID" required value={subForm.absentUserId} onChange={(e) => setSubForm({ ...subForm, absentUserId: e.target.value })} />
-            <input className="input" placeholder="Substitute user UUID" required value={subForm.substituteUserId} onChange={(e) => setSubForm({ ...subForm, substituteUserId: e.target.value })} />
-            <input className="input" type="date" required value={subForm.date} onChange={(e) => setSubForm({ ...subForm, date: e.target.value })} />
-            <button type="submit" className="btn-primary">Schedule</button>
-          </form>
-          <div className="card p-5 text-sm text-slate-300">{substitutes.map((s) => <p key={s.id}>{s.date}: sub {s.substituteUserId?.slice(0, 8)}</p>)}</div>
-        </div>
+        <TeacherSimpleCrud<Substitute>
+          title="Substitute requests"
+          items={substitutes}
+          columns={[
+            { key: "date", label: "Date" },
+            { key: "absentUserId", label: "Absent", render: (r) => colleagueName(r.absentUserId) },
+            { key: "substituteUserId", label: "Cover", render: (r) => colleagueName(r.substituteUserId) },
+            { key: "notes", label: "Notes" },
+          ]}
+          fields={[
+            { name: "date", label: "Date", type: "date", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          extraForm={
+            <ColleaguePickers colleagues={colleagues} absentId={subAbsent} coverId={subCover} onAbsent={setSubAbsent} onCover={setSubCover} />
+          }
+          onCreate={async (body) => {
+            if (!subAbsent || !subCover) {
+              toast("Pick absent and substitute teachers", "error");
+              return;
+            }
+            await api.post(`${apiBase}/substitutes`, { ...body, absentUserId: subAbsent, substituteUserId: subCover });
+            toast("Request saved", "success");
+            await loadTab("substitute");
+          }}
+          onUpdate={async () => { toast("Edit substitute via delete and re-add", "error"); }}
+          onDelete={async (id) => {
+            await api.delete(`${apiBase}/substitutes/${id}`);
+            toast("Removed", "success");
+            await loadTab("substitute");
+          }}
+        />
       )}
 
       {tab === "performance" && performance && (
         <div className="grid grid-cols-3 gap-4">
-          <div className="card p-5 text-center"><p className="text-2xl font-bold text-white">{performance.classCount}</p><p className="text-xs text-slate-500">Classes</p></div>
-          <div className="card p-5 text-center"><p className="text-2xl font-bold text-white">{performance.marksEntered}</p><p className="text-xs text-slate-500">Marks entered</p></div>
-          <div className="card p-5 text-center"><p className="text-2xl font-bold text-white">{performance.lessonPlans}</p><p className="text-xs text-slate-500">Lesson plans</p></div>
+          <Stat n={performance.classCount} label="Classes" />
+          <Stat n={performance.marksEntered} label="Marks entered" />
+          <Stat n={performance.lessonPlans} label="Lesson plans" />
         </div>
       )}
 
@@ -387,9 +449,12 @@ export const TeacherWorkspace: React.FC = () => {
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="card p-4 lg:col-span-1">
             <h3 className="font-semibold text-white mb-2 flex items-center gap-2"><MessageSquare className="w-4 h-4" /> Students</h3>
-            <p className="text-xs text-slate-500 mb-2">Enter student UUID from Students module</p>
-            <input className="input text-sm" placeholder="Student UUID" value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} />
-            <button type="button" className="btn-ghost mt-2 w-full text-sm" onClick={() => selectedStudent && loadMessages(selectedStudent)}>Load thread</button>
+            <select className="input text-sm" value={selectedStudent} onChange={(e) => void loadMessages(e.target.value)}>
+              <option value="">Select student…</option>
+              {recipients.map((r) => (
+                <option key={r.studentId} value={r.studentId}>{r.studentName}{r.className ? ` (${r.className})` : ""}</option>
+              ))}
+            </select>
           </div>
           <div className="card p-4 lg:col-span-2 flex flex-col min-h-[320px]">
             <div className="flex-1 space-y-2 overflow-y-auto mb-3">
@@ -402,33 +467,102 @@ export const TeacherWorkspace: React.FC = () => {
             </div>
             <div className="flex gap-2">
               <input className="input flex-1" value={msgBody} onChange={(e) => setMsgBody(e.target.value)} placeholder="Message parent…" />
-              <button type="button" className="btn-primary" onClick={sendMessage}>Send</button>
+              <button type="button" className="btn-primary" onClick={() => void sendMessage()}>Send</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {tab === "meetings" && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <form onSubmit={addMeeting} className="card p-5 space-y-3">
-            <h3 className="font-semibold text-white flex items-center gap-2"><Calendar className="w-4 h-4" /> Meetings</h3>
-            <input className="input" placeholder="Title" required value={meetingForm.title} onChange={(e) => setMeetingForm({ ...meetingForm, title: e.target.value })} />
-            <input className="input" type="datetime-local" required value={meetingForm.scheduledAt} onChange={(e) => setMeetingForm({ ...meetingForm, scheduledAt: e.target.value })} />
-            <textarea className="input" placeholder="Notes" value={meetingForm.notes} onChange={(e) => setMeetingForm({ ...meetingForm, notes: e.target.value })} />
-            <button type="submit" className="btn-primary">Schedule</button>
-          </form>
-          <div className="card p-5">
-            <ul className="text-sm text-slate-300 space-y-2">
-              {meetings.map((m) => (
-                <li key={m.id}><strong>{m.title}</strong> — {new Date(m.scheduledAt).toLocaleString()}</li>
-              ))}
-            </ul>
           </div>
         </div>
       )}
     </div>
   );
 };
+
+function AiLessonDraft({ apiBase, onSaved }: { apiBase: string; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [topic, setTopic] = useState("");
+  const [subject, setSubject] = useState("");
+  const [className, setClassName] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <input className="input flex-1 min-w-[120px]" placeholder="Topic" value={topic} onChange={(e) => setTopic(e.target.value)} />
+      <input className="input flex-1 min-w-[120px]" placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+      <input className="input flex-1 min-w-[120px]" placeholder="Class" value={className} onChange={(e) => setClassName(e.target.value)} />
+      <button type="button" className="btn-secondary" disabled={busy} onClick={async () => {
+        setBusy(true);
+        try {
+          const res = await api.post(`${apiBase}/lesson-plans/ai-generate`, { topic, subject, className });
+          await api.post(`${apiBase}/lesson-plans`, { title: res.data.title, content: res.data.content });
+          toast("AI lesson saved", "success");
+          onSaved();
+        } catch (e: unknown) {
+          toast(e instanceof Error ? e.message : "AI failed", "error");
+        } finally { setBusy(false); }
+      }}>Generate & save</button>
+    </>
+  );
+}
+
+function CbtQuestionForm({ paperId, apiBase, questions, onSaved }: { paperId: string; apiBase: string; questions: CbtQuestion[]; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [prompt, setPrompt] = useState("");
+  const [options, setOptions] = useState("A,B,C,D");
+  const [correctIndex, setCorrectIndex] = useState("0");
+  return (
+    <div className="space-y-3">
+      <ul className="text-sm text-slate-400 space-y-1">
+        {questions.map((q) => <li key={q.id}>• {q.prompt}</li>)}
+      </ul>
+      <input className="input" placeholder="Question" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+      <input className="input" placeholder="Options (comma-separated)" value={options} onChange={(e) => setOptions(e.target.value)} />
+      <input className="input w-24" type="number" placeholder="Correct index" value={correctIndex} onChange={(e) => setCorrectIndex(e.target.value)} />
+      <button type="button" className="btn-secondary" onClick={async () => {
+        await api.post(`${apiBase}/cbt-papers/${paperId}/questions`, {
+          prompt,
+          options: options.split(",").map((s) => s.trim()),
+          correctIndex: Number(correctIndex),
+        });
+        setPrompt("");
+        toast("Question added", "success");
+        onSaved();
+      }}>Add question</button>
+    </div>
+  );
+}
+
+function ColleaguePickers({
+  colleagues,
+  absentId,
+  coverId,
+  onAbsent,
+  onCover,
+}: {
+  colleagues: Colleague[];
+  absentId: string;
+  coverId: string;
+  onAbsent: (id: string) => void;
+  onCover: (id: string) => void;
+}) {
+  return (
+    <>
+      <div>
+        <label className="label">Absent teacher</label>
+        <select className="input" value={absentId} onChange={(e) => onAbsent(e.target.value)}>
+          {colleagues.map((c) => (
+            <option key={c.userId} value={c.userId}>{c.firstName} {c.lastName}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="label">Substitute teacher</label>
+        <select className="input" value={coverId} onChange={(e) => onCover(e.target.value)}>
+          {colleagues.map((c) => (
+            <option key={c.userId} value={c.userId}>{c.firstName} {c.lastName}</option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
 
 function QuickLink({ to, icon: Icon, label, sub }: { to: string; icon: React.ElementType; label: string; sub: string }) {
   return (
@@ -445,6 +579,15 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     <div className="card p-5">
       <h3 className="font-semibold text-white mb-3">{title}</h3>
       {children}
+    </div>
+  );
+}
+
+function Stat({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="card p-5 text-center">
+      <p className="text-2xl font-bold text-white">{n}</p>
+      <p className="text-xs text-slate-500">{label}</p>
     </div>
   );
 }

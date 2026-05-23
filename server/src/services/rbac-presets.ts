@@ -10,7 +10,8 @@ export const RBAC_PRESETS: Record<string, { label: string; description: string; 
     description: "Classes, attendance, marks, and student view",
     codes: [
       "students.view", "attendance.view", "attendance.take", "attendance.edit",
-      "academics.view", "exams.view", "exams.enter_marks", "messaging.view", "messaging.send",
+      "academics.view", "academics.teach",
+      "exams.view", "exams.enter_marks", "messaging.view", "messaging.send",
       "reports.view",
     ],
   },
