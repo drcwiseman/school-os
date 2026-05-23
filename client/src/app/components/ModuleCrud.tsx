@@ -32,11 +32,12 @@ interface ModuleCrudProps {
   deletePermission?: string;
   editPermission?: string;
   createPermission?: string;
+  extraRowActions?: (row: Record<string, unknown>) => React.ReactNode;
 }
 
 export const ModuleCrud: React.FC<ModuleCrudProps> = ({
   title, apiPath, listQuery, columns, fields, emptyMessage, allowDelete, allowEdit,
-  deletePermission, editPermission, createPermission,
+  deletePermission, editPermission, createPermission, extraRowActions,
 }) => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const { toast } = useToast();
@@ -110,6 +111,7 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({
   const canCreate = !createPermission || hasPermission(createPermission);
   const canEdit = allowEdit && (!editPermission || hasPermission(editPermission));
   const canDelete = allowDelete && (!deletePermission || hasPermission(deletePermission));
+  const showActions = canEdit || canDelete || Boolean(extraRowActions);
 
   const removeRow = async (id: string) => {
     try {
@@ -180,18 +182,19 @@ export const ModuleCrud: React.FC<ModuleCrudProps> = ({
         ) : (
           <table className="table">
             <thead>
-              <tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}{(canEdit || canDelete) && <th>Actions</th>}</tr>
+              <tr>{columns.map((c) => <th key={c.key}>{c.label}</th>)}{showActions && <th>Actions</th>}</tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={columns.length + (canEdit || canDelete ? 1 : 0)} className="text-center py-8 text-slate-400">{emptyMessage ?? "No records."}</td></tr>
+                <tr><td colSpan={columns.length + (showActions ? 1 : 0)} className="text-center py-8 text-slate-400">{emptyMessage ?? "No records."}</td></tr>
               ) : rows.map((row) => (
                 <tr key={row.id}>
                   {columns.map((c) => (
                     <td key={c.key}>{c.render ? c.render(row) : String(row[c.key] ?? "—")}</td>
                   ))}
-                  {(canEdit || canDelete) && (
-                    <td className="space-x-2">
+                  {showActions && (
+                    <td className="space-x-2 whitespace-nowrap">
+                      {extraRowActions?.(row)}
                       {canEdit && (
                         <button type="button" className="btn-ghost text-xs inline-flex items-center gap-1" onClick={() => openEdit(row)}>
                           <Pencil className="w-3 h-3" /> Edit

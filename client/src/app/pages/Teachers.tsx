@@ -3,10 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { ModuleCrud } from "../components/ModuleCrud";
 import { useAuth } from "../state/AuthContext";
 import { api } from "../api/client";
-import { GraduationCap, Info } from "lucide-react";
+import { GraduationCap, Info, Loader2, UserCog } from "lucide-react";
+import { useImpersonateSwitch } from "../hooks/useImpersonateSwitch";
 
 export const Teachers: React.FC = () => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, impersonationActive } = useAuth();
+  const { loginAsStaff, switchingId, canImpersonate } = useImpersonateSwitch();
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const [hrTotal, setHrTotal] = useState<number | null>(null);
   const [teachingCount, setTeachingCount] = useState<number | null>(null);
@@ -94,6 +96,16 @@ export const Teachers: React.FC = () => {
         </div>
       )}
 
+      {impersonationActive && (
+        <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 flex gap-3 text-sm text-blue-100/90">
+          <UserCog className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+          <div>
+            Platform impersonation is active. Use <strong>Login as</strong> on a teacher row to open their workspace
+            (creates an ERP login first if they only exist in HR).
+          </div>
+        </div>
+      )}
+
       <ModuleCrud
         title="Teaching staff"
         apiPath="hr/staff"
@@ -120,6 +132,30 @@ export const Teachers: React.FC = () => {
         createPermission="hr.manage"
         editPermission="hr.manage"
         deletePermission="hr.manage"
+        extraRowActions={
+          canImpersonate
+            ? (row) => (
+                <button
+                  type="button"
+                  className="btn-ghost text-xs inline-flex items-center gap-1 text-blue-300 hover:text-blue-200"
+                  disabled={switchingId === row.id || (!row.userId && !row.email)}
+                  title={
+                    !row.userId && !row.email
+                      ? "Add an email in HR first"
+                      : "Open teacher workspace as this user"
+                  }
+                  onClick={() => void loginAsStaff(row as { id: string; userId?: string; email?: string; firstName?: string; lastName?: string })}
+                >
+                  {switchingId === row.id ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <UserCog className="w-3 h-3" />
+                  )}
+                  Login as
+                </button>
+              )
+            : undefined
+        }
       />
     </div>
   );

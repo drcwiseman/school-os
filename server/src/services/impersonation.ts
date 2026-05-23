@@ -3,7 +3,7 @@ import { db } from "../db";
 import { platformImpersonationTokens, users, userRoles, roles, staff } from "../db/schema";
 import { userAuthColumns } from "../lib/user-columns";
 import { eq, and, gt, isNull, sql } from "drizzle-orm";
-import { createSession } from "../middleware/auth";
+import { createSession, deleteSession } from "../middleware/auth";
 import { getUserPermissions } from "../middleware/rbac";
 import { listStaffForTenant } from "../lib/staff-query";
 import { provisionErpLoginForStaff } from "./staff-erp-login";
@@ -135,6 +135,39 @@ export async function resolveImpersonationLandingPath(
 
 export function impersonationSessionPayload(readOnly: boolean) {
   return readOnly ? { active: true, readOnly: true } : { active: true, readOnly: false };
+}
+
+export function getPlatformImpersonationContext(session: { metadata?: Record<string, unknown> | null }) {
+  const m = (session.metadata ?? {}) as Record<string, unknown>;
+  if (!m.impersonation || typeof m.platformAdminId !== "string" || !m.platformAdminId) {
+    return null;
+  }
+  return {
+    platformAdminId: m.platformAdminId,
+    readOnly: m.readOnly === true,
+  };
+}
+
+/** Switch platform impersonation to another ERP user (or provision from HR staff). */
+export async function switchPlatformImpersonation(opts: {
+  tenantId: string;
+  slug: string;
+  currentSessionToken: string;
+  platformAdminId: string;
+  readOnly: boolean;
+  target: { userId?: string; staffId?: string; roleName?: string; provisionStaffLogin?: boolean };
+  ip?: string;
+  ua?: string;
+}) {
+  const target = await resolveImpersonationUser(opts.tenantId, opts.target);
+  await deleteSession(opts.currentSessionToken);
+  const session = await createSession(target.id, opts.tenantId, opts.ip, opts.ua, {
+    impersonation: true,
+    readOnly: opts.readOnly,
+    platformAdminId: opts.platformAdminId,
+  });
+  const redirect = await resolveImpersonationLandingPath(opts.tenantId, opts.slug, target.id);
+  return { session, user: target, redirect };
 }
 
 /** Resolve which user to impersonate (explicit user, first match for role, or default admin). */
