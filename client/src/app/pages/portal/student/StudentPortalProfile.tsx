@@ -202,11 +202,11 @@ export const StudentPortalProfile: React.FC<{
         <form onSubmit={saveEmail} className="space-y-3 max-w-md">
           <label className="text-xs text-[var(--portal-subtle)] block">
             Current password
-            <PasswordInput required className="portal-input w-full mt-1 rounded-lg text-sm" value={emailForm.currentPassword} onChange={(e) => setEmailForm({ ...emailForm, currentPassword: e.target.value })} />
+            <PasswordInput required autoComplete="current-password" className="portal-input w-full mt-1 rounded-lg text-sm" value={emailForm.currentPassword} onChange={(e) => setEmailForm({ ...emailForm, currentPassword: e.target.value })} />
           </label>
           <label className="text-xs text-[var(--portal-subtle)] block">
             New login email
-            <input type="email" required className="portal-input w-full mt-1 rounded-lg text-sm" value={emailForm.email} onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })} />
+            <input type="email" required autoComplete="email" className="portal-input w-full mt-1 rounded-lg text-sm" value={emailForm.email} onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })} />
           </label>
           <button type="submit" disabled={saving} className="portal-btn-primary rounded-lg text-sm px-4 py-2 font-medium">Update email</button>
         </form>
@@ -219,15 +219,15 @@ export const StudentPortalProfile: React.FC<{
         <form onSubmit={savePassword} className="space-y-3 max-w-md">
           <label className="text-xs text-[var(--portal-subtle)] block">
             Current password
-            <PasswordInput required className="portal-input w-full mt-1 rounded-lg text-sm" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} />
+            <PasswordInput required autoComplete="current-password" className="portal-input w-full mt-1 rounded-lg text-sm" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} />
           </label>
           <label className="text-xs text-[var(--portal-subtle)] block">
             New password
-            <PasswordInput required minLength={8} className="portal-input w-full mt-1 rounded-lg text-sm" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
+            <PasswordInput required minLength={8} autoComplete="new-password" className="portal-input w-full mt-1 rounded-lg text-sm" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
           </label>
           <label className="text-xs text-[var(--portal-subtle)] block">
             Confirm new password
-            <PasswordInput required className="portal-input w-full mt-1 rounded-lg text-sm" value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} />
+            <PasswordInput required autoComplete="new-password" className="portal-input w-full mt-1 rounded-lg text-sm" value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} />
           </label>
           <button type="submit" disabled={saving} className="portal-btn-primary rounded-lg text-sm px-4 py-2 font-medium">Change password</button>
         </form>

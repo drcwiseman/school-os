@@ -451,6 +451,30 @@ router.get("/pdf/invoice/:id", requirePortalAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** Must be registered before /messages/:studentId (otherwise "recipients" is parsed as a student id). */
+router.get("/messages/recipients", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    const { getStudentMessageRecipients } = await import("../services/portal-messaging");
+
+    if (principal.kind === "student") {
+      const data = await getStudentMessageRecipients(tenant.id, principal.account.studentId);
+      return res.json({ success: true, data: [...data.teachers, ...data.admins] });
+    }
+
+    if (principal.kind === "parent") {
+      const studentId = String(req.query.studentId ?? "");
+      if (!studentId) throw new BadRequestError("studentId is required");
+      await assertPortalCanAccessStudent(principal, tenant.id, studentId);
+      const data = await getStudentMessageRecipients(tenant.id, studentId);
+      return res.json({ success: true, data: [...data.teachers, ...data.admins] });
+    }
+
+    throw new ForbiddenError("Students and parents only");
+  } catch (e) { next(e); }
+});
+
 router.get("/messages/:studentId", requirePortalAuth, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -510,29 +534,6 @@ router.post("/messages", requirePortalAuth,
     } catch (e) { next(e); }
   },
 );
-
-router.get("/messages/recipients", requirePortalAuth, async (req, res, next) => {
-  try {
-    const tenant = (req as any).tenant;
-    const principal = (req as any).portalPrincipal;
-    const { getStudentMessageRecipients } = await import("../services/portal-messaging");
-
-    if (principal.kind === "student") {
-      const data = await getStudentMessageRecipients(tenant.id, principal.account.studentId);
-      return res.json({ success: true, data: [...data.teachers, ...data.admins] });
-    }
-
-    if (principal.kind === "parent") {
-      const studentId = String(req.query.studentId ?? "");
-      if (!studentId) throw new BadRequestError("studentId is required");
-      await assertPortalCanAccessStudent(principal, tenant.id, studentId);
-      const data = await getStudentMessageRecipients(tenant.id, studentId);
-      return res.json({ success: true, data: [...data.teachers, ...data.admins] });
-    }
-
-    throw new ForbiddenError("Students and parents only");
-  } catch (e) { next(e); }
-});
 
 router.get("/pdf/receipt/:id", requirePortalAuth, async (req, res, next) => {
   try {
@@ -956,6 +957,18 @@ router.post("/student/tutor", requirePortalAuth,
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      const { isFeatureAllowedForTenant } = await import("../services/plan-features");
+      const aiEnabled = await isFeatureAllowedForTenant(tenant.id, "ai_homework");
+      if (!aiEnabled) {
+        return res.json({
+          success: true,
+          data: {
+            reply: "The AI study tutor is not enabled for your school yet. Use Messages to contact your teachers, or check Study materials and Homework tabs.",
+            studyPlan: [],
+            aiDisabled: true,
+          },
+        });
+      }
       const reply = await adminAssistantReply(tenant.id, req.body.message);
       const plan = req.body.subject ? await studyRecommendations(tenant.id, req.body.subject) : [];
       res.json({ success: true, data: { reply, studyPlan: plan } });

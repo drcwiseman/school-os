@@ -559,6 +559,7 @@ portalProfileRouter.get("/profile/photo", async (req, res, next) => {
     const tenant = (req as any).tenant;
     const principal = (req as any).portalPrincipal;
     const { readProfilePhotoFile } = await import("../services/profile-photo");
+    res.setHeader("Cache-Control", "private, max-age=300");
     if (principal.kind === "student") {
       const abs = readProfilePhotoFile(tenant.id, "student", principal.account.studentId);
       if (!abs) throw new NotFoundError("Photo not uploaded");

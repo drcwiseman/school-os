@@ -38,6 +38,9 @@ import { StudentLibraryPanel } from "./StudentLibraryPanel";
 import { StudentMaterialsPanel } from "./StudentMaterialsPanel";
 import { StudentCalendarPanel } from "./StudentCalendarPanel";
 import { StudentNoticeboardPanel } from "./StudentNoticeboardPanel";
+import { StudentTutorPanel } from "./StudentTutorPanel";
+import { StudentTransportPanel } from "./StudentTransportPanel";
+import { StudentLeavePanel } from "./StudentLeavePanel";
 
 type TabId =
   | "overview"
@@ -134,8 +137,6 @@ export const StudentPortalDashboard: React.FC<{
   const [curriculum, setCurriculum] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [msgBody, setMsgBody] = useState("");
-  const [tutorMsg, setTutorMsg] = useState("");
-  const [tutorReply, setTutorReply] = useState("");
   const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(`student_portal_notif_${schoolSlug}`) ?? "[]");
@@ -148,6 +149,8 @@ export const StudentPortalDashboard: React.FC<{
     profilePendingApproval: false,
   });
   const [messageRecipients, setMessageRecipients] = useState<Array<{ userId: string; name: string; role?: string; kind: string }>>([]);
+  const [recipientsError, setRecipientsError] = useState("");
+  const [recipientsLoaded, setRecipientsLoaded] = useState(false);
   const [recipientUserId, setRecipientUserId] = useState("");
   const [publishedResults, setPublishedResults] = useState<any[]>([]);
   const [timetableFilter, setTimetableFilter] = useState<"all" | "teaching" | "exam" | "mock" | "test">("all");
@@ -207,8 +210,17 @@ export const StudentPortalDashboard: React.FC<{
 
   useEffect(() => {
     if (tab === "messages") loadMessages();
-    if (tab === "messages" && !messageRecipients.length) {
-      api.get(`/s/${schoolSlug}/api/portal/messages/recipients`).then((r) => setMessageRecipients(r.data ?? [])).catch(() => {});
+    if (tab === "messages" && !recipientsLoaded) {
+      api.get(`/s/${schoolSlug}/api/portal/messages/recipients`)
+        .then((r) => {
+          setMessageRecipients(r.data ?? []);
+          setRecipientsError("");
+          setRecipientsLoaded(true);
+        })
+        .catch((e: any) => {
+          setRecipientsError(e.message ?? "Could not load recipients");
+          setRecipientsLoaded(true);
+        });
     }
     if (tab === "results" && !publishedResults.length) {
       api.get(`/s/${schoolSlug}/api/portal/student/results`).then((r) => setPublishedResults(r.data ?? [])).catch(() => {});
@@ -222,7 +234,7 @@ export const StudentPortalDashboard: React.FC<{
         });
       }).catch(() => {});
     }
-  }, [tab, loadMessages, schoolSlug, messageRecipients.length, publishedResults.length, profileMeta.profilePendingApproval, student]);
+  }, [tab, loadMessages, schoolSlug, recipientsLoaded, publishedResults.length, profileMeta.profilePendingApproval, student]);
 
   useEffect(() => {
     if (!schoolSlug || !studentId) return;
@@ -708,11 +720,15 @@ export const StudentPortalDashboard: React.FC<{
 
           {tab === "messages" && (
             <Panel title="Messages with school" icon={MessageCircle}>
+              {recipientsError && (
+                <p className="text-sm text-red-600 dark:text-red-400 mb-3">{recipientsError}</p>
+              )}
               <div className="flex gap-2 mb-4">
                 <select
                   className="portal-input rounded-lg text-sm"
                   value={recipientUserId}
                   onChange={(e) => setRecipientUserId(e.target.value)}
+                  aria-label="Message recipient"
                 >
                   <option value="">Send to…</option>
                   {messageRecipients.map((r) => (
@@ -722,6 +738,11 @@ export const StudentPortalDashboard: React.FC<{
                   ))}
                 </select>
               </div>
+              {!messageRecipients.length && !recipientsError && (
+                <p className="text-xs text-[var(--portal-subtle)] mb-3">
+                  No teachers listed yet — you may still be waiting for class assignment, or ask the office to link your class teachers.
+                </p>
+              )}
               <div className="rounded-xl border border-[var(--portal-border)] bg-[var(--portal-bg-muted)] p-3 max-h-72 overflow-y-auto space-y-2 mb-4">
                 {messages.length === 0 ? (
                   <p className="portal-empty text-sm text-center py-6">No messages yet. Send a note to teachers or the office.</p>
@@ -748,6 +769,7 @@ export const StudentPortalDashboard: React.FC<{
                   value={msgBody}
                   onChange={(e) => setMsgBody(e.target.value)}
                   placeholder="Ask about homework, fees, or events…"
+                  autoComplete="off"
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}
                 />
                 <button type="button" onClick={sendMessage} className="portal-btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white shrink-0">
@@ -843,46 +865,21 @@ export const StudentPortalDashboard: React.FC<{
             </Panel>
           )}
 
-          {tab === "leave" && (
-            <StudentLeaveSection schoolSlug={schoolSlug} studentId={studentId!} leaves={data?.leaves ?? []} />
+          {tab === "leave" && studentId && (
+            <Panel title="Leave requests" icon={CalendarOff}>
+              <StudentLeavePanel schoolSlug={schoolSlug} studentId={studentId} initial={data?.leaves ?? []} />
+            </Panel>
           )}
 
           {tab === "transport" && (
             <Panel title="Transport" icon={Bus}>
-              {!data?.transport ? (
-                <p className="portal-empty text-sm">You are not assigned to a bus route.</p>
-              ) : (
-                <>
-                  <p className="text-sm font-medium text-[var(--portal-fg-strong)]">Route: {data.transport.routeName}</p>
-                  <ul className="mt-3 text-sm text-[var(--portal-muted)] space-y-1">
-                    {(data.transport.stops ?? []).map((s: any, i: number) => (
-                      <li key={i}>{s.orderNo}. {s.name}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
+              <StudentTransportPanel schoolSlug={schoolSlug} initial={data?.transport ?? null} />
             </Panel>
           )}
 
           {tab === "tutor" && (
             <Panel title="AI study tutor" icon={Sparkles}>
-              <textarea
-                className="portal-input w-full rounded-lg px-3 py-2 text-sm min-h-[100px]"
-                value={tutorMsg}
-                onChange={(e) => setTutorMsg(e.target.value)}
-                placeholder="Ask about a topic, exam prep, or homework help…"
-              />
-              <button
-                type="button"
-                className="mt-2 portal-btn-primary rounded-lg text-white text-sm px-4 py-2 font-medium"
-                onClick={async () => {
-                  const res = await api.post(`/s/${schoolSlug}/api/portal/student/tutor`, { message: tutorMsg, subject: "General" });
-                  setTutorReply(res.data?.reply ?? "");
-                }}
-              >
-                Ask tutor
-              </button>
-              {tutorReply && <p className="mt-3 text-sm text-[var(--portal-fg)] whitespace-pre-wrap rounded-xl border border-[var(--portal-border)] p-4">{tutorReply}</p>}
+              <StudentTutorPanel schoolSlug={schoolSlug} />
             </Panel>
           )}
 
@@ -971,51 +968,5 @@ function NoticeList({ items, limit, onMore }: { items: any[]; limit?: number; on
         <button type="button" onClick={onMore} className="mt-3 text-xs portal-accent-text font-medium">View all →</button>
       )}
     </>
-  );
-}
-
-function StudentLeaveSection({ schoolSlug, studentId, leaves: initial }: { schoolSlug: string; studentId: string; leaves: any[] }) {
-  const [form, setForm] = useState({ startDate: "", endDate: "", reason: "" });
-  const [leaves, setLeaves] = useState(initial);
-  useEffect(() => {
-    api.get(`/s/${schoolSlug}/api/portal/leaves`).then((r) => {
-      const all = r.data ?? [];
-      setLeaves(all.filter((l: any) => l.studentId === studentId));
-    }).catch(() => {});
-  }, [schoolSlug, studentId]);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await api.post(`/s/${schoolSlug}/api/portal/leaves`, { ...form, studentId });
-    setForm({ startDate: "", endDate: "", reason: "" });
-    const r = await api.get(`/s/${schoolSlug}/api/portal/leaves`);
-    setLeaves((r.data ?? []).filter((l: any) => l.studentId === studentId));
-  };
-  return (
-    <Panel title="Leave requests" icon={CalendarOff}>
-      <form onSubmit={submit} className="grid sm:grid-cols-2 gap-3 mb-6">
-        <label className="text-xs text-[var(--portal-subtle)]">
-          From
-          <input type="date" className="portal-input w-full mt-1 rounded-lg text-sm" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-        </label>
-        <label className="text-xs text-[var(--portal-subtle)]">
-          To
-          <input type="date" className="portal-input w-full mt-1 rounded-lg text-sm" required value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-        </label>
-        <label className="text-xs text-[var(--portal-subtle)] sm:col-span-2">
-          Reason
-          <input className="portal-input w-full mt-1 rounded-lg text-sm" required value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
-        </label>
-        <button type="submit" className="sm:col-span-2 portal-btn-primary rounded-lg text-white text-sm py-2 font-medium">Submit request</button>
-      </form>
-      <ul className="text-sm space-y-2">
-        {leaves.map((l: any) => (
-          <li key={l.id} className="flex justify-between gap-2 rounded-lg border border-[var(--portal-border)] px-3 py-2">
-            <span>{new Date(l.startDate).toLocaleDateString()} – {new Date(l.endDate).toLocaleDateString()}</span>
-            <span className={`student-portal-pill text-[10px] ${statusPill(l.status)}`}>{l.status}</span>
-          </li>
-        ))}
-        {!leaves.length && <p className="portal-empty">No leave requests yet.</p>}
-      </ul>
-    </Panel>
   );
 }

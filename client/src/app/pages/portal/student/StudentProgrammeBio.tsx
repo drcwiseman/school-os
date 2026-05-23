@@ -87,27 +87,27 @@ export const StudentProgrammeBio: React.FC<{
         </p>
         <label className="text-xs text-[var(--portal-subtle)] sm:col-span-2">
           Phone
-          <input className="portal-input w-full mt-1 rounded-lg text-sm" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <input className="portal-input w-full mt-1 rounded-lg text-sm" autoComplete="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         </label>
         <label className="text-xs text-[var(--portal-subtle)] sm:col-span-2">
           Contact email
-          <input type="email" className="portal-input w-full mt-1 rounded-lg text-sm" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input type="email" className="portal-input w-full mt-1 rounded-lg text-sm" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         </label>
         <label className="text-xs text-[var(--portal-subtle)] sm:col-span-2">
           Address
-          <input className="portal-input w-full mt-1 rounded-lg text-sm" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <input className="portal-input w-full mt-1 rounded-lg text-sm" autoComplete="street-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </label>
         <label className="text-xs text-[var(--portal-subtle)] sm:col-span-2">
           Short bio
-          <textarea className="portal-input w-full mt-1 rounded-lg text-sm min-h-[80px]" value={form.shortBio} onChange={(e) => setForm({ ...form, shortBio: e.target.value })} />
+          <textarea className="portal-input w-full mt-1 rounded-lg text-sm min-h-[80px]" autoComplete="off" value={form.shortBio} onChange={(e) => setForm({ ...form, shortBio: e.target.value })} />
         </label>
         <label className="text-xs text-[var(--portal-subtle)]">
           Emergency contact
-          <input className="portal-input w-full mt-1 rounded-lg text-sm" value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
+          <input className="portal-input w-full mt-1 rounded-lg text-sm" autoComplete="name" value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
         </label>
         <label className="text-xs text-[var(--portal-subtle)]">
           Emergency phone
-          <input className="portal-input w-full mt-1 rounded-lg text-sm" value={form.emergencyPhone} onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })} />
+          <input className="portal-input w-full mt-1 rounded-lg text-sm" autoComplete="tel" value={form.emergencyPhone} onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })} />
         </label>
         <button type="submit" disabled={saving} className="sm:col-span-2 portal-btn-primary inline-flex items-center justify-center gap-2 rounded-lg text-sm py-2.5 font-medium disabled:opacity-60">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
