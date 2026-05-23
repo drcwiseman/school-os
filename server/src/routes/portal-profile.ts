@@ -1,3 +1,4 @@
+import path from "path";
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
@@ -563,10 +564,10 @@ portalProfileRouter.get("/profile/photo", async (req, res, next) => {
     if (principal.kind === "student") {
       const abs = readProfilePhotoFile(tenant.id, "student", principal.account.studentId);
       if (!abs) throw new NotFoundError("Photo not uploaded");
-      return res.sendFile(abs);
+      return res.sendFile(path.resolve(abs));
     }
     const abs = readProfilePhotoFile(tenant.id, "guardian", principal.account.guardianId);
     if (!abs) throw new NotFoundError("Photo not uploaded");
-    res.sendFile(abs);
+    res.sendFile(path.resolve(abs));
   } catch (e) { next(e); }
 });

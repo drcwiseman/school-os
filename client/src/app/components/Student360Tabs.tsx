@@ -366,15 +366,23 @@ export const Student360Tabs: React.FC<Props> = ({ schoolSlug, studentId }) => {
         {tab === "id-card" && (
           <div className="bg-slate-950/20 rounded-xl border border-slate-800/80 p-4 space-y-4">
             <p className="text-xs text-slate-500 text-center">
-              Template from School settings → Branding → ID cards. PDF includes front, back, and barcode.
+              Template from School settings → Branding → ID cards. Photo comes from the student&apos;s portal profile upload. PDF includes front, back, and barcode.
             </p>
+            {!data.hasProfilePhoto && (
+              <p className="text-xs text-amber-400/90 text-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                No profile photo on file yet — ask the student to upload one in the Student Portal → Profile tab. Initials are shown until then.
+              </p>
+            )}
             <IdCardPreview
               template={idCardTemplate}
               schoolName={schoolName}
               firstName={data.student?.firstName ?? ""}
               lastName={data.student?.lastName ?? ""}
               identifier={data.student?.admissionNumber ?? ""}
-              subtitle={data.student?.className}
+              subtitle={data.classHistory?.[0]?.className}
+              gender={data.student?.gender}
+              dob={data.student?.dob}
+              photoSrc={`/s/${schoolSlug}/api/students/${studentId}/profile-photo`}
               kind="student"
             />
             <div className="flex justify-center pt-2">

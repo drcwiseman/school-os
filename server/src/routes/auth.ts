@@ -14,7 +14,8 @@ import { createAuditLog } from "../services/audit";
 import { getUserPermissions } from "../middleware/rbac";
 import { getTenantModuleAccess } from "../services/plan-features";
 import { exchangeImpersonationToken } from "../services/impersonation";
-import { isReadOnlyImpersonation } from "../middleware/auth";
+import { isPlatformImpersonation, isReadOnlyImpersonation } from "../middleware/auth";
+import { impersonationSessionPayload, resolveImpersonationLandingPath } from "../services/impersonation";
 import { z } from "zod";
 
 const router = Router();
@@ -115,7 +116,9 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
         hasPhoto: Boolean(staffRow.photoUrl),
         photoRequired: true,
       } : null,
-      impersonation: isReadOnlyImpersonation(session) ? { readOnly: true } : null,
+      impersonation: isPlatformImpersonation(session)
+        ? impersonationSessionPayload(isReadOnlyImpersonation(session))
+        : null,
     });
   } catch (err) { next(err); }
 });
@@ -154,17 +157,18 @@ router.get("/impersonate", async (req: Request, res: Response, next: NextFunctio
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
+    const redirect = await resolveImpersonationLandingPath(tenant.id, slug, result.user.id);
     res.json({
       success: true,
       readOnly: result.readOnly,
-      redirect: `/s/${slug}/dashboard`,
+      redirect,
       user: safeUser,
       permissions,
       roles: roleRows,
       modules,
       country: locale.country,
       currency: locale.currency,
-      impersonation: result.readOnly ? { readOnly: true } : null,
+      impersonation: impersonationSessionPayload(result.readOnly),
     });
   } catch (err) { next(err); }
 });

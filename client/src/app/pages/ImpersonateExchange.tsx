@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../state/AuthContext";
+import { useSchoolSlug } from "../hooks/useSchoolSlug";
 import { Loader2 } from "lucide-react";
 
 export const ImpersonateExchange: React.FC = () => {
-  const { schoolSlug } = useParams<{ schoolSlug: string }>();
+  const schoolSlug = useSchoolSlug();
   const [params] = useSearchParams();
   const { setAuth } = useAuth();
   const [error, setError] = useState("");
@@ -34,13 +35,14 @@ export const ImpersonateExchange: React.FC = () => {
             res.modules,
             {
               readOnly: Boolean(res.impersonation?.readOnly),
+              impersonationActive: Boolean(res.impersonation?.active),
               country: res.country,
               currency: res.currency,
             },
           );
         }
 
-        const path = res.redirect ?? `/s/${schoolSlug}/dashboard`;
+        const path = res.redirect ?? `/s/${schoolSlug}/teacher`;
         const target = path.startsWith("http") ? path : `${window.location.origin}${path}`;
         window.location.replace(target);
       } catch (e: any) {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 export type IdCardTemplateId = "default" | "uganda_national" | "makerere";
 
@@ -9,8 +9,41 @@ type Props = {
   lastName: string;
   identifier: string;
   subtitle?: string;
+  gender?: string | null;
+  dob?: string | null;
+  photoSrc?: string;
   kind?: "student" | "staff";
 };
+
+function PhotoSlot({
+  src,
+  initials,
+  className,
+}: {
+  src?: string;
+  initials: string;
+  className: string;
+}) {
+  const [failed, setFailed] = useState(!src);
+  useEffect(() => {
+    setFailed(!src);
+  }, [src]);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className={`${className} object-cover`}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div className={`${className} flex items-center justify-center font-bold text-slate-500 shrink-0`}>
+      {initials}
+    </div>
+  );
+}
 
 export const IdCardPreview: React.FC<Props> = ({
   template,
@@ -19,10 +52,17 @@ export const IdCardPreview: React.FC<Props> = ({
   lastName,
   identifier,
   subtitle,
+  gender,
+  dob,
+  photoSrc,
   kind = "student",
 }) => {
   const initials = `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
   const name = `${firstName} ${lastName}`;
+  const genderLabel = gender ? String(gender) : "";
+  const dobLabel = dob
+    ? (typeof dob === "string" ? new Date(dob) : dob).toLocaleDateString("en-GB")
+    : "";
 
   if (template === "uganda_national") {
     return (
@@ -34,9 +74,11 @@ export const IdCardPreview: React.FC<Props> = ({
               <span className="text-[7px] text-emerald-100">{kind === "student" ? "STUDENT ID" : "STAFF ID"}</span>
             </div>
             <div className="p-2 flex gap-2">
-              <div className="w-14 h-[4.5rem] bg-slate-200 border border-emerald-700/40 flex items-center justify-center text-lg font-bold text-slate-500 shrink-0">
-                {initials}
-              </div>
+              <PhotoSlot
+                src={photoSrc}
+                initials={initials}
+                className="w-14 h-[4.5rem] bg-slate-200 border border-emerald-700/40"
+              />
               <div className="text-[9px] text-slate-800 space-y-0.5 min-w-0">
                 <p className="text-[7px] text-slate-500">SURNAME</p>
                 <p className="font-bold uppercase truncate">{lastName}</p>
@@ -45,6 +87,8 @@ export const IdCardPreview: React.FC<Props> = ({
                 <p className="text-[7px] text-slate-500 pt-0.5">{kind === "student" ? "ADM. NO." : "EMP. NO."}</p>
                 <p className="font-mono font-semibold text-emerald-900">{identifier}</p>
                 {subtitle && <p className="text-[8px] truncate">{subtitle}</p>}
+                {genderLabel && <p className="text-[8px]">SEX: {genderLabel.toUpperCase()}</p>}
+                {dobLabel && <p className="text-[8px]">DOB: {dobLabel}</p>}
               </div>
             </div>
             <div className="mx-2 mb-2 h-4 bg-white border border-slate-300 flex items-end justify-center gap-px px-1">
@@ -57,10 +101,14 @@ export const IdCardPreview: React.FC<Props> = ({
         <CardShell label="Back">
           <div className="w-[272px] h-[172px] rounded-lg overflow-hidden border-2 border-emerald-800/30 shadow-lg bg-[#f3ead0] text-left">
             <div className="h-6 bg-emerald-800 text-[8px] font-bold text-white flex items-center px-2">OFFICIAL SCHOOL USE ONLY</div>
-            <div className="mx-2 mt-2 h-9 bg-slate-900 rounded-sm" />
+            <div className="mx-2 mt-2 h-9 bg-slate-900 rounded-sm flex items-center justify-center text-[6px] text-slate-400 px-1 text-center">
+              Ministry of Education · Uganda
+            </div>
             <div className="p-2 text-[8px] text-slate-700 space-y-0.5">
               <p className="font-semibold uppercase truncate">{name}</p>
               <p>ID: {identifier}</p>
+              {genderLabel && <p>Sex: {genderLabel}</p>}
+              {dobLabel && <p>DOB: {dobLabel}</p>}
               <p className="truncate">Issued by: {schoolName}</p>
               <p className="text-slate-500">If found, return to issuing school.</p>
             </div>
@@ -85,14 +133,18 @@ export const IdCardPreview: React.FC<Props> = ({
               <p className="text-[7px] text-[#d4a82a]">{kind === "student" ? "STUDENT ID CARD" : "STAFF ID CARD"}</p>
             </div>
             <div className="p-2 flex gap-2">
-              <div className="w-14 h-[4.5rem] bg-slate-100 border-2 border-[#7b1e3a]/30 flex items-center justify-center text-lg font-bold text-[#7b1e3a]">
-                {initials}
-              </div>
+              <PhotoSlot
+                src={photoSrc}
+                initials={initials}
+                className="w-14 h-[4.5rem] bg-slate-100 border-2 border-[#7b1e3a]/30 text-[#7b1e3a]"
+              />
               <div className="text-[9px] min-w-0">
                 <p className="font-bold text-[#7b1e3a] uppercase text-[10px] leading-tight truncate">{name}</p>
                 <p className="text-slate-500 mt-1">{kind === "student" ? "Reg. No." : "Staff No."}</p>
                 <p className="font-mono font-bold text-sm">{identifier}</p>
                 {subtitle && <p className="text-slate-600 truncate mt-0.5">{subtitle}</p>}
+                {genderLabel && <p className="text-slate-600 text-[8px]">Sex: {genderLabel}</p>}
+                {dobLabel && <p className="text-slate-600 text-[8px]">DOB: {dobLabel}</p>}
               </div>
             </div>
             <div className="mx-2 h-3 bg-slate-50 border flex items-end gap-px px-1">
@@ -112,6 +164,7 @@ export const IdCardPreview: React.FC<Props> = ({
             </ul>
             <div className="mx-2 border border-[#7b1e3a]/40 rounded p-1 text-[8px]">
               <p className="font-bold text-[#7b1e3a] truncate">{schoolName}</p>
+              <p className="text-slate-600 truncate">{name} · {identifier}</p>
             </div>
             <div className="mx-2 mt-1 h-3 bg-white border flex items-end gap-px px-1">
               {`MK${identifier}`.split("").slice(0, 18).map((_, i) => (
@@ -131,11 +184,17 @@ export const IdCardPreview: React.FC<Props> = ({
           <p className="text-[9px] font-bold text-indigo-900 uppercase truncate">{schoolName}</p>
           <p className="text-[8px] text-slate-500 mb-2">{kind === "student" ? "STUDENT ID" : "STAFF ID"}</p>
           <div className="flex gap-2">
-            <div className="w-12 h-14 rounded-lg bg-white border flex items-center justify-center font-bold text-indigo-600">{initials}</div>
-            <div>
+            <PhotoSlot
+              src={photoSrc}
+              initials={initials}
+              className="w-12 h-14 rounded-lg bg-white border text-indigo-600"
+            />
+            <div className="min-w-0">
               <p className="font-bold text-sm text-slate-900">{name}</p>
               <p className="font-mono text-xs text-slate-600">{identifier}</p>
               {subtitle && <p className="text-[10px] text-slate-500">{subtitle}</p>}
+              {genderLabel && <p className="text-[10px] text-slate-500">Gender: {genderLabel}</p>}
+              {dobLabel && <p className="text-[10px] text-slate-500">DOB: {dobLabel}</p>}
             </div>
           </div>
           <div className="mt-2 h-3 bg-white border rounded flex items-end gap-px px-1">
@@ -148,10 +207,14 @@ export const IdCardPreview: React.FC<Props> = ({
       <CardShell label="Back">
         <div className="w-[272px] h-[172px] rounded-xl border border-slate-300 bg-slate-50 shadow-lg p-3 text-left text-[9px] text-slate-600">
           <p className="font-semibold text-indigo-900">{schoolName}</p>
-          <p className="mt-2">ID: {identifier}</p>
-          <p className="mt-4 text-slate-400">Signature _______________</p>
-          <p className="mt-2 text-[8px]">Property of school — not transferable</p>
-          <div className="mt-3 h-3 bg-white border rounded flex items-end gap-px px-1">
+          <p className="mt-1 font-medium text-slate-800">{name}</p>
+          <p className="mt-1">ID: {identifier}</p>
+          {subtitle && <p>Class: {subtitle}</p>}
+          {genderLabel && <p>Gender: {genderLabel}</p>}
+          {dobLabel && <p>DOB: {dobLabel}</p>}
+          <p className="mt-2 text-slate-400">Signature _______________</p>
+          <p className="mt-1 text-[8px]">Property of school — not transferable</p>
+          <div className="mt-2 h-3 bg-white border rounded flex items-end gap-px px-1">
             {identifier.split("").slice(0, 18).map((_, i) => (
               <div key={i} className="w-0.5 bg-slate-700" style={{ height: `${4 + (i % 3) * 2}px` }} />
             ))}

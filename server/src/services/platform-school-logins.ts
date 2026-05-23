@@ -35,14 +35,35 @@ export async function listSchoolErpUsers(tenantId: string): Promise<SchoolErpUse
   const primary = await findImpersonationTargetUser(tenantId);
   const primaryId = primary?.id;
 
-  return rows.map((r) => ({
-    id: r.id,
-    email: r.email,
-    firstName: r.firstName,
-    lastName: r.lastName,
-    status: r.status,
-    roleName: r.roleName,
-    isPrimaryAdmin: r.id === primaryId,
+  const byId = new Map<string, SchoolErpUserRow & { roleNames: string[] }>();
+  for (const r of rows) {
+    let entry = byId.get(r.id);
+    if (!entry) {
+      entry = {
+        id: r.id,
+        email: r.email,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        status: r.status,
+        roleName: r.roleName,
+        roleNames: [],
+        isPrimaryAdmin: r.id === primaryId,
+      };
+      byId.set(r.id, entry);
+    }
+    if (r.roleName && !entry.roleNames.includes(r.roleName)) {
+      entry.roleNames.push(r.roleName);
+    }
+  }
+
+  return [...byId.values()].map((u) => ({
+    id: u.id,
+    email: u.email,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    status: u.status,
+    roleName: u.roleNames.join(", ") || u.roleName,
+    isPrimaryAdmin: u.isPrimaryAdmin,
   }));
 }
 

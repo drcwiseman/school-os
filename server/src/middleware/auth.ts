@@ -68,6 +68,11 @@ export async function deleteSession(token: string) {
   await db.delete(sessions).where(eq(sessions.token, token));
 }
 
+export function isPlatformImpersonation(session: { metadata?: Record<string, unknown> | null }): boolean {
+  const m = (session.metadata ?? {}) as Record<string, unknown>;
+  return Boolean(m.impersonation);
+}
+
 export function isReadOnlyImpersonation(session: { metadata?: Record<string, unknown> | null }): boolean {
   const m = (session.metadata ?? {}) as Record<string, unknown>;
   return Boolean(m.impersonation && m.readOnly);

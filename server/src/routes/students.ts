@@ -395,6 +395,17 @@ router.get("/:id/documents/:docId/file", ...guard, requirePermission("students.v
   } catch (err) { next(err); }
 });
 
+router.get("/:id/profile-photo", ...guard, requirePermission("students.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { readProfilePhotoFile } = await import("../services/profile-photo");
+    const abs = readProfilePhotoFile(tenant.id, "student", req.params.id);
+    if (!abs) throw new NotFoundError("Photo not on file");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    return res.sendFile(path.resolve(abs));
+  } catch (err) { next(err); }
+});
+
 router.get("/:id/360", ...guard, requirePermission("students.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;

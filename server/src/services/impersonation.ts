@@ -1,9 +1,12 @@
 import crypto from "crypto";
 import { db } from "../db";
-import { platformImpersonationTokens, users, userRoles, roles } from "../db/schema";
+import { platformImpersonationTokens, users, userRoles, roles, staff } from "../db/schema";
 import { userAuthColumns } from "../lib/user-columns";
-import { eq, and, gt, isNull } from "drizzle-orm";
+import { eq, and, gt, isNull, sql } from "drizzle-orm";
 import { createSession } from "../middleware/auth";
+import { getUserPermissions } from "../middleware/rbac";
+import { listStaffForTenant } from "../lib/staff-query";
+import { provisionErpLoginForStaff } from "./staff-erp-login";
 
 export type ImpersonationTargetUser = {
   id: string;
@@ -15,12 +18,24 @@ export type ImpersonationTargetUser = {
 
 export type ImpersonationTargetRow = ImpersonationTargetUser & {
   roleNames: string[];
+  staffId?: string | null;
+};
+
+export type StaffNeedingErpLogin = {
+  id: string;
+  employeeNo: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  department: string | null;
+  suggestedRole: string;
 };
 
 /** All active ERP users with roles (for platform impersonation picker). */
 export async function listImpersonationTargets(tenantId: string): Promise<{
   users: ImpersonationTargetRow[];
   roles: string[];
+  staffNeedingLogin: StaffNeedingErpLogin[];
 }> {
   const rows = await db
     .select({
@@ -56,20 +71,96 @@ export async function listImpersonationTargets(tenantId: string): Promise<{
     }
   }
 
+  const staffRows = await listStaffForTenant(tenantId, { teachingOnly: true });
+  const staffByUserId = new Map<string, string>();
+  for (const s of staffRows) {
+    if (s.userId) staffByUserId.set(s.userId, s.id);
+  }
+  for (const u of byId.values()) {
+    u.staffId = staffByUserId.get(u.id) ?? null;
+  }
+
   const activeUsers = [...byId.values()].filter((u) => u.status === "active");
   const roleSet = new Set<string>();
   for (const u of activeUsers) {
     for (const r of u.roleNames) roleSet.add(r);
   }
   const roleNames = [...roleSet].sort((a, b) => a.localeCompare(b));
-  return { users: activeUsers, roles: roleNames };
+
+  const staffNeedingLogin: StaffNeedingErpLogin[] = staffRows
+    .filter((s) => !s.userId && s.status === "active")
+    .map((s) => ({
+      id: s.id,
+      employeeNo: s.employeeNo,
+      firstName: s.firstName,
+      lastName: s.lastName,
+      email: s.email ?? null,
+      department: s.department ?? null,
+      suggestedRole: /head/i.test(`${s.department ?? ""} ${(s as { jobTitle?: string }).jobTitle ?? ""}`)
+        ? "Headteacher"
+        : "Teacher",
+    }));
+
+  return { users: activeUsers, roles: roleNames, staffNeedingLogin };
+}
+
+/** Where to land after platform impersonation (teacher workspace vs admin dashboard). */
+export async function resolveImpersonationLandingPath(
+  tenantId: string,
+  slug: string,
+  userId: string,
+): Promise<string> {
+  const perms = await getUserPermissions(userId, tenantId);
+  const roleRows = await db
+    .select({ name: roles.name })
+    .from(userRoles)
+    .innerJoin(roles, eq(roles.id, userRoles.roleId))
+    .where(eq(userRoles.userId, userId));
+  const names = roleRows.map((r) => r.name.toLowerCase());
+
+  const isAdminLike = names.some((n) =>
+    /school administrator|tenant admin|administrator|deputy admin|bursar/.test(n),
+  );
+  const isHeadteacher = names.includes("headteacher");
+  const isTeacher = names.includes("teacher");
+
+  if (isTeacher && !isAdminLike && !isHeadteacher) {
+    return `/s/${slug}/teacher`;
+  }
+  if (isTeacher && perms.includes("academics.view") && !perms.includes("settings.users.manage")) {
+    return `/s/${slug}/teacher`;
+  }
+  return `/s/${slug}/dashboard`;
+}
+
+export function impersonationSessionPayload(readOnly: boolean) {
+  return readOnly ? { active: true, readOnly: true } : { active: true, readOnly: false };
 }
 
 /** Resolve which user to impersonate (explicit user, first match for role, or default admin). */
 export async function resolveImpersonationUser(
   tenantId: string,
-  opts: { userId?: string; roleName?: string },
+  opts: { userId?: string; roleName?: string; staffId?: string; provisionStaffLogin?: boolean },
 ): Promise<ImpersonationTargetUser> {
+  if (opts.staffId) {
+    const [member] = await db.select().from(staff).where(and(
+      eq(staff.id, opts.staffId),
+      eq(staff.tenantId, tenantId),
+      isNull(staff.deletedAt),
+    )).limit(1);
+    if (!member) throw new Error("Staff member not found");
+    if (member.userId) {
+      return resolveImpersonationUser(tenantId, { userId: member.userId });
+    }
+    if (!opts.provisionStaffLogin) {
+      throw new Error("This teacher has no ERP login yet — enable “Create ERP login” or add an email in HR");
+    }
+    const { user } = await provisionErpLoginForStaff(tenantId, member.id, {
+      roleName: opts.roleName ?? "Teacher",
+    });
+    return user;
+  }
+
   if (opts.userId) {
     const [user] = await db
       .select(userAuthColumns)
@@ -85,7 +176,7 @@ export async function resolveImpersonationUser(
   }
 
   if (opts.roleName?.trim()) {
-    const roleFilter = opts.roleName.trim();
+    const roleFilter = opts.roleName.trim().toLowerCase();
     const rows = await db
       .select(userAuthColumns)
       .from(users)
@@ -96,7 +187,7 @@ export async function resolveImpersonationUser(
           eq(users.tenantId, tenantId),
           isNull(users.deletedAt),
           eq(users.status, "active"),
-          eq(roles.name, roleFilter),
+          sql`lower(${roles.name}) = ${roleFilter}`,
         ),
       )
       .orderBy(users.email);

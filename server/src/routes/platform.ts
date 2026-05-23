@@ -1497,7 +1497,9 @@ router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPe
     body: z.object({
       readOnly: z.boolean().optional(),
       userId: z.string().uuid().optional(),
+      staffId: z.string().uuid().optional(),
       roleName: z.string().min(1).optional(),
+      provisionStaffLogin: z.boolean().optional(),
     }),
   }),
   async (req, res, next) => {
@@ -1509,7 +1511,9 @@ router.post("/tenants/:slug/impersonate", requirePlatformAuth, requirePlatformPe
       try {
         target = await resolveImpersonationUser(tenant.id, {
           userId: req.body?.userId,
+          staffId: req.body?.staffId,
           roleName: req.body?.roleName,
+          provisionStaffLogin: req.body?.provisionStaffLogin === true,
         });
       } catch (e) {
         throw new BadRequestError(e instanceof Error ? e.message : "Invalid impersonation target");

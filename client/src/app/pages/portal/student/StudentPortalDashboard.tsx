@@ -316,6 +316,14 @@ export const StudentPortalDashboard: React.FC<{
     setOnlineClasses(o.data ?? []);
   };
 
+  const handleProfilePhotoChange = useCallback((url: string | null) => {
+    setProfilePhotoUrl((prev) => {
+      if (prev === url) return prev;
+      setPhotoVersion((v) => v + 1);
+      return url;
+    });
+  }, []);
+
   return (
     <div className="portal-shell student-portal flex flex-col h-[100dvh] overflow-hidden" data-portal-theme={portalTheme}>
       {mobileNavOpen && (
@@ -889,10 +897,7 @@ export const StudentPortalDashboard: React.FC<{
               theme={portalTheme}
               onThemeChange={setPortalTheme}
               onAccountEmailChange={onAccountEmailChange}
-              onPhotoChange={(url) => {
-                setProfilePhotoUrl(url);
-                setPhotoVersion((v) => v + 1);
-              }}
+              onPhotoChange={handleProfilePhotoChange}
             />
           )}
         </main>

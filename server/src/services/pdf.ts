@@ -178,7 +178,9 @@ export async function generateStaffIdCardPdf(tenantId: string, staffId: string):
     subtitle: row.jobTitle ?? row.department ?? undefined,
     validUntil: "While employed",
   };
-  return createIdCardPdf(template, subject, toIdBranding(branding));
+  const { readProfilePhotoFile } = await import("./profile-photo");
+  const photoPath = readProfilePhotoFile(tenantId, "staff", staffId);
+  return createIdCardPdf(template, subject, toIdBranding(branding), { photoPath });
 }
 
 export async function generateStaffIdCardsBulkPdf(tenantId: string, staffIds?: string[]): Promise<Uint8Array> {
@@ -192,7 +194,9 @@ export async function generateStaffIdCardsBulkPdf(tenantId: string, staffIds?: s
   const doc = await PDFDocument.create();
   const cardBranding = toIdBranding(branding);
 
+  const { readProfilePhotoFile } = await import("./profile-photo");
   for (const row of rows) {
+    const photoPath = readProfilePhotoFile(tenantId, "staff", row.id);
     await appendIdCardPair(doc, template, {
       kind: "staff",
       firstName: row.firstName,
@@ -200,7 +204,7 @@ export async function generateStaffIdCardsBulkPdf(tenantId: string, staffIds?: s
       identifier: row.employeeNo,
       subtitle: row.jobTitle ?? row.department ?? undefined,
       validUntil: "While employed",
-    }, cardBranding);
+    }, cardBranding, { photoPath });
   }
 
   if (rows.length === 0) {
@@ -235,7 +239,9 @@ export async function generateStudentIdCardPdf(tenantId: string, studentId: stri
     .where(and(
       eq(studentClassHistory.studentId, studentId),
       eq(studentClassHistory.tenantId, tenantId),
+      isNull(studentClassHistory.toDate),
     ))
+    .orderBy(desc(studentClassHistory.fromDate))
     .limit(1);
   if (enrollment) {
     subtitle = enrollment.streamName
@@ -253,7 +259,9 @@ export async function generateStudentIdCardPdf(tenantId: string, studentId: stri
     dob: student.dob,
     validUntil: "Current academic year",
   };
-  return createIdCardPdf(template, subject, toIdBranding(branding));
+  const { readProfilePhotoFile } = await import("./profile-photo");
+  const photoPath = readProfilePhotoFile(tenantId, "student", studentId);
+  return createIdCardPdf(template, subject, toIdBranding(branding), { photoPath });
 }
 
 export async function generateTransferCertificatePdf(tenantId: string, studentId: string, transferId?: string): Promise<Uint8Array> {

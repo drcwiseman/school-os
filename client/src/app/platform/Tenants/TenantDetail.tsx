@@ -207,7 +207,7 @@ export const TenantDetail: React.FC = () => {
         ? res.data.url
         : `${window.location.origin}${res.data.url}`;
       window.open(normalizeAppUrl(raw), "_blank", "noopener,noreferrer");
-      toast(readOnly ? "Opened read-only shadow session" : "Logged in as school administrator", "success");
+      toast(readOnly ? "Opened read-only shadow session" : "Opened school ERP session", "success");
     } catch (e: any) {
       toast(e.message, "error");
     }

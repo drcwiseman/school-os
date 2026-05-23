@@ -1,4 +1,5 @@
-import { PDFDocument, PDFFont, PDFPage, RGB, StandardFonts, rgb } from "pdf-lib";
+import fs from "fs";
+import { PDFDocument, PDFFont, PDFImage, PDFPage, RGB, StandardFonts, rgb } from "pdf-lib";
 
 export type IdCardTemplateId = "default" | "uganda_national" | "makerere";
 
@@ -18,6 +19,11 @@ export type IdCardBranding = {
   logoText?: string;
   primaryColor: RGB;
   footer?: string;
+};
+
+export type IdCardRenderOptions = {
+  /** Absolute path to JPEG/PNG on disk (student/staff profile upload). */
+  photoPath?: string | null;
 };
 
 const CARD_W = 242.65;
@@ -66,6 +72,20 @@ function drawBarcode(
   });
 }
 
+async function embedPhotoFromPath(doc: PDFDocument, filePath: string | null | undefined): Promise<PDFImage | null> {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  const bytes = fs.readFileSync(filePath);
+  try {
+    return await doc.embedJpg(bytes);
+  } catch {
+    try {
+      return await doc.embedPng(bytes);
+    } catch {
+      return null;
+    }
+  }
+}
+
 function drawPhotoPlaceholder(
   page: PDFPage,
   x: number,
@@ -86,12 +106,32 @@ function drawPhotoPlaceholder(
   });
 }
 
+function drawPhotoSlot(
+  page: PDFPage,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  initials: string,
+  border: RGB,
+  bold: PDFFont,
+  photo: PDFImage | null,
+) {
+  if (photo) {
+    page.drawRectangle({ x, y, width: w, height: h, borderColor: border, borderWidth: 1 });
+    page.drawImage(photo, { x, y, width: w, height: h });
+    return;
+  }
+  drawPhotoPlaceholder(page, x, y, w, h, initials, border, bold);
+}
+
 function drawUgandaNationalFront(
   page: PDFPage,
   subject: IdCardSubject,
   branding: IdCardBranding,
   font: PDFFont,
   bold: PDFFont,
+  photo: PDFImage | null,
 ) {
   const { width: w, height: h } = page.getSize();
   page.drawRectangle({ x: 0, y: 0, width: w, height: h, color: rgb(0.97, 0.93, 0.82) });
@@ -112,7 +152,7 @@ function drawUgandaNationalFront(
     color: rgb(0.15, 0.35, 0.2),
   });
 
-  drawPhotoPlaceholder(
+  drawPhotoSlot(
     page,
     10,
     38,
@@ -121,6 +161,7 @@ function drawUgandaNationalFront(
     `${subject.firstName[0] ?? ""}${subject.lastName[0] ?? ""}`,
     rgb(0.2, 0.45, 0.3),
     bold,
+    photo,
   );
 
   const tx = 72;
@@ -145,6 +186,14 @@ function drawUgandaNationalFront(
   if (subject.subtitle) {
     ty -= 12;
     page.drawText(subject.subtitle.slice(0, 28), { x: tx, y: ty, size: 6, font });
+  }
+  if (subject.gender) {
+    ty -= 11;
+    page.drawText(`SEX: ${String(subject.gender).toUpperCase()}`, { x: tx, y: ty, size: 5.5, font });
+  }
+  if (subject.dob) {
+    ty -= 11;
+    page.drawText(`DOB: ${subject.dob.toLocaleDateString("en-GB")}`, { x: tx, y: ty, size: 5.5, font });
   }
 
   drawBarcode(page, 10, 8, w - 20, 14, subject.identifier, font);
@@ -194,6 +243,7 @@ function drawMakerereFront(
   branding: IdCardBranding,
   font: PDFFont,
   bold: PDFFont,
+  photo: PDFImage | null,
 ) {
   const { width: w, height: h } = page.getSize();
   const maroon = rgb(0.48, 0.12, 0.23);
@@ -216,7 +266,7 @@ function drawMakerereFront(
     color: gold,
   });
 
-  drawPhotoPlaceholder(page, 12, 42, 54, 64, `${subject.firstName[0] ?? ""}${subject.lastName[0] ?? ""}`, maroon, bold);
+  drawPhotoSlot(page, 12, 42, 54, 64, `${subject.firstName[0] ?? ""}${subject.lastName[0] ?? ""}`, maroon, bold, photo);
 
   const tx = 74;
   page.drawText(fullName(subject), { x: tx, y: 88, size: 9, font: bold, color: maroon });
@@ -225,7 +275,16 @@ function drawMakerereFront(
   if (subject.subtitle) {
     page.drawText(subject.subtitle.slice(0, 26), { x: tx, y: 52, size: 7, font, color: rgb(0.35, 0.35, 0.35) });
   }
-  page.drawText(`Valid: ${subject.validUntil ?? "Current academic year"}`, { x: tx, y: 40, size: 5.5, font });
+  let detailY = 40;
+  if (subject.gender) {
+    page.drawText(`Sex: ${String(subject.gender)}`, { x: tx, y: detailY, size: 5.5, font });
+    detailY -= 9;
+  }
+  if (subject.dob) {
+    page.drawText(`DOB: ${subject.dob.toLocaleDateString("en-GB")}`, { x: tx, y: detailY, size: 5.5, font });
+    detailY -= 9;
+  }
+  page.drawText(`Valid: ${subject.validUntil ?? "Current academic year"}`, { x: tx, y: detailY, size: 5.5, font });
 
   drawBarcode(page, 12, 8, w - 24, 12, subject.identifier, font);
 }
@@ -268,6 +327,7 @@ function drawDefaultFront(
   branding: IdCardBranding,
   font: PDFFont,
   bold: PDFFont,
+  photo: PDFImage | null,
 ) {
   const { width: w, height: h } = page.getSize();
   page.drawRectangle({ x: 0, y: 0, width: w, height: h, color: rgb(0.96, 0.97, 1) });
@@ -287,7 +347,7 @@ function drawDefaultFront(
     color: rgb(0.9, 0.95, 1),
   });
 
-  drawPhotoPlaceholder(
+  drawPhotoSlot(
     page,
     12,
     40,
@@ -296,10 +356,22 @@ function drawDefaultFront(
     `${subject.firstName[0] ?? ""}${subject.lastName[0] ?? ""}`,
     branding.primaryColor,
     bold,
+    photo,
   );
   page.drawText(`${subject.firstName} ${subject.lastName}`, { x: 70, y: 78, size: 10, font: bold });
   page.drawText(subject.identifier, { x: 70, y: 64, size: 8, font });
-  if (subject.subtitle) page.drawText(subject.subtitle.slice(0, 24), { x: 70, y: 52, size: 7, font });
+  let dy = 52;
+  if (subject.subtitle) {
+    page.drawText(subject.subtitle.slice(0, 24), { x: 70, y: dy, size: 7, font });
+    dy -= 10;
+  }
+  if (subject.gender) {
+    page.drawText(`Gender: ${subject.gender}`, { x: 70, y: dy, size: 6, font });
+    dy -= 9;
+  }
+  if (subject.dob) {
+    page.drawText(`DOB: ${subject.dob.toLocaleDateString("en-GB")}`, { x: 70, y: dy, size: 6, font });
+  }
   drawBarcode(page, 10, 8, w - 20, 12, subject.identifier, font);
 }
 
@@ -331,12 +403,14 @@ export async function appendIdCardPair(
   template: IdCardTemplateId,
   subject: IdCardSubject,
   branding: IdCardBranding,
+  options?: IdCardRenderOptions,
 ) {
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const photo = await embedPhotoFromPath(doc, options?.photoPath);
 
   const drawPair = (front: typeof drawDefaultFront, back: typeof drawDefaultBack) => {
-    front(doc.addPage([CARD_W, CARD_H]), subject, branding, font, bold);
+    front(doc.addPage([CARD_W, CARD_H]), subject, branding, font, bold, photo);
     back(doc.addPage([CARD_W, CARD_H]), subject, branding, font, bold);
   };
 
@@ -353,8 +427,9 @@ export async function createIdCardPdf(
   template: IdCardTemplateId,
   subject: IdCardSubject,
   branding: IdCardBranding,
+  options?: IdCardRenderOptions,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  await appendIdCardPair(doc, template, subject, branding);
+  await appendIdCardPair(doc, template, subject, branding, options);
   return doc.save();
 }

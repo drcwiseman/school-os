@@ -14,7 +14,7 @@ interface User {
 
 export type TenantModules = Record<string, boolean>;
 
-type SetAuthOptions = { readOnly?: boolean };
+type SetAuthOptions = { readOnly?: boolean; impersonationActive?: boolean };
 
 interface AuthContextType {
   user: User | null;
@@ -25,6 +25,7 @@ interface AuthContextType {
   currency: string;
   formatMoney: (amountMinor: number | undefined | null) => string;
   impersonationReadOnly: boolean;
+  impersonationActive: boolean;
   loading: boolean;
   schoolSlug: string | null;
   setAuth: (
@@ -52,6 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [impersonationReadOnly, setImpersonationReadOnly] = useState(false);
+  const [impersonationActive, setImpersonationActive] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const formatMoney = useCallback(
@@ -90,15 +92,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCountry(res.country ?? DEFAULT_COUNTRY);
           setCurrency(res.currency ?? DEFAULT_CURRENCY);
           setImpersonationReadOnly(Boolean(res.impersonation?.readOnly));
+          setImpersonationActive(Boolean(res.impersonation?.active));
           if (res.theme) applyTenantAppearance(res.theme as { mode?: "light" | "dark"; accent?: string });
         } else {
           setUser(null);
           setImpersonationReadOnly(false);
+          setImpersonationActive(false);
         }
       })
       .catch(() => {
         setUser(null);
         setImpersonationReadOnly(false);
+        setImpersonationActive(false);
       })
       .finally(() => setLoading(false));
   }, [location.pathname]);
@@ -121,6 +126,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (options?.readOnly !== undefined) {
       setImpersonationReadOnly(options.readOnly);
     }
+    if (options?.impersonationActive !== undefined) {
+      setImpersonationActive(options.impersonationActive);
+    }
   };
 
   const hasPermission = (code: string) => permissions.includes(code);
@@ -132,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setImpersonationReadOnly(false);
+    setImpersonationActive(false);
     window.location.href = schoolSlug ? schoolPath(schoolSlug, "login") : "/";
   };
 
@@ -146,6 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currency,
         formatMoney,
         impersonationReadOnly,
+        impersonationActive,
         loading,
         schoolSlug,
         setAuth,

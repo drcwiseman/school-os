@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { applyPortalTheme } from "../../../utils/theme";
 import { resolvePortalMediaUrl } from "../../../utils/portal-media";
@@ -43,9 +43,17 @@ export const StudentPortalProfile: React.FC<{
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [profile, setProfile] = useState<StudentProfileData | null>(null);
+  const onThemeChangeRef = useRef(onThemeChange);
+  const onPhotoChangeRef = useRef(onPhotoChange);
+  const lastPhotoUrlRef = useRef<string | null | undefined>(undefined);
 
   const [emailForm, setEmailForm] = useState({ email: "", currentPassword: "" });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
+
+  useEffect(() => {
+    onThemeChangeRef.current = onThemeChange;
+    onPhotoChangeRef.current = onPhotoChange;
+  }, [onThemeChange, onPhotoChange]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,17 +63,22 @@ export const StudentPortalProfile: React.FC<{
       const data = res.data as StudentProfileData;
       setProfile(data);
       setEmailForm({ email: data.account.email, currentPassword: "" });
-      onThemeChange(data.preferences.theme);
-      applyPortalTheme(data.preferences.theme, schoolSlug);
-      onPhotoChange?.(data.photoUrl ?? null);
+      const nextTheme = data.preferences.theme;
+      onThemeChangeRef.current(nextTheme);
+      applyPortalTheme(nextTheme, schoolSlug);
+      const nextPhoto = data.photoUrl ?? null;
+      if (lastPhotoUrlRef.current !== nextPhoto) {
+        lastPhotoUrlRef.current = nextPhoto;
+        onPhotoChangeRef.current?.(nextPhoto);
+      }
     } catch (e: any) {
       setErr(e.message ?? "Could not load profile");
     } finally {
       setLoading(false);
     }
-  }, [schoolSlug, onThemeChange, onPhotoChange]);
+  }, [schoolSlug]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const photoPreview = useMemo(() => {
     if (!profile?.photoUrl) return "";
@@ -79,21 +92,27 @@ export const StudentPortalProfile: React.FC<{
 
   const uploadPhoto = async (file: File) => {
     setUploadingPhoto(true);
+    const timeout = window.setTimeout(() => setUploadingPhoto(false), 90_000);
     try {
       const payload = await fileToBase64Payload(file);
       const res = await api.post(`/s/${schoolSlug}/api/portal/profile/photo`, payload);
-      const url = res.data?.photoUrl ?? res.data?.profile?.photoUrl ?? null;
+      const payloadData = res.data ?? res;
+      const url = payloadData?.photoUrl ?? payloadData?.profile?.photoUrl ?? null;
       setPhotoVersion((v) => v + 1);
-      if (res.data?.profile) {
-        setProfile(res.data.profile);
+      if (payloadData?.profile) {
+        setProfile(payloadData.profile);
       } else if (profile && url) {
         setProfile({ ...profile, photoUrl: url, hasPhoto: true });
       }
-      onPhotoChange?.(url);
+      if (url != null) {
+        lastPhotoUrlRef.current = url;
+        onPhotoChangeRef.current?.(url);
+      }
       flash("Profile photo saved");
     } catch (ex: any) {
       flash(ex.message ?? "Photo upload failed", true);
     } finally {
+      window.clearTimeout(timeout);
       setUploadingPhoto(false);
     }
   };

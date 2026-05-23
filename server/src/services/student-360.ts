@@ -6,6 +6,7 @@ import {
   studentLeaveRequests, studentTransfers, studentCertificates, studentDocuments,
 } from "../db/schema";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { profilePhotoExists } from "./profile-photo";
 
 export async function getStudent360(tenantId: string, studentId: string) {
   const [student] = await db.select().from(students).where(and(eq(students.id, studentId), eq(students.tenantId, tenantId))).limit(1);
@@ -106,6 +107,7 @@ export async function getStudent360(tenantId: string, studentId: string) {
 
   return {
     student,
+    hasProfilePhoto: profilePhotoExists(tenantId, "student", studentId),
     medical: (student as any).medicalJson ?? {},
     biometricId: (student as any).biometricId ?? null,
     feeHistory,

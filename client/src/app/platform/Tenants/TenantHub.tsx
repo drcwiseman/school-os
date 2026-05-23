@@ -152,7 +152,7 @@ export const TenantHub: React.FC = () => {
         ? res.data.url
         : `${window.location.origin}${res.data.url}`;
       window.open(normalizeAppUrl(raw), "_blank", "noopener,noreferrer");
-      toast(readOnly ? "Opened school (read-only shadow)" : "Opened school as administrator", "success");
+      toast(readOnly ? "Opened school (read-only shadow)" : "Opened school ERP session", "success");
       setLoginSlug(null);
     } catch (err: any) {
       toast(err.message, "error");
