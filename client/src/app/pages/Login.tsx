@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useSchoolSlug } from "../hooks/useSchoolSlug";
-import { getTenantBootstrap, schoolPath } from "../lib/tenant-host";
+import { getTenantBootstrap } from "../lib/tenant-host";
+import { staffHomePath } from "../lib/staff-home";
 import { api } from "../api/client";
 import { Loader2, AlertCircle } from "lucide-react";
 import { PasswordInput } from "../components/PasswordInput";
@@ -34,7 +35,7 @@ export const Login: React.FC = () => {
           country: me.country,
           currency: me.currency,
         });
-        navigate(schoolPath(schoolSlug!, "dashboard"));
+        navigate(staffHomePath(schoolSlug!, me.roles || [], me.permissions || []));
       }
     } catch (err: any) {
       setError(err.message || "Invalid credentials");

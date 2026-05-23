@@ -1,5 +1,4 @@
 import { Navigate, Route } from "react-router-dom";
-import { Dashboard } from "../pages/Dashboard";
 import { StudentsLayout } from "../layout/StudentsLayout";
 import { StudentsList } from "../pages/StudentsList";
 import { StudentDetail } from "../pages/StudentDetail";
@@ -32,6 +31,7 @@ import { Settings } from "../pages/Settings";
 import { TeacherWorkspace } from "../pages/TeacherWorkspace";
 import { Curriculum } from "../pages/Curriculum";
 import { StudentCbtExam } from "../pages/StudentCbtExam";
+import { DashboardGate, StaffHomeRedirect } from "../components/StaffHomeRedirect";
 import { FeatureRoute } from "../components/FeatureRoute";
 import { MODULE_FEATURE_CODES } from "../../lib/module-features";
 import { facilitiesPath, type FacilitiesTabId } from "../../lib/facilities-nav";
@@ -46,7 +46,7 @@ function FacilitiesTabRedirect({ tab }: { tab: FacilitiesTabId }) {
 export function schoolDashboardRouteElements() {
   return (
     <>
-      <Route path="dashboard" element={<Dashboard />} />
+      <Route path="dashboard" element={<DashboardGate />} />
       <Route path="students" element={<FeatureRoute feature={MODULE_FEATURE_CODES.students}><StudentsLayout /></FeatureRoute>}>
         <Route index element={<StudentsList />} />
         <Route path="leaves" element={<StudentLeavesPage />} />
@@ -86,7 +86,7 @@ export function schoolDashboardRouteElements() {
       <Route path="help" element={<Help />} />
       <Route path="admin" element={<Admin />} />
       <Route path="settings" element={<Settings />} />
-      <Route path="*" element={<Navigate to="dashboard" replace />} />
+      <Route path="*" element={<StaffHomeRedirect />} />
     </>
   );
 }

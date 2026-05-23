@@ -15,6 +15,7 @@ import {
   type FacilitiesTabId,
 } from "../../lib/facilities-nav";
 import { schoolPath } from "../lib/tenant-host";
+import { isTeacherHomeUser } from "../lib/staff-home";
 
 const OPS_ICONS: Record<string, React.ElementType> = {
   discipline: ShieldAlert,
@@ -35,7 +36,7 @@ export const Sidebar: React.FC<{ mobileOpen?: boolean; onMobileClose?: () => voi
   mobileOpen = false,
   onMobileClose,
 }) => {
-  const { schoolSlug, logout, user, hasPermission, moduleEnabled } = useAuth();
+  const { schoolSlug, logout, user, hasPermission, moduleEnabled, roles, permissions } = useAuth();
   const location = useLocation();
 
   type NavLink = {
@@ -49,8 +50,11 @@ export const Sidebar: React.FC<{ mobileOpen?: boolean; onMobileClose?: () => voi
   };
 
   const p = (sub: string) => (schoolSlug ? schoolPath(schoolSlug, sub) : "/");
+  const teacherHome = isTeacherHomeUser(roles, permissions);
   const allLinks: NavLink[] = [
-    { name: "Dashboard", path: p("dashboard"), icon: LayoutDashboard },
+    teacherHome
+      ? { name: "My workspace", path: p("teacher"), icon: LayoutDashboard }
+      : { name: "Dashboard", path: p("dashboard"), icon: LayoutDashboard },
     { name: "Admissions", path: p("admissions"), icon: UserCog, perm: "admissions.view", feature: MODULE_FEATURE_CODES.admissions },
     { name: "Students", path: p("students"), icon: GraduationCap, perm: "students.view", feature: MODULE_FEATURE_CODES.students },
     { name: "Parents", path: p("parents"), icon: Users, perm: "students.view", feature: MODULE_FEATURE_CODES.students },
@@ -58,7 +62,9 @@ export const Sidebar: React.FC<{ mobileOpen?: boolean; onMobileClose?: () => voi
     { name: "Attendance", path: p("attendance"), icon: CalendarCheck, perm: "attendance.view", feature: MODULE_FEATURE_CODES.attendance },
     { name: "Academics", path: p("academics"), icon: BookOpen, perm: "academics.view", feature: MODULE_FEATURE_CODES.academics },
     { name: "Curriculum", path: p("curriculum"), icon: BookMarked, perm: "academics.view", feature: MODULE_FEATURE_CODES.academics },
-    { name: "Teacher workspace", path: p("teacher"), icon: School, perm: "academics.view" },
+    ...(!teacherHome
+      ? [{ name: "Teacher workspace", path: p("teacher"), icon: School, perm: "academics.view" as string | undefined }]
+      : []),
     { name: "Exams", path: p("exams"), icon: ClipboardList, perm: "exams.view", feature: MODULE_FEATURE_CODES.exams },
     { name: "Finance", path: p("finance"), icon: DollarSign, perm: "finance.view", feature: MODULE_FEATURE_CODES.finance },
     { name: "HR", path: p("hr"), icon: Briefcase, perm: "hr.view", feature: MODULE_FEATURE_CODES.hr },

@@ -156,12 +156,12 @@ export const Dashboard: React.FC = () => {
             to={hasPermission("students.view") ? `${base}/students` : undefined}
           />
           <StatCard
-            label="Staff Present"
+            label="Teaching staff"
             value={a.staffTotalToday ? a.staffTotalToday.toLocaleString() : "—"}
             icon={GraduationCap}
             gradient="bg-gradient-to-br from-blue-400 to-blue-600"
             shadow="shadow-lg shadow-blue-500/30"
-            to={`${base}/teachers`}
+            to={hasPermission("hr.view") ? `${base}/teachers` : undefined}
           />
           <StatCard
             label="Registered Parents"
@@ -177,7 +177,7 @@ export const Dashboard: React.FC = () => {
             icon={Wallet}
             gradient="bg-gradient-to-br from-rose-400 to-rose-600"
             shadow="shadow-lg shadow-rose-500/30"
-            to={`${base}/finance`}
+            to={hasPermission("finance.view") ? `${base}/finance` : undefined}
           />
         </div>
       )}
