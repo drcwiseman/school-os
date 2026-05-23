@@ -46,6 +46,7 @@ export const StudentDetail: React.FC = () => {
   const [portalForm, setPortalForm] = useState({ email: "", password: "" });
   const [portalAccount, setPortalAccount] = useState<{ email: string; status: string } | null>(null);
   const [studentPortalForm, setStudentPortalForm] = useState({ email: "", password: "" });
+  const [pendingProfile, setPendingProfile] = useState<Record<string, unknown> | null>(null);
 
   const reloadGuardians = async () => {
     const g = await api.get(`/s/${schoolSlug}/api/students/${studentId}/guardians`);
@@ -83,6 +84,7 @@ export const StudentDetail: React.FC = () => {
         setGuardians(g.data ?? []);
         setDocuments(docs.data ?? []);
         setPortalAccount(s.portalAccount ?? null);
+        setPendingProfile(s.pendingProfileJson ?? null);
         setStudentPortalForm({ email: "", password: "" });
       })
       .catch((err: any) => toast(err.message, "error"))
@@ -228,6 +230,37 @@ export const StudentDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {pendingProfile && hasPermission("students.edit") && (
+        <div className="card p-4 border border-amber-500/30 bg-amber-950/20">
+          <p className="text-sm font-semibold text-amber-200 mb-2">Pending portal bio changes</p>
+          <pre className="text-xs text-slate-300 whitespace-pre-wrap mb-3">{JSON.stringify(pendingProfile, null, 2)}</pre>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-primary text-sm"
+              onClick={async () => {
+                await api.post(`/s/${schoolSlug}/api/students/${studentId}/profile-pending/approve`);
+                toast("Bio approved and live", "success");
+                setPendingProfile(null);
+              }}
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              className="btn-ghost text-sm"
+              onClick={async () => {
+                await api.post(`/s/${schoolSlug}/api/students/${studentId}/profile-pending/reject`);
+                toast("Pending bio rejected", "success");
+                setPendingProfile(null);
+              }}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      )}
 
       {hasPermission("students.edit") ? (
         <form onSubmit={save} className="bg-slate-900/40 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-2xl p-6 space-y-6">

@@ -188,3 +188,49 @@
 .portal-shell[data-portal-theme="dark"] :where(.text-slate-500, .text-slate-600) {
   color: var(--portal-subtle);
 }
+
+.portal-shell .portal-accent-text {
+  color: var(--portal-accent);
+}
+
+.portal-shell .portal-btn-primary {
+  background-color: var(--portal-accent);
+  color: #fff;
+}
+
+.portal-shell .portal-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.portal-shell .portal-flash-success {
+  color: var(--portal-accent);
+  background-color: var(--portal-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--portal-accent) 35%, transparent);
+}
+
+.portal-shell .portal-badge {
+  background-color: var(--portal-accent);
+  color: #fff;
+}
+
+.portal-shell .portal-avatar-fallback {
+  background-color: var(--portal-accent-soft);
+  color: var(--portal-accent);
+}
+
+.portal-shell .portal-notif-highlight {
+  border-color: color-mix(in srgb, var(--portal-accent) 40%, transparent);
+  background-color: var(--portal-accent-soft);
+}
+
+.portal-shell .portal-msg-self {
+  margin-left: auto;
+  background-color: var(--portal-accent-soft);
+  color: var(--portal-fg-strong);
+  border: 1px solid color-mix(in srgb, var(--portal-accent) 25%, transparent);
+}
+
+.portal-shell .portal-theme-selected {
+  border-color: var(--portal-accent);
+  background-color: var(--portal-accent-soft);
+}

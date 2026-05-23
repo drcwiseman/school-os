@@ -27,6 +27,9 @@ import {
   transportRoutes,
   transportStops,
   users,
+  examTimetableSlots,
+  assessments,
+  marks,
 } from "../db/schema";
 import { promoteScheduledAnnouncements } from "./announcements";
 
@@ -109,16 +112,19 @@ export async function buildStudentPortalExtras(tenantId: string, studentId: stri
     eq(reportCards.published, true),
   )).orderBy(desc(reportCards.createdAt));
 
-  const cbtExams = await db.select({
+  const classIdForCbt = enrollment?.classId ?? null;
+  const cbtRows = await db.select({
     id: cbtPapers.id,
     title: cbtPapers.title,
     durationMinutes: cbtPapers.durationMinutes,
     published: cbtPapers.published,
     createdAt: cbtPapers.createdAt,
+    classId: cbtPapers.classId,
   }).from(cbtPapers).where(and(
     eq(cbtPapers.tenantId, tenantId),
     eq(cbtPapers.published, true),
   )).orderBy(desc(cbtPapers.createdAt)).limit(30);
+  const cbtExams = cbtRows.filter((p) => !p.classId || (classIdForCbt && p.classId === classIdForCbt));
 
   const loanRows = await db.select({
     id: libraryLoans.id,
@@ -299,7 +305,10 @@ export async function buildStudentPortalExtras(tenantId: string, studentId: stri
 }
 
 export async function listStudentTimetableEnriched(tenantId: string, classId: string | null) {
-  const conds = [eq(timetablePeriods.tenantId, tenantId)];
+  const conds = [
+    eq(timetablePeriods.tenantId, tenantId),
+    eq(timetables.isPublished, true),
+  ];
   if (classId) conds.push(eq(timetables.classId, classId));
 
   const periods = await db.select({
@@ -312,6 +321,8 @@ export async function listStudentTimetableEnriched(tenantId: string, classId: st
     teacherFirstName: users.firstName,
     teacherLastName: users.lastName,
     className: classes.name,
+    timetableType: timetables.timetableType,
+    timetableName: timetables.name,
   })
     .from(timetablePeriods)
     .innerJoin(timetables, eq(timetables.id, timetablePeriods.timetableId))
@@ -320,11 +331,91 @@ export async function listStudentTimetableEnriched(tenantId: string, classId: st
     .leftJoin(classes, eq(classes.id, timetables.classId))
     .where(and(...conds))
     .orderBy(timetablePeriods.dayOfWeek, timetablePeriods.periodNo)
-    .limit(80);
+    .limit(120);
 
   return periods.map((p) => ({
     ...p,
+    type: p.timetableType ?? "teaching",
     teacherName: [p.teacherFirstName, p.teacherLastName].filter(Boolean).join(" ") || null,
     dayLabel: DAY_LABELS[p.dayOfWeek] ?? `Day ${p.dayOfWeek}`,
   }));
+}
+
+export async function listStudentFullTimetable(tenantId: string, classId: string | null) {
+  const teaching = await listStudentTimetableEnriched(tenantId, classId);
+  if (!classId) return teaching;
+
+  const examRows = await db.select({
+    id: examTimetableSlots.id,
+    examDate: examTimetableSlots.examDate,
+    startTime: examTimetableSlots.startTime,
+    endTime: examTimetableSlots.endTime,
+    room: examTimetableSlots.room,
+    subjectName: subjects.name,
+    assessmentType: assessments.type,
+    assessmentTitle: assessments.name,
+  })
+    .from(examTimetableSlots)
+    .leftJoin(subjects, eq(subjects.id, examTimetableSlots.subjectId))
+    .leftJoin(assessments, eq(assessments.id, examTimetableSlots.assessmentId))
+    .where(and(
+      eq(examTimetableSlots.tenantId, tenantId),
+      eq(examTimetableSlots.classId, classId),
+      eq(examTimetableSlots.published, true),
+    ))
+    .orderBy(examTimetableSlots.examDate, examTimetableSlots.startTime)
+    .limit(80);
+
+  const examSlots = examRows.map((e) => {
+    const d = e.examDate ? new Date(e.examDate) : new Date();
+    const dayOfWeek = d.getDay();
+    const type = (e.assessmentType ?? "exam").toLowerCase();
+    const slotType = type.includes("mock") ? "mock" : type.includes("test") ? "test" : "exam";
+    return {
+      id: e.id,
+      type: slotType,
+      dayOfWeek,
+      dayLabel: DAY_LABELS[dayOfWeek] ?? `Day ${dayOfWeek}`,
+      date: d.toISOString().slice(0, 10),
+      periodNo: null as number | null,
+      startTime: e.startTime,
+      endTime: e.endTime,
+      subjectName: e.subjectName ?? e.assessmentTitle ?? "Exam",
+      teacherName: null,
+      room: e.room,
+      timetableName: `${slotType} timetable`,
+    };
+  });
+
+  return [...teaching, ...examSlots].sort((a, b) => {
+    const dayDiff = (a.dayOfWeek ?? 0) - (b.dayOfWeek ?? 0);
+    if (dayDiff !== 0) return dayDiff;
+    return String(a.startTime ?? "").localeCompare(String(b.startTime ?? ""));
+  });
+}
+
+export async function listStudentPublishedResults(tenantId: string, studentId: string) {
+  const rows = await db.select({
+    id: marks.id,
+    score: marks.score,
+    grade: marks.grade,
+    remarks: marks.remarks,
+    assessmentTitle: assessments.name,
+    assessmentType: assessments.type,
+    subjectName: subjects.name,
+    updatedAt: marks.updatedAt,
+  })
+    .from(marks)
+    .innerJoin(assessments, eq(assessments.id, marks.assessmentId))
+    .leftJoin(subjects, eq(subjects.id, assessments.subjectId))
+    .where(and(
+      eq(marks.tenantId, tenantId),
+      eq(marks.studentId, studentId),
+      eq(marks.status, "published"),
+      isNull(marks.deletedAt),
+    ))
+    .orderBy(desc(marks.updatedAt))
+    .limit(50);
+
+  return rows;
 }

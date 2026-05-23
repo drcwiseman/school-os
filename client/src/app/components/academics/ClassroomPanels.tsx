@@ -112,8 +112,16 @@ export const TimetableBuilderPanel: React.FC = () => {
   const [selected, setSelected] = useState("");
   const [periods, setPeriods] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
-  const [periodForm, setPeriodForm] = useState({ dayOfWeek: "1", periodNo: "1", subjectId: "", teacherUserId: "", roomId: "" });
-  const [newTt, setNewTt] = useState({ name: "", classId: "" });
+  const [periodForm, setPeriodForm] = useState({ dayOfWeek: "1", periodNo: "1", subjectId: "", teacherUserId: "", roomId: "", startTime: "", endTime: "" });
+  const [newTt, setNewTt] = useState({ name: "", classId: "", timetableType: "teaching" as string });
+  const [genRules, setGenRules] = useState({
+    periodsPerDay: "8",
+    startTime: "08:00",
+    periodDurationMinutes: "40",
+    subjectId: "",
+    teacherUserId: "",
+    periodsPerWeek: "5",
+  });
 
   useEffect(() => {
     Promise.all([
@@ -129,9 +137,12 @@ export const TimetableBuilderPanel: React.FC = () => {
     e.preventDefault();
     if (!newTt.classId || !newTt.name) return;
     try {
-      const res = await api.post(`/s/${schoolSlug}/api/academics/timetables`, newTt);
+      const res = await api.post(`/s/${schoolSlug}/api/academics/timetables`, {
+        ...newTt,
+        timetableType: newTt.timetableType,
+      });
       toast("Timetable created", "success");
-      setNewTt({ name: "", classId: "" });
+      setNewTt({ name: "", classId: "", timetableType: "teaching" });
       const list = await api.get(`/s/${schoolSlug}/api/academics/timetables`);
       setTimetables(list.data ?? []);
       if (res.data?.id) loadPeriods(res.data.id);
@@ -156,9 +167,39 @@ export const TimetableBuilderPanel: React.FC = () => {
       subjectId: periodForm.subjectId || undefined,
       teacherUserId: periodForm.teacherUserId || undefined,
       roomId: periodForm.roomId || undefined,
+      startTime: periodForm.startTime || undefined,
+      endTime: periodForm.endTime || undefined,
     });
     toast("Period added", "success");
     loadPeriods(selected);
+  };
+
+  const publishTimetable = async (published: boolean) => {
+    if (!selected) return;
+    await api.patch(`/s/${schoolSlug}/api/academics/timetables/${selected}/publish`, { published });
+    toast(published ? "Timetable published for students" : "Timetable unpublished", "success");
+    loadPeriods(selected);
+  };
+
+  const autoGenerate = async () => {
+    if (!selected || !genRules.subjectId) return;
+    try {
+      const res = await api.post(`/s/${schoolSlug}/api/academics/timetables/${selected}/generate`, {
+        periodsPerDay: Number(genRules.periodsPerDay),
+        startTime: genRules.startTime,
+        periodDurationMinutes: Number(genRules.periodDurationMinutes),
+        subjects: [{
+          subjectId: genRules.subjectId,
+          teacherUserId: genRules.teacherUserId || undefined,
+          periodsPerWeek: Number(genRules.periodsPerWeek),
+        }],
+      });
+      const n = res.data?.conflicts?.length ?? 0;
+      toast(n ? `Generated with ${n} conflict(s)` : "Timetable generated", n ? "error" : "success");
+      loadPeriods(selected);
+    } catch (err: any) {
+      toast(err.message, "error");
+    }
   };
 
   return (
@@ -177,6 +218,15 @@ export const TimetableBuilderPanel: React.FC = () => {
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className="label text-xs">Type</label>
+            <select className="input" value={newTt.timetableType} onChange={(e) => setNewTt({ ...newTt, timetableType: e.target.value })}>
+              <option value="teaching">Teaching</option>
+              <option value="exam">Exam</option>
+              <option value="mock">Mock</option>
+              <option value="test">Test</option>
+            </select>
+          </div>
           <button type="submit" className="btn-primary text-sm">Create</button>
         </form>
         <select className="input" value={selected} onChange={(e) => e.target.value && loadPeriods(e.target.value)}>
@@ -184,11 +234,24 @@ export const TimetableBuilderPanel: React.FC = () => {
           {timetables.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
         {selected && (
-          <form onSubmit={addPeriod} className="space-y-2">
-            <input className="input" placeholder="Day 0-6" value={periodForm.dayOfWeek} onChange={(e) => setPeriodForm({ ...periodForm, dayOfWeek: e.target.value })} />
-            <input className="input" placeholder="Period #" value={periodForm.periodNo} onChange={(e) => setPeriodForm({ ...periodForm, periodNo: e.target.value })} />
-            <button type="submit" className="btn-primary">Add period</button>
-          </form>
+          <>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-primary text-sm" onClick={() => publishTimetable(true)}>Publish</button>
+              <button type="button" className="btn-ghost text-sm" onClick={() => publishTimetable(false)}>Unpublish</button>
+            </div>
+            <form onSubmit={addPeriod} className="space-y-2">
+              <input className="input" placeholder="Day 0-6" value={periodForm.dayOfWeek} onChange={(e) => setPeriodForm({ ...periodForm, dayOfWeek: e.target.value })} />
+              <input className="input" placeholder="Period #" value={periodForm.periodNo} onChange={(e) => setPeriodForm({ ...periodForm, periodNo: e.target.value })} />
+              <input className="input" placeholder="Start HH:MM" value={periodForm.startTime ?? ""} onChange={(e) => setPeriodForm({ ...periodForm, startTime: e.target.value })} />
+              <input className="input" placeholder="End HH:MM" value={periodForm.endTime ?? ""} onChange={(e) => setPeriodForm({ ...periodForm, endTime: e.target.value })} />
+              <button type="submit" className="btn-primary">Add period</button>
+            </form>
+            <div className="border-t border-slate-700 pt-3 space-y-2">
+              <p className="text-xs text-slate-400 font-medium">Auto-generate (admin)</p>
+              <input className="input" placeholder="Subject ID" value={genRules.subjectId} onChange={(e) => setGenRules({ ...genRules, subjectId: e.target.value })} />
+              <button type="button" className="btn-ghost text-sm w-full" onClick={autoGenerate}>Generate from rules</button>
+            </div>
+          </>
         )}
         {conflicts.length > 0 && <p className="text-amber-400 text-sm">{conflicts.length} conflict(s) detected</p>}
       </div>

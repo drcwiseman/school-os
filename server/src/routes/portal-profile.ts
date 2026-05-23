@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import {
-  guardians, parentAccounts, studentGuardians, students,
+  guardians, parentAccounts, studentAccounts, studentGuardians, students,
 } from "../db/schema";
 import { requirePortalAuth, hashPassword, verifyPassword } from "../middleware/portal-auth";
 import { validate } from "../utils/validate";
@@ -121,7 +121,10 @@ async function loadParentProfile(tenantId: string, account: typeof parentAccount
       phone: guardian.phone,
       email: guardian.email,
       address: guardian.address,
+      photoUrl: guardian.photoUrl ?? null,
     },
+    photoUrl: guardian.photoUrl ?? null,
+    hasPhoto: Boolean(guardian.photoUrl),
     preferences: {
       theme: prefs.theme === "light" ? "light" as const : "dark" as const,
     },
@@ -130,35 +133,138 @@ async function loadParentProfile(tenantId: string, account: typeof parentAccount
   };
 }
 
+async function loadStudentProfile(tenantId: string, slug: string, account: typeof studentAccounts.$inferSelect) {
+  const [student] = await db.select().from(students).where(and(
+    eq(students.id, account.studentId),
+    eq(students.tenantId, tenantId),
+  )).limit(1);
+  if (!student) throw new NotFoundError("Student record not found");
+
+  const medical = (student.medicalJson ?? {}) as {
+    emergencyContact?: string;
+    emergencyPhone?: string;
+  };
+  const prefs = (account.preferencesJson ?? {}) as { theme?: "light" | "dark" };
+
+  return {
+    account: {
+      id: account.id,
+      email: account.email,
+      status: account.status,
+    },
+    student: {
+      id: student.id,
+      admissionNumber: student.admissionNumber,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      middleName: student.middleName,
+      dob: student.dob,
+      gender: student.gender,
+      nationality: student.nationality,
+      religion: student.religion,
+      bloodGroup: student.bloodGroup,
+      phone: student.phone,
+      email: student.email,
+      address: student.address,
+      shortBio: student.shortBio,
+      status: student.status,
+      photoUrl: student.photoUrl ?? null,
+      emergencyContact: medical.emergencyContact ?? null,
+      emergencyPhone: medical.emergencyPhone ?? null,
+    },
+    preferences: {
+      theme: prefs.theme === "light" ? "light" as const : "dark" as const,
+    },
+    photoUrl: student.photoUrl ?? null,
+    hasPhoto: Boolean(student.photoUrl),
+    pendingProfile: student.pendingProfileJson ?? null,
+    profilePendingApproval: Boolean(student.pendingProfileJson),
+  };
+}
+
 portalProfileRouter.get("/profile", async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const principal = requireParent(req);
-    const data = await loadParentProfile(tenant.id, principal.account);
+    const principal = (req as any).portalPrincipal;
+    if (principal.kind === "parent") {
+      const data = await loadParentProfile(tenant.id, principal.account);
+      return res.json({ success: true, data });
+    }
+    const data = await loadStudentProfile(tenant.id, tenant.slug, principal.account);
     res.json({ success: true, data });
   } catch (e) { next(e); }
 });
 
 portalProfileRouter.patch("/profile",
-  validate({ body: guardianBodySchema.partial() }),
+  validate({
+    body: guardianBodySchema.extend({
+      shortBio: z.string().max(1000).optional().or(z.literal("")),
+      emergencyContact: z.string().max(120).optional().or(z.literal("")),
+      emergencyPhone: z.string().max(40).optional().or(z.literal("")),
+    }).partial(),
+  }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const principal = requireParent(req);
-      const patch: Record<string, unknown> = { ...req.body };
-      if (patch.email === "") patch.email = null;
-      if (patch.phone === "") patch.phone = null;
-      if (patch.address === "") patch.address = null;
-      if (!Object.keys(patch).length) throw new BadRequestError("No fields to update");
+      const principal = (req as any).portalPrincipal;
 
-      const [updated] = await db.update(guardians).set(patch).where(and(
-        eq(guardians.id, principal.account.guardianId),
-        eq(guardians.tenantId, tenant.id),
-      )).returning();
-      if (!updated) throw new NotFoundError("Guardian profile not found");
+      if (principal.kind === "parent") {
+        const patch: Record<string, unknown> = {};
+        for (const key of ["firstName", "lastName", "relationship", "phone", "email", "address"] as const) {
+          if (req.body[key] !== undefined) patch[key] = req.body[key];
+        }
+        if (patch.email === "") patch.email = null;
+        if (patch.phone === "") patch.phone = null;
+        if (patch.address === "") patch.address = null;
+        if (!Object.keys(patch).length) throw new BadRequestError("No fields to update");
 
-      const data = await loadParentProfile(tenant.id, principal.account);
-      res.json({ success: true, data });
+        const [updated] = await db.update(guardians).set(patch).where(and(
+          eq(guardians.id, principal.account.guardianId),
+          eq(guardians.tenantId, tenant.id),
+        )).returning();
+        if (!updated) throw new NotFoundError("Guardian profile not found");
+
+        const data = await loadParentProfile(tenant.id, principal.account);
+        return res.json({ success: true, data });
+      }
+
+      const { emergencyContact, emergencyPhone, ...studentPatch } = req.body as {
+        emergencyContact?: string;
+        emergencyPhone?: string;
+        phone?: string;
+        email?: string;
+        address?: string;
+        shortBio?: string;
+      };
+
+      const [existing] = await db.select().from(students).where(and(
+        eq(students.id, principal.account.studentId),
+        eq(students.tenantId, tenant.id),
+      )).limit(1);
+      if (!existing) throw new NotFoundError("Student not found");
+
+      const hasBioFields = ["phone", "email", "address", "shortBio", "emergencyContact", "emergencyPhone"]
+        .some((k) => (req.body as Record<string, unknown>)[k] !== undefined);
+
+      if (hasBioFields) {
+        const { submitStudentPendingProfile } = await import("../services/student-profile-pending");
+        await submitStudentPendingProfile(tenant.id, principal.account.studentId, {
+          phone: studentPatch.phone,
+          email: studentPatch.email,
+          address: studentPatch.address,
+          shortBio: studentPatch.shortBio,
+          emergencyContact,
+          emergencyPhone,
+        });
+        const data = await loadStudentProfile(tenant.id, tenant.slug, principal.account);
+        return res.json({
+          success: true,
+          data,
+          message: "Bio changes submitted for admin approval",
+        });
+      }
+
+      throw new BadRequestError("No fields to update");
     } catch (e) { next(e); }
   },
 );
@@ -168,18 +274,31 @@ portalProfileRouter.patch("/profile/preferences",
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const principal = requireParent(req);
+      const principal = (req as any).portalPrincipal;
       const prefs = { theme: req.body.theme };
-      const [updated] = await db.update(parentAccounts).set({
+
+      if (principal.kind === "parent") {
+        const [updated] = await db.update(parentAccounts).set({
+          preferencesJson: prefs,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(parentAccounts.id, principal.account.id),
+          eq(parentAccounts.tenantId, tenant.id),
+        )).returning();
+        if (!updated) throw new NotFoundError("Account not found");
+        const data = await loadParentProfile(tenant.id, updated);
+        return res.json({ success: true, data });
+      }
+
+      const [updated] = await db.update(studentAccounts).set({
         preferencesJson: prefs,
         updatedAt: new Date(),
       }).where(and(
-        eq(parentAccounts.id, principal.account.id),
-        eq(parentAccounts.tenantId, tenant.id),
+        eq(studentAccounts.id, principal.account.id),
+        eq(studentAccounts.tenantId, tenant.id),
       )).returning();
       if (!updated) throw new NotFoundError("Account not found");
-
-      const data = await loadParentProfile(tenant.id, updated);
+      const data = await loadStudentProfile(tenant.id, tenant.slug, updated);
       res.json({ success: true, data });
     } catch (e) { next(e); }
   },
@@ -195,24 +314,38 @@ portalProfileRouter.patch("/profile/email",
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const principal = requireParent(req);
+      const principal = (req as any).portalPrincipal;
       const ok = await verifyPassword(req.body.currentPassword, principal.account.passwordHash);
       if (!ok) throw new UnauthorizedError("Current password is incorrect");
 
-      const [existing] = await db.select().from(parentAccounts).where(and(
-        eq(parentAccounts.tenantId, tenant.id),
-        eq(parentAccounts.email, req.body.email),
-      )).limit(1);
-      if (existing && existing.id !== principal.account.id) {
-        throw new ConflictError("Another parent account already uses this email");
+      if (principal.kind === "parent") {
+        const [existing] = await db.select().from(parentAccounts).where(and(
+          eq(parentAccounts.tenantId, tenant.id),
+          eq(parentAccounts.email, req.body.email),
+        )).limit(1);
+        if (existing && existing.id !== principal.account.id) {
+          throw new ConflictError("Another parent account already uses this email");
+        }
+        const [updated] = await db.update(parentAccounts).set({
+          email: req.body.email,
+          updatedAt: new Date(),
+        }).where(eq(parentAccounts.id, principal.account.id)).returning();
+        const data = await loadParentProfile(tenant.id, updated);
+        return res.json({ success: true, data });
       }
 
-      const [updated] = await db.update(parentAccounts).set({
+      const [existing] = await db.select().from(studentAccounts).where(and(
+        eq(studentAccounts.tenantId, tenant.id),
+        eq(studentAccounts.email, req.body.email),
+      )).limit(1);
+      if (existing && existing.id !== principal.account.id) {
+        throw new ConflictError("Another student account already uses this email");
+      }
+      const [updated] = await db.update(studentAccounts).set({
         email: req.body.email,
         updatedAt: new Date(),
-      }).where(eq(parentAccounts.id, principal.account.id)).returning();
-
-      const data = await loadParentProfile(tenant.id, updated);
+      }).where(eq(studentAccounts.id, principal.account.id)).returning();
+      const data = await loadStudentProfile(tenant.id, tenant.slug, updated);
       res.json({ success: true, data });
     } catch (e) { next(e); }
   },
@@ -227,13 +360,18 @@ portalProfileRouter.patch("/profile/password",
   }),
   async (req, res, next) => {
     try {
-      const principal = requireParent(req);
+      const principal = (req as any).portalPrincipal;
       const ok = await verifyPassword(req.body.currentPassword, principal.account.passwordHash);
       if (!ok) throw new UnauthorizedError("Current password is incorrect");
 
       const passwordHash = await hashPassword(req.body.newPassword);
-      await db.update(parentAccounts).set({ passwordHash, updatedAt: new Date() })
-        .where(eq(parentAccounts.id, principal.account.id));
+      if (principal.kind === "parent") {
+        await db.update(parentAccounts).set({ passwordHash, updatedAt: new Date() })
+          .where(eq(parentAccounts.id, principal.account.id));
+      } else {
+        await db.update(studentAccounts).set({ passwordHash, updatedAt: new Date() })
+          .where(eq(studentAccounts.id, principal.account.id));
+      }
       res.json({ success: true, message: "Password updated" });
     } catch (e) { next(e); }
   },
@@ -349,5 +487,85 @@ portalProfileRouter.delete("/profile/contacts/:guardianId", async (req, res, nex
 
     const data = await loadParentProfile(tenant.id, principal.account);
     res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
+
+portalProfileRouter.post("/profile/photo",
+  validate({
+    body: z.object({
+      fileName: z.string().min(1),
+      contentBase64: z.string().min(1),
+      mimeType: z.string().optional(),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const principal = (req as any).portalPrincipal;
+      const { validateUpload } = await import("../middleware/upload");
+      const { safeName, size } = validateUpload(req.body.fileName, req.body.mimeType, req.body.contentBase64);
+      const buffer = Buffer.from(req.body.contentBase64, "base64");
+      if (buffer.length !== size) throw new ConflictError("Invalid file payload");
+
+      const {
+        writeProfilePhoto,
+        profilePhotoApiPath,
+      } = await import("../services/profile-photo");
+      const apiUrl = `${profilePhotoApiPath(tenant.slug, "portal")}?v=${Date.now()}`;
+
+      if (principal.kind === "student") {
+        writeProfilePhoto(tenant.id, "student", principal.account.studentId, buffer);
+        await db.update(students).set({ photoUrl: apiUrl, updatedAt: new Date() }).where(and(
+          eq(students.id, principal.account.studentId),
+          eq(students.tenantId, tenant.id),
+        ));
+        const data = await loadStudentProfile(tenant.id, tenant.slug, principal.account);
+        return res.json({ success: true, data: { photoUrl: apiUrl, profile: data } });
+      }
+
+      writeProfilePhoto(tenant.id, "guardian", principal.account.guardianId, buffer);
+      await db.update(guardians).set({ photoUrl: apiUrl }).where(and(
+        eq(guardians.id, principal.account.guardianId),
+        eq(guardians.tenantId, tenant.id),
+      ));
+      const data = await loadParentProfile(tenant.id, principal.account);
+      res.json({ success: true, data: { photoUrl: apiUrl, profile: data } });
+    } catch (e) { next(e); }
+  },
+);
+
+portalProfileRouter.delete("/profile/photo", async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    if (principal.kind === "student") {
+      throw new ForbiddenError("Students must keep a profile photo on file");
+    }
+    const fs = await import("fs");
+    const { profilePhotoDiskPath } = await import("../services/profile-photo");
+    const p = profilePhotoDiskPath(tenant.id, "guardian", principal.account.guardianId);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    await db.update(guardians).set({ photoUrl: null }).where(and(
+      eq(guardians.id, principal.account.guardianId),
+      eq(guardians.tenantId, tenant.id),
+    ));
+    const data = await loadParentProfile(tenant.id, principal.account);
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
+
+portalProfileRouter.get("/profile/photo", async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    const { readProfilePhotoFile } = await import("../services/profile-photo");
+    if (principal.kind === "student") {
+      const abs = readProfilePhotoFile(tenant.id, "student", principal.account.studentId);
+      if (!abs) throw new NotFoundError("Photo not uploaded");
+      return res.sendFile(abs);
+    }
+    const abs = readProfilePhotoFile(tenant.id, "guardian", principal.account.guardianId);
+    if (!abs) throw new NotFoundError("Photo not uploaded");
+    res.sendFile(abs);
   } catch (e) { next(e); }
 });

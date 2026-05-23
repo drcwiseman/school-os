@@ -46,16 +46,14 @@ router.get("/me", requirePortalAuth, async (req, res, next) => {
     const principal = (req as any).portalPrincipal;
     const prefs = principal.kind === "parent"
       ? ((principal.account.preferencesJson ?? {}) as { theme?: "light" | "dark" })
-      : {};
+      : ((principal.account.preferencesJson ?? {}) as { theme?: "light" | "dark" });
     res.json({
       success: true,
       account: {
         id: principal.account.id,
         email: principal.account.email,
         type: principal.kind,
-        preferences: principal.kind === "parent"
-          ? { theme: prefs.theme === "light" ? "light" : "dark" }
-          : undefined,
+        preferences: { theme: prefs.theme === "light" ? "light" : "dark" },
       },
     });
   } catch (e) { next(e); }
@@ -466,24 +464,75 @@ router.get("/messages/:studentId", requirePortalAuth, async (req, res, next) => 
 });
 
 router.post("/messages", requirePortalAuth,
-  validate({ body: z.object({ studentId: z.string().uuid(), body: z.string().min(1) }) }),
+  validate({ body: z.object({
+    studentId: z.string().uuid().optional(),
+    recipientUserId: z.string().uuid().optional(),
+    body: z.string().min(1),
+  }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
       const principal = (req as any).portalPrincipal;
-      if (principal.kind !== "parent") throw new ForbiddenError("Only parents can send messages");
-      await assertPortalCanAccessStudent(principal, tenant.id, req.body.studentId);
-      const [row] = await db.insert(portalMessages).values({
-        tenantId: tenant.id,
-        studentId: req.body.studentId,
-        senderType: "parent",
-        parentAccountId: principal.account.id,
-        body: req.body.body,
-      }).returning();
-      res.status(201).json({ success: true, data: row });
+      const recipientUserId = req.body.recipientUserId as string | undefined;
+
+      if (principal.kind === "parent") {
+        if (!req.body.studentId) throw new BadRequestError("studentId is required");
+        await assertPortalCanAccessStudent(principal, tenant.id, req.body.studentId);
+        const { assertParentCanMessageRecipient } = await import("../services/portal-messaging");
+        await assertParentCanMessageRecipient(tenant.id, principal.account.guardianId, req.body.studentId, recipientUserId);
+        const [row] = await db.insert(portalMessages).values({
+          tenantId: tenant.id,
+          studentId: req.body.studentId,
+          senderType: "parent",
+          parentAccountId: principal.account.id,
+          recipientUserId: recipientUserId ?? null,
+          body: req.body.body,
+        }).returning();
+        return res.status(201).json({ success: true, data: row });
+      }
+
+      if (principal.kind === "student") {
+        const studentId = principal.account.studentId;
+        if (!recipientUserId) throw new BadRequestError("Choose who to send this message to");
+        const { assertStudentCanMessageRecipient } = await import("../services/portal-messaging");
+        await assertStudentCanMessageRecipient(tenant.id, studentId, recipientUserId);
+        const [row] = await db.insert(portalMessages).values({
+          tenantId: tenant.id,
+          studentId,
+          senderType: "student",
+          recipientUserId,
+          body: req.body.body,
+        }).returning();
+        return res.status(201).json({ success: true, data: row });
+      }
+
+      throw new ForbiddenError("Invalid portal account");
     } catch (e) { next(e); }
   },
 );
+
+router.get("/messages/recipients", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    const { getStudentMessageRecipients } = await import("../services/portal-messaging");
+
+    if (principal.kind === "student") {
+      const data = await getStudentMessageRecipients(tenant.id, principal.account.studentId);
+      return res.json({ success: true, data: [...data.teachers, ...data.admins] });
+    }
+
+    if (principal.kind === "parent") {
+      const studentId = String(req.query.studentId ?? "");
+      if (!studentId) throw new BadRequestError("studentId is required");
+      await assertPortalCanAccessStudent(principal, tenant.id, studentId);
+      const data = await getStudentMessageRecipients(tenant.id, studentId);
+      return res.json({ success: true, data: [...data.teachers, ...data.admins] });
+    }
+
+    throw new ForbiddenError("Students and parents only");
+  } catch (e) { next(e); }
+});
 
 router.get("/pdf/receipt/:id", requirePortalAuth, async (req, res, next) => {
   try {
@@ -556,6 +605,17 @@ router.get("/cbt/available", requirePortalAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get("/student/results", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
+    if (principal.kind !== "student") throw new ForbiddenError("Students only");
+    const { listStudentPublishedResults } = await import("../services/portal-student-data");
+    const rows = await listStudentPublishedResults(tenant.id, principal.account.studentId);
+    res.json({ success: true, data: rows });
+  } catch (e) { next(e); }
+});
+
 router.get("/student/timetable", requirePortalAuth, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
@@ -573,8 +633,8 @@ router.get("/student/timetable", requirePortalAuth, async (req, res, next) => {
       ))
       .orderBy(desc(studentClassHistory.fromDate))
       .limit(1);
-    const { listStudentTimetableEnriched } = await import("../services/portal-student-data");
-    const periods = await listStudentTimetableEnriched(tenant.id, enrollment?.classId ?? null);
+    const { listStudentFullTimetable } = await import("../services/portal-student-data");
+    const periods = await listStudentFullTimetable(tenant.id, enrollment?.classId ?? null);
     res.json({ success: true, data: periods });
   } catch (e) { next(e); }
 });
@@ -582,7 +642,14 @@ router.get("/student/timetable", requirePortalAuth, async (req, res, next) => {
 router.get("/student/materials", requirePortalAuth, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    res.json({ success: true, data: await db.select().from(studentMaterials).where(eq(studentMaterials.tenantId, tenant.id)).limit(50) });
+    const principal = (req as any).portalPrincipal;
+    if (principal.kind !== "student") throw new ForbiddenError("Students only");
+    const { listStudentMaterials } = await import("../services/portal-student-academics");
+    const data = await listStudentMaterials(tenant.id, principal.account.studentId, {
+      folder: typeof req.query.folder === "string" ? req.query.folder : undefined,
+      subjectId: typeof req.query.subjectId === "string" ? req.query.subjectId : undefined,
+    });
+    res.json({ success: true, data: data.materials, folders: data.folders });
   } catch (e) { next(e); }
 });
 
@@ -626,63 +693,259 @@ router.post("/student/online-classes/:id/join", requirePortalAuth, async (req, r
   } catch (e) { next(e); }
 });
 
+function portalStudentId(req: any): string {
+  const principal = req.portalPrincipal;
+  if (principal?.kind !== "student") throw new ForbiddenError("Students only");
+  return principal.account.studentId;
+}
+
+router.get("/student/assignments", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { listStudentAssignmentsEnriched } = await import("../services/portal-student-academics");
+    res.json({ success: true, data: await listStudentAssignmentsEnriched(tenant.id, portalStudentId(req)) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/assignments/:id", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getStudentAssignmentDetail } = await import("../services/portal-student-academics");
+    res.json({ success: true, data: await getStudentAssignmentDetail(tenant.id, portalStudentId(req), req.params.id) });
+  } catch (e) { next(e); }
+});
+
 router.post("/student/assignments/:id/submit", requirePortalAuth,
-  validate({ body: z.object({ content: z.string().min(1) }) }),
+  validate({ body: z.object({ content: z.string().min(1), draft: z.boolean().optional() }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const principal = (req as any).portalPrincipal;
-      if (principal.kind !== "student") throw new ForbiddenError("Students only");
-      const studentId = principal.account.studentId;
-      const [a] = await db.select().from(assignments).where(and(
-        eq(assignments.id, req.params.id),
-        eq(assignments.tenantId, tenant.id),
-      )).limit(1);
-      if (!a) throw new NotFoundError("Assignment not found");
-      const [ex] = await db.select().from(assignmentSubmissions).where(and(
-        eq(assignmentSubmissions.assignmentId, a.id),
-        eq(assignmentSubmissions.studentId, studentId),
-      )).limit(1);
-      if (ex) {
-        const [row] = await db.update(assignmentSubmissions).set({
-          content: req.body.content,
-          submittedAt: new Date(),
-          status: "submitted",
-        }).where(eq(assignmentSubmissions.id, ex.id)).returning();
-        return res.json({ success: true, data: row });
-      }
-      const [row] = await db.insert(assignmentSubmissions).values({
-        tenantId: tenant.id,
-        assignmentId: a.id,
-        studentId,
-        content: req.body.content,
-        status: "submitted",
-      }).returning();
+      const { upsertAssignmentSubmission } = await import("../services/portal-student-academics");
+      const row = await upsertAssignmentSubmission(
+        tenant.id,
+        portalStudentId(req),
+        req.params.id,
+        req.body.content,
+        req.body.draft === true,
+      );
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
   },
 );
 
+router.patch("/student/assignments/:id/submission", requirePortalAuth,
+  validate({ body: z.object({ content: z.string().min(1), draft: z.boolean().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const { upsertAssignmentSubmission } = await import("../services/portal-student-academics");
+      const row = await upsertAssignmentSubmission(
+        tenant.id,
+        portalStudentId(req),
+        req.params.id,
+        req.body.content,
+        req.body.draft === true,
+      );
+      res.json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/student/assignments/:id/submission", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { deleteAssignmentSubmission } = await import("../services/portal-student-academics");
+    await deleteAssignmentSubmission(tenant.id, portalStudentId(req), req.params.id);
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/cbt/papers", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { listStudentCbtPapers } = await import("../services/portal-student-academics");
+    res.json({ success: true, data: await listStudentCbtPapers(tenant.id, portalStudentId(req)) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/cbt/sessions", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { listStudentCbtSessions } = await import("../services/portal-student-academics");
+    res.json({ success: true, data: await listStudentCbtSessions(tenant.id, portalStudentId(req)) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/cbt/sessions/:id", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getStudentCbtSessionDetail } = await import("../services/portal-student-academics");
+    res.json({ success: true, data: await getStudentCbtSessionDetail(tenant.id, portalStudentId(req), req.params.id) });
+  } catch (e) { next(e); }
+});
+
+router.post("/student/cbt/sessions/start", requirePortalAuth,
+  validate({ body: z.object({ paperId: z.string().uuid() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const { startStudentCbtSession } = await import("../services/portal-student-academics");
+      const data = await startStudentCbtSession(tenant.id, portalStudentId(req), req.body.paperId, {
+        ipAddress: req.ip,
+        deviceFingerprint: req.headers["x-device-fingerprint"] as string | undefined,
+      });
+      res.status(201).json({ success: true, data });
+    } catch (e) { next(e); }
+  },
+);
+
+router.post("/student/cbt/sessions/:id/answer", requirePortalAuth,
+  validate({ body: z.object({ questionId: z.string().uuid(), answer: z.union([z.number(), z.string(), z.record(z.unknown())]) }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const { saveStudentCbtAnswer } = await import("../services/portal-student-academics");
+      const result = await saveStudentCbtAnswer(
+        tenant.id,
+        portalStudentId(req),
+        req.params.id,
+        req.body.questionId,
+        req.body.answer,
+      );
+      res.json({ success: true, data: result });
+    } catch (e) { next(e); }
+  },
+);
+
+router.post("/student/cbt/sessions/:id/submit", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { submitStudentCbtSession } = await import("../services/portal-student-academics");
+    const row = await submitStudentCbtSession(tenant.id, portalStudentId(req), req.params.id);
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/library", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getStudentLibraryOverview } = await import("../services/portal-student-academics");
+    res.json({ success: true, data: await getStudentLibraryOverview(tenant.id, portalStudentId(req)) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/library/catalog", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const q = String(req.query.q ?? "").trim();
+    if (!q) return res.json({ success: true, data: { books: [], ebooks: [] } });
+    const { searchLibraryCatalog } = await import("../services/portal-student-academics");
+    res.json({ success: true, data: await searchLibraryCatalog(tenant.id, q) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/library/reservations", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getStudentLibraryOverview } = await import("../services/portal-student-academics");
+    const overview = await getStudentLibraryOverview(tenant.id, portalStudentId(req));
+    res.json({ success: true, data: overview.reservations });
+  } catch (e) { next(e); }
+});
+
+router.post("/student/library/reservations", requirePortalAuth,
+  validate({ body: z.object({ bookId: z.string().uuid().optional(), ebookId: z.string().uuid().optional() }) }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const { createLibraryReservation } = await import("../services/portal-student-academics");
+      const row = await createLibraryReservation(tenant.id, portalStudentId(req), req.body.bookId, req.body.ebookId);
+      res.status(201).json({ success: true, data: row });
+    } catch (e) { next(e); }
+  },
+);
+
+router.delete("/student/library/reservations/:id", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { cancelLibraryReservation } = await import("../services/portal-student-academics");
+    await cancelLibraryReservation(tenant.id, portalStudentId(req), req.params.id);
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
 router.get("/student/events", requirePortalAuth, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const now = new Date();
-    const rows = await db.select().from(schoolEvents).where(and(
-      eq(schoolEvents.tenantId, tenant.id),
-      eq(schoolEvents.published, true),
-    )).orderBy(schoolEvents.startsAt).limit(30);
-    res.json({ success: true, data: rows.filter((e) => !e.endsAt || e.endsAt >= now) });
+    const { listStudentSchoolEvents } = await import("../services/portal-student-calendar");
+    res.json({ success: true, data: await listStudentSchoolEvents(tenant.id, { filter: "upcoming", limit: 30 }) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/calendar", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getStudentCalendarOverview } = await import("../services/portal-student-calendar");
+    res.json({ success: true, data: await getStudentCalendarOverview(tenant.id) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/calendar/events", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const filter = (req.query.filter as "upcoming" | "past" | "all") || "upcoming";
+    const eventType = typeof req.query.eventType === "string" ? req.query.eventType : undefined;
+    const { listStudentSchoolEvents } = await import("../services/portal-student-calendar");
+    res.json({
+      success: true,
+      data: await listStudentSchoolEvents(tenant.id, {
+        filter: ["upcoming", "past", "all"].includes(filter) ? filter : "upcoming",
+        eventType,
+        limit: 80,
+      }),
+    });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/calendar/events/:id", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getStudentSchoolEvent } = await import("../services/portal-student-calendar");
+    res.json({ success: true, data: await getStudentSchoolEvent(tenant.id, req.params.id) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/noticeboard", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
+    const { listStudentAnnouncements } = await import("../services/portal-student-calendar");
+    res.json({ success: true, data: await listStudentAnnouncements(tenant.id, { q, limit: 50 }) });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/noticeboard/:id", requirePortalAuth, async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { getStudentAnnouncement } = await import("../services/portal-student-calendar");
+    res.json({ success: true, data: await getStudentAnnouncement(tenant.id, req.params.id) });
   } catch (e) { next(e); }
 });
 
 router.get("/student/materials/:id/file", requirePortalAuth, async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
+    const principal = (req as any).portalPrincipal;
     const [mat] = await db.select().from(studentMaterials).where(and(
       eq(studentMaterials.id, req.params.id),
       eq(studentMaterials.tenantId, tenant.id),
     )).limit(1);
     if (!mat?.filePath) throw new NotFoundError("File not found");
+    if (principal.kind === "student" && mat.classId) {
+      const { getStudentEnrollmentClassId } = await import("../services/portal-student-academics");
+      const classId = await getStudentEnrollmentClassId(tenant.id, principal.account.studentId);
+      if (classId && mat.classId !== classId) throw new ForbiddenError("Material not available for your class");
+    }
     const { resolveTenantFile } = await import("../lib/uploads");
     res.sendFile(resolveTenantFile(tenant.id, mat.filePath));
   } catch (e) { next(e); }
@@ -758,20 +1021,6 @@ router.post("/leaves", requirePortalAuth,
         status: "pending",
       }).returning();
       res.status(201).json({ success: true, data: row });
-    } catch (e) { next(e); }
-  },
-);
-
-router.patch("/student/profile", requirePortalAuth,
-  validate({ body: z.object({ phone: z.string().optional() }) }),
-  async (req, res, next) => {
-    try {
-      const tenant = (req as any).tenant;
-      const principal = (req as any).portalPrincipal;
-      if (principal.kind !== "student") throw new ForbiddenError("Students only");
-      const [acc] = await db.select().from(studentAccounts).where(eq(studentAccounts.id, principal.account.id)).limit(1);
-      if (!acc) throw new NotFoundError("Account not found");
-      res.json({ success: true, data: { email: acc.email, note: "Contact school admin to change legal name", ...req.body } });
     } catch (e) { next(e); }
   },
 );

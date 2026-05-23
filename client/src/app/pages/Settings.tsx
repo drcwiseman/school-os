@@ -123,13 +123,17 @@ export const Settings: React.FC = () => {
   const [importJson, setImportJson] = useState("");
   const [featureRows, setFeatureRows] = useState<FeatureRow[]>([]);
   const [featureSearch, setFeatureSearch] = useState("");
+  const [staffPhotoUrl, setStaffPhotoUrl] = useState("");
+  const [staffPhotoVersion, setStaffPhotoVersion] = useState(0);
+  const [uploadingStaffPhoto, setUploadingStaffPhoto] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [res, featRes] = await Promise.all([
+      const [res, featRes, meRes] = await Promise.all([
         api.get(`/s/${schoolSlug}/api/settings`),
         api.get(`/s/${schoolSlug}/api/settings/features`).catch(() => ({ data: [] })),
+        api.get(`/s/${schoolSlug}/api/auth/me`).catch(() => null),
       ]);
       const s = res.data;
       setCustomSmtpAllowed(Boolean(s.customSmtpAllowed));
@@ -182,6 +186,8 @@ export const Settings: React.FC = () => {
       setPayPesapalSecret("");
       setPayPesapalSecretConfigured(Boolean(pesapal.consumerSecretConfigured));
       setFeatureRows(featRes.data ?? []);
+      const me = meRes as { staffProfile?: { photoUrl?: string | null } } | null;
+      setStaffPhotoUrl(me?.staffProfile?.photoUrl ?? "");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "Load failed", "error");
     } finally {
@@ -229,6 +235,27 @@ export const Settings: React.FC = () => {
   };
 
   const logoPreview = logoUrl ? (logoUrl.includes("?") ? logoUrl : `${logoUrl}?v=${logoVersion}`) : "";
+
+  const staffPhotoPreview = staffPhotoUrl
+    ? `${resolveMediaUrl(staffPhotoUrl)}${staffPhotoUrl.includes("?") ? "&" : "?"}v=${staffPhotoVersion}`
+    : "";
+
+  const uploadStaffPhoto = async (file: File) => {
+    if (!schoolSlug) return;
+    setUploadingStaffPhoto(true);
+    try {
+      const payload = await fileToBase64Payload(file);
+      const res = await api.post(`/s/${schoolSlug}/api/auth/profile/photo`, payload);
+      const url = (res.data?.photoUrl ?? "") as string;
+      if (url) setStaffPhotoUrl(url);
+      setStaffPhotoVersion((v) => v + 1);
+      toast("Profile photo saved", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Photo upload failed", "error");
+    } finally {
+      setUploadingStaffPhoto(false);
+    }
+  };
 
   const verifyDomain = async () => {
     if (!schoolSlug || !canManage) return;
@@ -436,7 +463,21 @@ export const Settings: React.FC = () => {
       </div>
 
       {tab === "general" && (
-        <div className="card p-6 space-y-4">
+        <div className="space-y-4">
+          <div className="card p-6 space-y-4">
+            <h3 className="font-semibold text-white">Your profile photo</h3>
+            <p className="text-xs text-slate-500">
+              Required for all staff — same upload flow as the parent and student portals. Shown on your account and internal records.
+            </p>
+            <SchoolImageUpload
+              label="Staff photo"
+              hint="PNG, JPG, or WebP · max 5MB"
+              previewSrc={staffPhotoPreview}
+              uploading={uploadingStaffPhoto}
+              onUpload={uploadStaffPhoto}
+            />
+          </div>
+          <div className="card p-6 space-y-4">
           <h3 className="font-semibold text-white">Locale &amp; region</h3>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
@@ -464,6 +505,7 @@ export const Settings: React.FC = () => {
                 {!TIMEZONES.includes(timezone) && <option value={timezone}>{timezone}</option>}
               </select>
             </div>
+          </div>
           </div>
         </div>
       )}

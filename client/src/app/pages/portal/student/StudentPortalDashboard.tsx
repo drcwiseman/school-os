@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { api, downloadPdf } from "../../../api/client";
 import {
   LayoutDashboard,
@@ -10,7 +9,6 @@ import {
   ClipboardList,
   Library,
   FolderOpen,
-  Video,
   Bell,
   Bus,
   Sparkles,
@@ -27,12 +25,24 @@ import {
   Megaphone,
   ChevronRight,
   RefreshCw,
+  MessageCircle,
+  UserCheck,
 } from "lucide-react";
 import { applyPortalTheme, getStoredPortalTheme } from "../../../utils/theme";
+import { resolvePortalMediaUrl } from "../../../utils/portal-media";
+import { StudentPortalProfile } from "./StudentPortalProfile";
+import { StudentProgrammeBio } from "./StudentProgrammeBio";
+import { StudentHomeworkPanel } from "./StudentHomeworkPanel";
+import { StudentCbtPanel } from "./StudentCbtPanel";
+import { StudentLibraryPanel } from "./StudentLibraryPanel";
+import { StudentMaterialsPanel } from "./StudentMaterialsPanel";
+import { StudentCalendarPanel } from "./StudentCalendarPanel";
+import { StudentNoticeboardPanel } from "./StudentNoticeboardPanel";
 
 type TabId =
   | "overview"
   | "programme"
+  | "attendance"
   | "results"
   | "fees"
   | "timetable"
@@ -42,17 +52,21 @@ type TabId =
   | "resources"
   | "calendar"
   | "notices"
+  | "messages"
   | "leave"
   | "transport"
-  | "tutor";
+  | "tutor"
+  | "profile";
 
 type PortalTheme = "light" | "dark";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Home", icon: LayoutDashboard },
   { id: "programme", label: "My programme", icon: GraduationCap },
+  { id: "attendance", label: "Attendance", icon: UserCheck },
   { id: "results", label: "Results", icon: FileText },
   { id: "fees", label: "Fees & invoices", icon: Wallet },
+  { id: "messages", label: "Messages", icon: MessageCircle },
   { id: "timetable", label: "Timetable", icon: Clock },
   { id: "homework", label: "Homework", icon: ClipboardList },
   { id: "exams", label: "CBT exams", icon: BookOpen },
@@ -63,6 +77,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "leave", label: "Leave", icon: CalendarOff },
   { id: "transport", label: "Transport", icon: Bus },
   { id: "tutor", label: "AI tutor", icon: Sparkles },
+  { id: "profile", label: "Profile", icon: UserCircle },
 ];
 
 const QUICK_LINKS: { tab: TabId; label: string }[] = [
@@ -72,6 +87,8 @@ const QUICK_LINKS: { tab: TabId; label: string }[] = [
   { tab: "exams", label: "CBT exams" },
   { tab: "library", label: "Library" },
   { tab: "homework", label: "Homework" },
+  { tab: "messages", label: "Messages" },
+  { tab: "profile", label: "Profile" },
 ];
 
 function formatMoney(cents: number | undefined, currency = "UGX") {
@@ -105,16 +122,18 @@ export const StudentPortalDashboard: React.FC<{
   summary: any;
   onLogout: () => void;
   payMsg?: string;
-}> = ({ schoolSlug, account, data, summary, onLogout, payMsg }) => {
+  onAccountEmailChange?: (email: string) => void;
+  initialTheme?: PortalTheme;
+}> = ({ schoolSlug, account, data, summary, onLogout, payMsg, onAccountEmailChange, initialTheme }) => {
   const [tab, setTab] = useState<TabId>("overview");
-  const [portalTheme, setPortalTheme] = useState<PortalTheme>(() => getStoredPortalTheme(schoolSlug));
+  const [portalTheme, setPortalTheme] = useState<PortalTheme>(() => initialTheme ?? getStoredPortalTheme(schoolSlug));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [materials, setMaterials] = useState<any[]>([]);
   const [timetable, setTimetable] = useState<any[]>([]);
   const [onlineClasses, setOnlineClasses] = useState<any[]>([]);
   const [curriculum, setCurriculum] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
+  const [msgBody, setMsgBody] = useState("");
   const [tutorMsg, setTutorMsg] = useState("");
   const [tutorReply, setTutorReply] = useState("");
   const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
@@ -124,12 +143,33 @@ export const StudentPortalDashboard: React.FC<{
       return [];
     }
   });
+  const [profileMeta, setProfileMeta] = useState<{ pendingProfile: Record<string, string> | null; profilePendingApproval: boolean }>({
+    pendingProfile: null,
+    profilePendingApproval: false,
+  });
+  const [messageRecipients, setMessageRecipients] = useState<Array<{ userId: string; name: string; role?: string; kind: string }>>([]);
+  const [recipientUserId, setRecipientUserId] = useState("");
+  const [publishedResults, setPublishedResults] = useState<any[]>([]);
+  const [timetableFilter, setTimetableFilter] = useState<"all" | "teaching" | "exam" | "mock" | "test">("all");
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [photoVersion, setPhotoVersion] = useState(0);
 
   const student = data?.student;
   const studentId = student?.id;
   const currency = data?.currency ?? "UGX";
   const notifications: any[] = data?.notifications ?? [];
   const unreadCount = notifications.filter((n) => !readNotifIds.includes(n.id)).length;
+
+  useEffect(() => {
+    setProfilePhotoUrl(student?.photoUrl ?? null);
+  }, [student?.photoUrl]);
+
+  const hasProfilePhoto = Boolean(profilePhotoUrl);
+  const profilePhotoPreview = useMemo(() => {
+    if (!profilePhotoUrl) return "";
+    return resolvePortalMediaUrl(profilePhotoUrl, photoVersion);
+  }, [profilePhotoUrl, photoVersion]);
 
   useEffect(() => {
     applyPortalTheme(portalTheme, schoolSlug);
@@ -142,24 +182,52 @@ export const StudentPortalDashboard: React.FC<{
   useEffect(() => {
     if (!schoolSlug) return;
     Promise.all([
-      api.get(`/s/${schoolSlug}/api/portal/student/materials`).catch(() => ({ data: [] })),
       api.get(`/s/${schoolSlug}/api/portal/student/timetable`).catch(() => ({ data: [] })),
       api.get(`/s/${schoolSlug}/api/portal/student/online-classes`).catch(() => ({ data: [] })),
       api.get(`/s/${schoolSlug}/api/portal/curriculum`).catch(() => ({ data: null })),
-    ]).then(([m, t, o, c]) => {
-      setMaterials(m.data ?? []);
+    ]).then(([t, o, c]) => {
       setTimetable(t.data ?? data?.timetable ?? []);
       setOnlineClasses(o.data ?? []);
       setCurriculum(c.data);
     });
   }, [schoolSlug]);
 
+  const unreadStaffMessages = summary?.unreadStaffMessages ?? 0;
+
+  const loadMessages = useCallback(async () => {
+    if (!schoolSlug || !studentId) return;
+    const res = await api.get(`/s/${schoolSlug}/api/portal/messages/${studentId}`);
+    setMessages(res.data ?? []);
+    for (const m of res.data ?? []) {
+      if (m.senderType === "staff" && !m.readAt) {
+        api.patch(`/s/${schoolSlug}/api/portal/messages/${m.id}/read`, {}).catch(() => {});
+      }
+    }
+  }, [schoolSlug, studentId]);
+
+  useEffect(() => {
+    if (tab === "messages") loadMessages();
+    if (tab === "messages" && !messageRecipients.length) {
+      api.get(`/s/${schoolSlug}/api/portal/messages/recipients`).then((r) => setMessageRecipients(r.data ?? [])).catch(() => {});
+    }
+    if (tab === "results" && !publishedResults.length) {
+      api.get(`/s/${schoolSlug}/api/portal/student/results`).then((r) => setPublishedResults(r.data ?? [])).catch(() => {});
+    }
+    if (tab === "programme" && !profileMeta.profilePendingApproval && student) {
+      api.get(`/s/${schoolSlug}/api/portal/profile`).then((r) => {
+        const d = r.data;
+        setProfileMeta({
+          pendingProfile: d.pendingProfile ?? null,
+          profilePendingApproval: Boolean(d.profilePendingApproval),
+        });
+      }).catch(() => {});
+    }
+  }, [tab, loadMessages, schoolSlug, messageRecipients.length, publishedResults.length, profileMeta.profilePendingApproval, student]);
+
   useEffect(() => {
     if (!schoolSlug || !studentId) return;
-    api.get(`/s/${schoolSlug}/api/portal/messages/${studentId}`)
-      .then((r) => setMessages(r.data ?? []))
-      .catch(() => setMessages([]));
-  }, [schoolSlug, studentId]);
+    loadMessages().catch(() => setMessages([]));
+  }, [schoolSlug, studentId, loadMessages]);
 
   const selectTab = (id: TabId) => {
     setTab(id);
@@ -187,16 +255,6 @@ export const StudentPortalDashboard: React.FC<{
     return Math.round((present / rows.length) * 100);
   }, [data?.attendance]);
 
-  const timetableByDay = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const p of timetable) {
-      const key = p.dayLabel ?? `Day ${p.dayOfWeek}`;
-      if (!map[key]) map[key] = [];
-      map[key].push(p);
-    }
-    return map;
-  }, [timetable]);
-
   const downloadReportCard = async (id: string) => {
     await downloadPdf(`/s/${schoolSlug}/api/portal/pdf/report-card/${id}`);
   };
@@ -205,15 +263,54 @@ export const StudentPortalDashboard: React.FC<{
     await downloadPdf(`/s/${schoolSlug}/api/portal/pdf/invoice/${id}`);
   };
 
-  const subByAssignment = Object.fromEntries((data?.submissions ?? []).map((s: any) => [s.assignmentId, s]));
+  const sendMessage = async () => {
+    if (!studentId || !msgBody.trim() || !recipientUserId) return;
+    await api.post(`/s/${schoolSlug}/api/portal/messages`, { studentId, body: msgBody, recipientUserId });
+    setMsgBody("");
+    await loadMessages();
+  };
+
+  const payInvoice = async (invoiceId: string) => {
+    setPayingId(invoiceId);
+    try {
+      const res = await api.post(`/s/${schoolSlug}/api/portal/payments/initiate`, {
+        invoiceId,
+        provider: "flutterwave",
+      });
+      if (res.data?.checkoutUrl) window.location.href = res.data.checkoutUrl;
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  const filteredTimetable = useMemo(() => {
+    if (timetableFilter === "all") return timetable;
+    return timetable.filter((p: any) => (p.type ?? "teaching") === timetableFilter);
+  }, [timetable, timetableFilter]);
+
+  const timetableByDay = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const p of filteredTimetable) {
+      const key = p.date ? `${p.dayLabel} · ${p.date}` : (p.dayLabel ?? `Day ${p.dayOfWeek}`);
+      if (!map[key]) map[key] = [];
+      map[key].push(p);
+    }
+    return map;
+  }, [filteredTimetable]);
+
+  const joinOnlineClass = async (classId: string) => {
+    await api.post(`/s/${schoolSlug}/api/portal/student/online-classes/${classId}/join`, {});
+    const o = await api.get(`/s/${schoolSlug}/api/portal/student/online-classes`);
+    setOnlineClasses(o.data ?? []);
+  };
 
   return (
-    <div className="portal-shell student-portal min-h-screen" data-portal-theme={portalTheme}>
+    <div className="portal-shell student-portal flex flex-col h-[100dvh] overflow-hidden" data-portal-theme={portalTheme}>
       {mobileNavOpen && (
         <button type="button" className="fixed inset-0 z-40 bg-black/50 lg:hidden" aria-label="Close menu" onClick={() => setMobileNavOpen(false)} />
       )}
 
-      <header className="portal-header sticky top-0 z-30 border-b backdrop-blur-md">
+      <header className="portal-header shrink-0 z-30 border-b backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
@@ -225,7 +322,7 @@ export const StudentPortalDashboard: React.FC<{
               {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400 font-semibold">Student portal</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] portal-accent-text font-semibold">Student portal</p>
               <h1 className="text-base sm:text-lg font-bold truncate capitalize text-[var(--portal-fg-strong)]">{schoolSlug.replace(/-/g, " ")}</h1>
             </div>
           </div>
@@ -238,7 +335,7 @@ export const StudentPortalDashboard: React.FC<{
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-emerald-600 text-[10px] font-bold text-white flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full portal-badge text-[10px] font-bold flex items-center justify-center">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -266,24 +363,28 @@ export const StudentPortalDashboard: React.FC<{
         </div>
       </header>
 
-      <div className="student-portal-layout max-w-7xl mx-auto px-4 pb-28 lg:pb-8 lg:flex lg:items-start lg:gap-6 lg:pt-6">
+      <div className="student-portal-body flex flex-1 min-h-0 max-w-7xl w-full mx-auto">
         <aside
           className={`
             student-portal-sidebar flex flex-col w-[min(300px,88vw)] shrink-0 gap-1 z-50 border-r
             max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:top-0 max-lg:pt-[5.5rem] max-lg:px-3 max-lg:pb-6 max-lg:overflow-y-auto
             transition-transform duration-200
-            lg:relative lg:translate-x-0 lg:w-56 lg:pt-0 lg:px-0 lg:pb-0 lg:border-r-0 lg:overflow-visible
+            lg:relative lg:translate-x-0 lg:w-56 lg:pt-4 lg:px-2 lg:pb-4 lg:overflow-y-auto lg:overscroll-contain
             ${mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           `}
         >
           <div className="student-portal-profile-card rounded-xl p-4 mb-3 lg:mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-700/30 text-emerald-100 flex items-center justify-center font-bold text-lg">
-                {initials(student?.firstName, student?.lastName)}
-              </div>
+              {profilePhotoPreview ? (
+                <img src={profilePhotoPreview} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-[var(--portal-border)] shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-full portal-avatar-fallback flex items-center justify-center font-bold text-lg shrink-0">
+                  {initials(student?.firstName, student?.lastName)}
+                </div>
+              )}
               <div className="min-w-0">
-                <p className="font-semibold text-sm truncate text-white">{student?.firstName} {student?.lastName}</p>
-                <p className="text-[11px] text-emerald-100/80 font-mono truncate">{student?.admissionNumber}</p>
+                <p className="font-semibold text-sm truncate text-[var(--portal-fg-strong)]">{student?.firstName} {student?.lastName}</p>
+                <p className="text-[11px] student-portal-admission font-mono truncate">{student?.admissionNumber}</p>
               </div>
             </div>
           </div>
@@ -302,6 +403,9 @@ export const StudentPortalDashboard: React.FC<{
               {id === "fees" && feeDueMinor > 0 && (
                 <span className="ml-auto text-[10px] bg-red-500 text-white rounded-full px-1.5">!</span>
               )}
+              {id === "messages" && unreadStaffMessages > 0 && (
+                <span className="ml-auto text-[10px] bg-red-500 text-white rounded-full px-1.5">{unreadStaffMessages > 9 ? "9+" : unreadStaffMessages}</span>
+              )}
             </button>
           ))}
 
@@ -314,9 +418,20 @@ export const StudentPortalDashboard: React.FC<{
           </button>
         </aside>
 
-        <main className="student-portal-main flex-1 min-w-0 space-y-5 pt-4 lg:pt-0">
+        <main className="student-portal-main flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 lg:py-6 space-y-5">
+          {!hasProfilePhoto && tab !== "profile" && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>A profile photo is required. Upload one to complete your portal profile.</span>
+              </div>
+              <button type="button" onClick={() => selectTab("profile")} className="portal-btn-primary rounded-lg px-3 py-1.5 text-xs font-medium shrink-0">
+                Upload photo
+              </button>
+            </div>
+          )}
           {payMsg && (
-            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-sm portal-flash-success rounded-xl px-4 py-3">
               <CheckCircle className="w-4 h-4" /> {payMsg}
             </div>
           )}
@@ -337,7 +452,7 @@ export const StudentPortalDashboard: React.FC<{
                           setNotifOpen(false);
                         }}
                         className={`w-full text-left rounded-xl px-3 py-2 border text-sm ${
-                          readNotifIds.includes(n.id) ? "border-[var(--portal-border-soft)]" : "border-emerald-500/40 bg-emerald-500/10"
+                          readNotifIds.includes(n.id) ? "border-[var(--portal-border-soft)]" : "portal-notif-highlight"
                         }`}
                       >
                         <p className="font-medium text-[var(--portal-fg-strong)]">{n.title}</p>
@@ -395,7 +510,7 @@ export const StudentPortalDashboard: React.FC<{
 
               {(data?.reportCard || (data?.reportCards ?? []).length > 0) && data?.resultsVisible !== false && (
                 <Panel title="Latest results" icon={GraduationCap}>
-                  <button type="button" className="text-emerald-600 dark:text-emerald-400 text-sm font-medium" onClick={() => selectTab("results")}>
+                  <button type="button" className="portal-accent-text text-sm font-medium" onClick={() => selectTab("results")}>
                     View all results <ChevronRight className="w-4 h-4 inline" />
                   </button>
                 </Panel>
@@ -414,7 +529,7 @@ export const StudentPortalDashboard: React.FC<{
                     ))}
                   </ul>
                 )}
-                <button type="button" onClick={() => selectTab("timetable")} className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">Full timetable →</button>
+                <button type="button" onClick={() => selectTab("timetable")} className="mt-3 text-xs portal-accent-text font-medium">Full timetable →</button>
               </Panel>
 
               <Panel title="Noticeboard" icon={Megaphone}>
@@ -425,7 +540,7 @@ export const StudentPortalDashboard: React.FC<{
 
           {tab === "programme" && (
             <div className="space-y-5">
-              <Panel title="Bio data" icon={UserCircle}>
+              <Panel title="Registration" icon={UserCircle}>
                 <dl className="grid sm:grid-cols-2 gap-3 text-sm">
                   <Field label="Name" value={`${student?.firstName ?? ""} ${student?.lastName ?? ""}`} />
                   <Field label="Admission no." value={student?.admissionNumber} />
@@ -433,8 +548,24 @@ export const StudentPortalDashboard: React.FC<{
                   <Field label="Status" value={student?.status} />
                   <Field label="Class" value={enrollment?.className ?? "—"} />
                   <Field label="Stream" value={enrollment?.streamName ?? "—"} />
-                  <Field label="Email" value={account.email} />
+                  <Field label="Portal email" value={account.email} />
                 </dl>
+              </Panel>
+              <Panel title="Bio (approval required)" icon={UserCircle}>
+                <StudentProgrammeBio
+                  schoolSlug={schoolSlug}
+                  student={student}
+                  pendingProfile={profileMeta.pendingProfile}
+                  profilePendingApproval={profileMeta.profilePendingApproval}
+                  onSubmitted={() => {
+                    api.get(`/s/${schoolSlug}/api/portal/profile`).then((r) => {
+                      setProfileMeta({
+                        pendingProfile: r.data.pendingProfile ?? null,
+                        profilePendingApproval: Boolean(r.data.profilePendingApproval),
+                      });
+                    }).catch(() => {});
+                  }}
+                />
               </Panel>
               {curriculum?.framework && (
                 <Panel title="Curriculum" icon={BookOpen}>
@@ -467,26 +598,67 @@ export const StudentPortalDashboard: React.FC<{
             </div>
           )}
 
+          {tab === "attendance" && (
+            <Panel title="My attendance" icon={UserCheck}>
+              {(data?.attendance ?? []).length === 0 ? (
+                <p className="portal-empty text-sm">No attendance records yet.</p>
+              ) : (
+                <ul className="space-y-2 text-sm max-h-[60vh] overflow-y-auto">
+                  {(data.attendance as any[]).map((r: any, i: number) => (
+                    <li key={i} className="flex justify-between gap-2 rounded-lg border border-[var(--portal-border)] px-3 py-2">
+                      <span>{r.date ? new Date(r.date).toLocaleDateString() : "—"}</span>
+                      <span className={`student-portal-pill text-[10px] ${statusPill(r.status)}`}>{r.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          )}
+
           {tab === "results" && (
             <Panel title="Report cards & results" icon={GraduationCap}>
               {data?.resultsVisible === false ? (
                 <p className="portal-empty text-sm">Results are hidden by your school. Contact the office.</p>
-              ) : (data?.reportCards ?? []).length === 0 && !data?.reportCard ? (
-                <p className="portal-empty text-sm">No published report cards yet.</p>
               ) : (
-                <ul className="space-y-3">
-                  {(data.reportCards?.length ? data.reportCards : data.reportCard ? [data.reportCard] : []).map((rc: any) => (
-                    <li key={rc.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--portal-border)] px-4 py-3">
-                      <div>
-                        <p className="font-medium text-sm text-[var(--portal-fg-strong)]">Report card</p>
-                        <p className="text-xs text-[var(--portal-subtle)]">{rc.createdAt ? new Date(rc.createdAt).toLocaleDateString() : ""}</p>
-                      </div>
-                      <button type="button" className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium" onClick={() => downloadReportCard(rc.id)}>
-                        <Download className="w-3.5 h-3.5" /> PDF
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <p className="text-xs text-[var(--portal-subtle)] mb-3">Published assessment marks</p>
+                  {publishedResults.length === 0 ? (
+                    <p className="portal-empty text-sm mb-4">No published marks yet.</p>
+                  ) : (
+                    <ul className="space-y-3 mb-6">
+                      {publishedResults.map((m: any) => (
+                        <li key={m.id} className="rounded-xl border border-[var(--portal-border)] px-4 py-3 text-sm">
+                          <p className="font-medium text-[var(--portal-fg-strong)]">{m.subjectName ?? "Subject"} · {m.assessmentTitle}</p>
+                          <p className="text-xs text-[var(--portal-subtle)] capitalize">{m.assessmentType}</p>
+                          <p className="mt-1 text-[var(--portal-fg)]">
+                            {m.grade ? `Grade ${m.grade}` : m.score != null ? `Score ${m.score}` : "—"}
+                            {m.remarks ? ` · ${m.remarks}` : ""}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {(data?.reportCards ?? []).length > 0 || data?.reportCard ? (
+                    <div className="pt-4 border-t border-[var(--portal-border)]">
+                      <p className="text-sm font-semibold mb-3 text-[var(--portal-fg-strong)]">Report cards</p>
+                      <ul className="space-y-3">
+                        {(data.reportCards?.length ? data.reportCards : data.reportCard ? [data.reportCard] : []).map((rc: any) => (
+                          <li key={rc.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--portal-border)] px-4 py-3">
+                            <div>
+                              <p className="font-medium text-sm text-[var(--portal-fg-strong)]">Report card</p>
+                              <p className="text-xs text-[var(--portal-subtle)]">{rc.createdAt ? new Date(rc.createdAt).toLocaleDateString() : ""}</p>
+                            </div>
+                            <button type="button" className="inline-flex items-center gap-1 text-xs portal-accent-text font-medium" onClick={() => downloadReportCard(rc.id)}>
+                              <Download className="w-3.5 h-3.5" /> PDF
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="portal-empty text-sm">No published report cards yet.</p>
+                  )}
+                </>
               )}
             </Panel>
           )}
@@ -514,7 +686,17 @@ export const StudentPortalDashboard: React.FC<{
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`student-portal-pill text-[10px] ${statusPill(inv.status)}`}>{inv.status}</span>
-                        <button type="button" className="text-xs text-emerald-600 dark:text-emerald-400" onClick={() => downloadInvoice(inv.id)}>PDF</button>
+                        <button type="button" className="text-xs portal-accent-text" onClick={() => downloadInvoice(inv.id)}>PDF</button>
+                        {inv.status !== "paid" && Math.max(0, inv.totalAmount - inv.paidAmount) > 0 && (
+                          <button
+                            type="button"
+                            disabled={payingId === inv.id}
+                            className="portal-btn-primary text-xs px-2 py-1 rounded-lg"
+                            onClick={() => payInvoice(inv.id)}
+                          >
+                            {payingId === inv.id ? "…" : "Pay"}
+                          </button>
+                        )}
                       </div>
                     </li>
                   ))}
@@ -524,15 +706,78 @@ export const StudentPortalDashboard: React.FC<{
             </div>
           )}
 
+          {tab === "messages" && (
+            <Panel title="Messages with school" icon={MessageCircle}>
+              <div className="flex gap-2 mb-4">
+                <select
+                  className="portal-input rounded-lg text-sm"
+                  value={recipientUserId}
+                  onChange={(e) => setRecipientUserId(e.target.value)}
+                >
+                  <option value="">Send to…</option>
+                  {messageRecipients.map((r) => (
+                    <option key={r.userId} value={r.userId}>
+                      {r.name} ({r.kind === "administration" ? "Administration" : r.role ?? "Teacher"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="rounded-xl border border-[var(--portal-border)] bg-[var(--portal-bg-muted)] p-3 max-h-72 overflow-y-auto space-y-2 mb-4">
+                {messages.length === 0 ? (
+                  <p className="portal-empty text-sm text-center py-6">No messages yet. Send a note to teachers or the office.</p>
+                ) : (
+                  messages.map((m: any) => (
+                    <div
+                      key={m.id}
+                      className={`text-sm p-3 rounded-xl max-w-[85%] ${
+                        m.senderType === "student"
+                          ? "portal-msg-self rounded-xl px-3 py-2"
+                          : "mr-auto bg-[var(--portal-bg-elevated)] border border-[var(--portal-border)]"
+                      }`}
+                    >
+                      <p className="text-[10px] uppercase opacity-60 mb-1">{m.senderType === "student" ? "You" : "School"}</p>
+                      {m.body}
+                      <p className="text-[10px] opacity-50 mt-1">{m.createdAt ? new Date(m.createdAt).toLocaleString() : ""}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="portal-input flex-1 rounded-xl px-4 py-2.5 text-sm"
+                  value={msgBody}
+                  onChange={(e) => setMsgBody(e.target.value)}
+                  placeholder="Ask about homework, fees, or events…"
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}
+                />
+                <button type="button" onClick={sendMessage} className="portal-btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white shrink-0">
+                  Send
+                </button>
+              </div>
+            </Panel>
+          )}
+
           {tab === "timetable" && (
-            <Panel title="Teaching timetable" icon={Clock} action={<button type="button" className="text-xs text-[var(--portal-muted)]" onClick={() => window.location.reload()}><RefreshCw className="w-3.5 h-3.5 inline" /> Reload</button>}>
+            <Panel title="Timetable" icon={Clock} action={<button type="button" className="text-xs text-[var(--portal-muted)]" onClick={() => window.location.reload()}><RefreshCw className="w-3.5 h-3.5 inline" /> Reload</button>}>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {(["all", "teaching", "exam", "mock", "test"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTimetableFilter(t)}
+                    className={`rounded-lg px-3 py-1 text-xs font-medium capitalize ${timetableFilter === t ? "portal-theme-selected" : "border border-[var(--portal-border)]"}`}
+                  >
+                    {t === "all" ? "All" : t}
+                  </button>
+                ))}
+              </div>
               {Object.keys(timetableByDay).length === 0 ? (
                 <p className="portal-empty text-sm">No periods scheduled. Ask your class teacher to publish the timetable.</p>
               ) : (
                 <div className="space-y-4">
                   {Object.entries(timetableByDay).map(([day, periods]) => (
                     <div key={day}>
-                      <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-2">{day}</p>
+                      <p className="text-xs font-bold uppercase tracking-wider portal-accent-text mb-2">{day}</p>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
@@ -564,126 +809,37 @@ export const StudentPortalDashboard: React.FC<{
 
           {tab === "homework" && (
             <Panel title="Homework & assignments" icon={ClipboardList}>
-              <HomeworkList
-                schoolSlug={schoolSlug}
-                assignments={data?.assignments ?? []}
-                subByAssignment={subByAssignment}
-              />
+              <StudentHomeworkPanel schoolSlug={schoolSlug} />
             </Panel>
           )}
 
           {tab === "exams" && (
             <Panel title="CBT exams & tests" icon={BookOpen}>
-              <p className="text-sm text-[var(--portal-muted)] mb-4">Computer-based tests assigned by your teachers. Open an exam when it is published and within the allowed window.</p>
-              {(data?.cbtExams ?? []).length === 0 ? (
-                <p className="portal-empty text-sm">No published CBT papers right now.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {(data.cbtExams as any[]).map((paper: any) => (
-                    <li key={paper.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--portal-border)] px-4 py-3">
-                      <div>
-                        <p className="font-medium text-[var(--portal-fg-strong)]">{paper.title}</p>
-                        <p className="text-xs text-[var(--portal-subtle)]">{paper.durationMinutes ?? 60} minutes</p>
-                      </div>
-                      <Link
-                        to={`/s/${schoolSlug}/exam?paperId=${paper.id}&studentId=${studentId}`}
-                        className="rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-4 py-2"
-                      >
-                        Start exam
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <StudentCbtPanel schoolSlug={schoolSlug} />
             </Panel>
           )}
 
           {tab === "library" && (
-            <div className="space-y-5">
-              <Panel title="Library membership" icon={Library}>
-                {data?.libraryCard ? (
-                  <p className="text-sm">Card <span className="font-mono font-semibold text-[var(--portal-fg-strong)]">{data.libraryCard.cardNumber}</span> · {data.libraryCard.status}</p>
-                ) : (
-                  <p className="portal-empty text-sm">No library card on file. Visit the school library.</p>
-                )}
-                {(data?.libraryStats?.overdueLoans ?? 0) > 0 && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {data.libraryStats.overdueLoans} overdue loan(s)</p>
-                )}
-              </Panel>
-              <Panel title="My loans" icon={BookOpen}>
-                {(data?.libraryLoans ?? []).length === 0 ? (
-                  <p className="portal-empty text-sm">No library loans recorded.</p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {(data.libraryLoans as any[]).map((l: any) => (
-                      <li key={l.id} className="rounded-xl border border-[var(--portal-border)] px-4 py-3">
-                        <p className="font-medium text-[var(--portal-fg-strong)]">{l.bookTitle}</p>
-                        <p className="text-xs text-[var(--portal-subtle)]">{l.bookAuthor} · {l.barcode}</p>
-                        <p className="text-xs mt-1">
-                          Due {l.dueAt ? new Date(l.dueAt).toLocaleDateString() : "—"}
-                          {l.returnedAt ? " · Returned" : l.dueAt && new Date(l.dueAt) < new Date() ? " · Overdue" : " · On loan"}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-            </div>
+            <Panel title="Library" icon={Library}>
+              <StudentLibraryPanel schoolSlug={schoolSlug} />
+            </Panel>
           )}
 
           {tab === "resources" && (
-            <div className="space-y-5">
-              <Panel title="Study materials" icon={FolderOpen}>
-                {materials.length === 0 ? (
-                  <p className="portal-empty text-sm">No materials uploaded yet.</p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {materials.map((m: any) => (
-                      <li key={m.id} className="flex justify-between gap-2 rounded-lg border border-[var(--portal-border)] px-3 py-2">
-                        <span className="text-[var(--portal-fg-strong)]">{m.title}</span>
-                        {m.filePath && (
-                          <a href={`/s/${schoolSlug}/api/portal/student/materials/${m.id}/file`} className="text-emerald-600 dark:text-emerald-400 text-xs shrink-0" target="_blank" rel="noreferrer">Download</a>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-              <Panel title="Online classes" icon={Video}>
-                {onlineClasses.length === 0 ? (
-                  <p className="portal-empty text-sm">No online class links.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {onlineClasses.map((c: any) => (
-                      <li key={c.id}>
-                        <a href={c.url} target="_blank" rel="noreferrer" className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">{c.title}</a>
-                        <p className="text-xs text-[var(--portal-subtle)]">{c.scheduledAt ? new Date(c.scheduledAt).toLocaleString() : ""}</p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-            </div>
+            <Panel title="Study materials & online classes" icon={FolderOpen}>
+              <StudentMaterialsPanel schoolSlug={schoolSlug} onlineClasses={onlineClasses} onJoinClass={joinOnlineClass} />
+            </Panel>
           )}
 
           {tab === "calendar" && (
             <Panel title="Academic calendar & events" icon={Calendar}>
-              <ul className="space-y-3 text-sm">
-                {(data?.calendar?.upcoming ?? []).map((e: any) => (
-                  <li key={e.id} className="rounded-xl border border-[var(--portal-border)] px-4 py-3">
-                    <p className="font-medium text-[var(--portal-fg-strong)]">{e.title}</p>
-                    <p className="text-xs text-[var(--portal-subtle)]">{new Date(e.startsAt).toLocaleString()}{e.venue ? ` · ${e.venue}` : ""}</p>
-                    {e.description && <p className="text-xs text-[var(--portal-muted)] mt-1 line-clamp-2">{e.description}</p>}
-                  </li>
-                ))}
-                {!(data?.calendar?.upcoming ?? []).length && <p className="portal-empty">No upcoming events.</p>}
-              </ul>
+              <StudentCalendarPanel schoolSlug={schoolSlug} />
             </Panel>
           )}
 
           {tab === "notices" && (
             <Panel title="Noticeboard & announcements" icon={Megaphone}>
-              <NoticeList items={data?.noticeboard ?? []} />
+              <StudentNoticeboardPanel schoolSlug={schoolSlug} />
             </Panel>
           )}
 
@@ -718,7 +874,7 @@ export const StudentPortalDashboard: React.FC<{
               />
               <button
                 type="button"
-                className="mt-2 rounded-lg bg-emerald-700 text-white text-sm px-4 py-2 font-medium"
+                className="mt-2 portal-btn-primary rounded-lg text-white text-sm px-4 py-2 font-medium"
                 onClick={async () => {
                   const res = await api.post(`/s/${schoolSlug}/api/portal/student/tutor`, { message: tutorMsg, subject: "General" });
                   setTutorReply(res.data?.reply ?? "");
@@ -730,17 +886,17 @@ export const StudentPortalDashboard: React.FC<{
             </Panel>
           )}
 
-          {messages.length > 0 && (
-            <Panel title="Messages from school" icon={Bell}>
-              <ul className="text-sm space-y-2">
-                {messages.map((m: any) => (
-                  <li key={m.id} className={`rounded-lg px-3 py-2 border ${m.senderType === "staff" ? "border-emerald-500/30" : "border-[var(--portal-border)]"}`}>
-                    <p className="text-[10px] uppercase text-[var(--portal-subtle)]">{m.senderType}</p>
-                    <p className="text-[var(--portal-fg)]">{m.body}</p>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
+          {tab === "profile" && (
+            <StudentPortalProfile
+              schoolSlug={schoolSlug}
+              theme={portalTheme}
+              onThemeChange={setPortalTheme}
+              onAccountEmailChange={onAccountEmailChange}
+              onPhotoChange={(url) => {
+                setProfilePhotoUrl(url);
+                setPhotoVersion((v) => v + 1);
+              }}
+            />
           )}
         </main>
       </div>
@@ -765,7 +921,7 @@ function Panel({
     <section className="portal-panel rounded-2xl p-5">
       <div className="flex items-center justify-between gap-2 mb-4">
         <h2 className="portal-panel-title font-semibold flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
+          {Icon && <Icon className="w-4 h-4 portal-accent-text" />}
           {title}
         </h2>
         <div className="flex items-center gap-2">
@@ -812,50 +968,9 @@ function NoticeList({ items, limit, onMore }: { items: any[]; limit?: number; on
         ))}
       </ul>
       {onMore && items.length > (limit ?? 0) && (
-        <button type="button" onClick={onMore} className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">View all →</button>
+        <button type="button" onClick={onMore} className="mt-3 text-xs portal-accent-text font-medium">View all →</button>
       )}
     </>
-  );
-}
-
-function HomeworkList({
-  schoolSlug,
-  assignments,
-  subByAssignment,
-}: {
-  schoolSlug: string;
-  assignments: any[];
-  subByAssignment: Record<string, any>;
-}) {
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const submit = async (assignmentId: string) => {
-    const content = drafts[assignmentId]?.trim();
-    if (!content) return;
-    await api.post(`/s/${schoolSlug}/api/portal/student/assignments/${assignmentId}/submit`, { content });
-    window.location.reload();
-  };
-  if (!assignments.length) return <p className="portal-empty text-sm">No homework assigned.</p>;
-  return (
-    <ul className="space-y-4">
-      {assignments.map((a: any) => {
-        const sub = subByAssignment[a.id];
-        return (
-          <li key={a.id} className="rounded-xl border border-[var(--portal-border)] p-4">
-            <p className="font-medium text-[var(--portal-fg-strong)]">{a.title}</p>
-            {a.dueDate && <p className="text-xs text-[var(--portal-subtle)] mt-0.5">Due {new Date(a.dueDate).toLocaleDateString()}</p>}
-            {a.description && <p className="text-sm text-[var(--portal-muted)] mt-2">{a.description}</p>}
-            {sub ? (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Submitted · {sub.status}</p>
-            ) : (
-              <div className="mt-3 space-y-2">
-                <textarea className="portal-input w-full rounded-lg min-h-[72px] text-sm" value={drafts[a.id] ?? ""} onChange={(e) => setDrafts({ ...drafts, [a.id]: e.target.value })} placeholder="Your answer…" />
-                <button type="button" className="rounded-lg bg-emerald-700 text-white text-xs px-3 py-1.5" onClick={() => submit(a.id)}>Submit</button>
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
@@ -890,7 +1005,7 @@ function StudentLeaveSection({ schoolSlug, studentId, leaves: initial }: { schoo
           Reason
           <input className="portal-input w-full mt-1 rounded-lg text-sm" required value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
         </label>
-        <button type="submit" className="sm:col-span-2 rounded-lg bg-emerald-700 text-white text-sm py-2 font-medium">Submit request</button>
+        <button type="submit" className="sm:col-span-2 portal-btn-primary rounded-lg text-white text-sm py-2 font-medium">Submit request</button>
       </form>
       <ul className="text-sm space-y-2">
         {leaves.map((l: any) => (

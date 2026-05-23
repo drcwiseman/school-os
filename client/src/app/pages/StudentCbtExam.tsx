@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { Clock, Lock } from "lucide-react";
@@ -13,12 +13,13 @@ type Question = {
   maxWords?: number;
 };
 
+const PORTAL_CBT = (slug: string) => `/s/${slug}/api/portal/student/cbt`;
+
 export const StudentCbtExam: React.FC = () => {
   const { schoolSlug } = useParams<{ schoolSlug: string }>();
   const [search] = useSearchParams();
   const { toast } = useToast();
   const paperId = search.get("paperId") ?? "";
-  const studentId = search.get("studentId") ?? "";
   const [session, setSession] = useState<any>(null);
   const [paper, setPaper] = useState<any>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -26,23 +27,27 @@ export const StudentCbtExam: React.FC = () => {
   const [answers, setAnswers] = useState<Record<string, number | string>>({});
   const [remaining, setRemaining] = useState(0);
   const [done, setDone] = useState(false);
+  const [finalScore, setFinalScore] = useState<{ score?: number; maxScore?: number } | null>(null);
 
   const start = useCallback(async () => {
-    if (!paperId || !studentId) return;
-    const res = await api.post(`/s/${schoolSlug}/api/cbt/sessions/start`, { paperId, studentId });
-    setSession(res.data.session);
-    setPaper(res.data.paper);
-    setQuestions(res.data.questions ?? []);
-    const ends = new Date(res.data.session.endsAt).getTime();
+    if (!paperId || !schoolSlug) return;
+    const res = await api.post(`${PORTAL_CBT(schoolSlug)}/sessions/start`, { paperId });
+    const d = res.data;
+    setSession(d.session);
+    setPaper(d.paper);
+    setQuestions(d.questions ?? []);
+    const ends = new Date(d.session.endsAt).getTime();
     setRemaining(Math.max(0, Math.floor((ends - Date.now()) / 1000)));
-    if (res.data.paper?.lockdown) {
+    if (d.paper?.lockdown) {
       try {
         document.documentElement.requestFullscreen?.();
       } catch { /* ignore */ }
     }
-  }, [schoolSlug, paperId, studentId]);
+  }, [schoolSlug, paperId]);
 
-  useEffect(() => { start().catch((e) => toast(e.message, "error")); }, [start]);
+  useEffect(() => {
+    start().catch((e) => toast(e.message, "error"));
+  }, [start, toast]);
 
   useEffect(() => {
     if (!session || done) return;
@@ -62,16 +67,18 @@ export const StudentCbtExam: React.FC = () => {
     };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
-  }, [paper]);
+  }, [paper, toast]);
 
   const saveAnswer = async (qid: string, answer: number | string) => {
+    if (!session || !schoolSlug) return;
     setAnswers((a) => ({ ...a, [qid]: answer }));
-    await api.post(`/s/${schoolSlug}/api/cbt/sessions/${session.id}/answer`, { questionId: qid, answer });
+    await api.post(`${PORTAL_CBT(schoolSlug)}/sessions/${session.id}/answer`, { questionId: qid, answer });
   };
 
   const submit = async () => {
-    if (!session) return;
-    await api.post(`/s/${schoolSlug}/api/cbt/sessions/${session.id}/submit`);
+    if (!session || !schoolSlug) return;
+    const res = await api.post(`${PORTAL_CBT(schoolSlug)}/sessions/${session.id}/submit`);
+    setFinalScore({ score: res.data?.score, maxScore: res.data?.maxScore });
     setDone(true);
     toast(paper?.mode === "practice" ? "Practice complete" : "Exam submitted", "success");
   };
@@ -80,45 +87,64 @@ export const StudentCbtExam: React.FC = () => {
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
 
-  if (!session) return <p className="text-slate-400 p-8">Loading exam…</p>;
+  if (!session) {
+    return (
+      <div className="portal-shell student-portal min-h-screen p-8">
+        <p className="text-[var(--portal-muted)]">Loading exam…</p>
+      </div>
+    );
+  }
 
   if (done) {
     return (
-      <div className="card p-8 max-w-lg mx-auto mt-12 text-center">
-        <h2 className="text-xl font-bold text-white">Submitted</h2>
-        <p className="text-slate-400 mt-2">Score: {session.score ?? "pending grading"} / {session.maxScore}</p>
+      <div className="portal-shell student-portal min-h-screen flex items-center justify-center p-6">
+        <div className="rounded-xl border border-[var(--portal-border)] p-8 max-w-lg w-full text-center bg-[var(--portal-surface)]">
+          <h2 className="text-xl font-bold text-[var(--portal-fg-strong)]">Submitted</h2>
+          <p className="text-[var(--portal-muted)] mt-2">
+            Score: {finalScore?.score ?? session.score ?? "pending grading"} / {finalScore?.maxScore ?? session.maxScore}
+          </p>
+          {schoolSlug && (
+            <Link to={`/s/${schoolSlug}/student`} className="portal-btn-primary inline-block mt-6 rounded-lg text-white text-sm px-4 py-2">
+              Back to portal
+            </Link>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
+    <div className="portal-shell student-portal min-h-screen max-w-3xl mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold text-white">{paper?.title}</h1>
-        <span className="flex items-center gap-1 text-amber-400 font-mono">
+        <h1 className="text-xl font-bold text-[var(--portal-fg-strong)]">{paper?.title}</h1>
+        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-mono">
           <Clock className="w-4 h-4" /> {mins}:{secs.toString().padStart(2, "0")}
         </span>
       </div>
-      {paper?.lockdown && <p className="text-xs text-slate-500 flex items-center gap-1"><Lock className="w-3 h-3" /> Lockdown mode</p>}
+      {paper?.lockdown && (
+        <p className="text-xs text-[var(--portal-subtle)] flex items-center gap-1">
+          <Lock className="w-3 h-3" /> Lockdown mode
+        </p>
+      )}
 
       {q && (
-        <div className="card p-6 space-y-4">
-          <p className="text-slate-400 text-sm">Question {idx + 1} of {questions.length}</p>
-          <p className="text-white text-lg">{q.prompt}</p>
+        <div className="rounded-xl border border-[var(--portal-border)] p-6 space-y-4 bg-[var(--portal-surface)]">
+          <p className="text-[var(--portal-subtle)] text-sm">Question {idx + 1} of {questions.length}</p>
+          <p className="text-[var(--portal-fg-strong)] text-lg">{q.prompt}</p>
           {q.questionType === "mcq" && (q.optionsJson ?? []).map((opt, i) => (
-            <label key={i} className="flex items-center gap-2 p-3 rounded-lg bg-slate-800/80 cursor-pointer">
+            <label key={i} className="flex items-center gap-2 p-3 rounded-lg border border-[var(--portal-border)] cursor-pointer">
               <input
                 type="radio"
                 name={q.id}
                 checked={answers[q.id] === i}
                 onChange={() => saveAnswer(q.id, i)}
               />
-              <span className="text-slate-200">{opt}</span>
+              <span className="text-[var(--portal-fg)]">{opt}</span>
             </label>
           ))}
           {q.questionType === "essay" && (
             <textarea
-              className="input min-h-[120px]"
+              className="portal-input w-full min-h-[120px] rounded-lg"
               maxLength={q.maxWords ? q.maxWords * 6 : undefined}
               value={(answers[q.id] as string) ?? ""}
               onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
@@ -129,11 +155,11 @@ export const StudentCbtExam: React.FC = () => {
       )}
 
       <div className="flex justify-between">
-        <button type="button" className="btn-ghost" disabled={idx === 0} onClick={() => setIdx((i) => i - 1)}>Previous</button>
+        <button type="button" className="rounded-lg border border-[var(--portal-border)] px-3 py-2 text-sm" disabled={idx === 0} onClick={() => setIdx((i) => i - 1)}>Previous</button>
         {idx < questions.length - 1 ? (
-          <button type="button" className="btn-primary" onClick={() => setIdx((i) => i + 1)}>Next</button>
+          <button type="button" className="portal-btn-primary rounded-lg text-white px-4 py-2 text-sm" onClick={() => setIdx((i) => i + 1)}>Next</button>
         ) : (
-          <button type="button" className="btn-primary" onClick={submit}>Submit exam</button>
+          <button type="button" className="portal-btn-primary rounded-lg text-white px-4 py-2 text-sm" onClick={submit}>Submit exam</button>
         )}
       </div>
     </div>

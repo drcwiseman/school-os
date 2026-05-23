@@ -131,6 +131,13 @@ portalEnhancementsRouter.get("/dashboard/summary", async (req, res, next) => {
       eq(studentLeaveRequests.studentId, studentId), eq(studentLeaveRequests.tenantId, tenant.id),
     ));
 
+    const unreadStaffMessages = Number((await db.select({ n: sql<number>`count(*)` }).from(portalMessages).where(and(
+      eq(portalMessages.tenantId, tenant.id),
+      eq(portalMessages.studentId, studentId),
+      eq(portalMessages.senderType, "staff"),
+      sql`${portalMessages.readAt} is null`,
+    )))[0]?.n ?? 0);
+
     res.json({
       success: true,
       data: {
@@ -143,6 +150,7 @@ portalEnhancementsRouter.get("/dashboard/summary", async (req, res, next) => {
         submissionsCount: Number(submitted[0]?.n ?? 0),
         latestReportCard: rc ?? null,
         pendingLeaves: leaves.filter((l) => l.status === "pending").length,
+        unreadStaffMessages,
       },
     });
   } catch (e) { next(e); }

@@ -211,6 +211,15 @@ export const students = pgTable("students", {
   address:         text("address"),
   shortBio:        text("short_bio"),
   photoUrl:        text("photo_url"),
+  pendingProfileJson: jsonb("pending_profile_json").$type<{
+    phone?: string;
+    email?: string;
+    address?: string;
+    shortBio?: string;
+    emergencyContact?: string;
+    emergencyPhone?: string;
+    submittedAt?: string;
+  }>(),
   biometricId:     text("biometric_id"),
   medicalJson:     jsonb("medical_json").$type<{ allergies?: string; conditions?: string; emergencyContact?: string; emergencyPhone?: string }>().default({}),
   status:          studentStatusEnum("status").notNull().default("active"),
@@ -234,6 +243,7 @@ export const guardians = pgTable("guardians", {
   phone:        text("phone"),
   email:        text("email"),
   address:      text("address"),
+  photoUrl:     text("photo_url"),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   tenantIdx: index("guardians_tenant_idx").on(t.tenantId),
@@ -621,6 +631,9 @@ export const timetables = pgTable("timetables", {
   classId:   uuid("class_id").notNull().references(() => classes.id),
   termId:    uuid("term_id").references(() => terms.id),
   name:      text("name").notNull(),
+  timetableType: text("timetable_type").notNull().default("teaching"),
+  isPublished: boolean("is_published").notNull().default(false),
+  generationRulesJson: jsonb("generation_rules_json").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({ tenantIdx: index("timetables_tenant_idx").on(t.tenantId) }));
 
@@ -1446,6 +1459,7 @@ export const portalMessages = pgTable("portal_messages", {
   senderType:        text("sender_type").notNull(),
   staffUserId:       uuid("staff_user_id").references(() => users.id, { onDelete: "set null" }),
   parentAccountId:   uuid("parent_account_id").references((): any => parentAccounts.id, { onDelete: "set null" }),
+  recipientUserId:   uuid("recipient_user_id").references(() => users.id, { onDelete: "set null" }),
   body:              text("body").notNull(),
   readAt:            timestamp("read_at"),
   createdAt:         timestamp("created_at").notNull().defaultNow(),
@@ -1853,6 +1867,7 @@ export const studentAccounts = pgTable("student_accounts", {
   passwordHash: text("password_hash").notNull(),
   studentId:    uuid("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
   status:       userStatusEnum("status").notNull().default("active"),
+  preferencesJson: jsonb("preferences_json").$type<{ theme?: "light" | "dark" }>().notNull().default({}),
   createdAt:    timestamp("created_at").notNull().defaultNow(),
   updatedAt:    timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({

@@ -10,7 +10,7 @@ import {
 } from "../db/schema";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { writeTenantFile, resolveTenantFile } from "../lib/uploads";
-import { ConflictError } from "../middleware/error";
+import { ConflictError, NotFoundError } from "../middleware/error";
 import { getCampusId } from "../lib/campus-scope";
 import {
   getOnlineClassById,
@@ -27,7 +27,6 @@ import { requireAuth } from "../middleware/auth";
 import { requireTenantMatch } from "../middleware/tenant";
 import { requirePermission } from "../middleware/rbac";
 import { validate } from "../utils/validate";
-import { NotFoundError } from "../middleware/error";
 
 const router = Router();
 const guard = [requireAuth, requireTenantMatch];
@@ -376,11 +375,22 @@ router.get("/timetables", ...guard, requirePermission("academics.view"), async (
 });
 
 router.post("/timetables", ...guard, requirePermission("academics.manage"),
-  validate({ body: z.object({ classId: z.string().uuid(), termId: z.string().uuid().optional(), name: z.string() }) }),
+  validate({ body: z.object({
+    classId: z.string().uuid(),
+    termId: z.string().uuid().optional(),
+    name: z.string(),
+    timetableType: z.enum(["teaching", "exam", "mock", "test"]).optional(),
+  }) }),
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
-      const [tt] = await db.insert(timetables).values({ tenantId: tenant.id, classId: req.body.classId, termId: req.body.termId, name: req.body.name }).returning();
+      const [tt] = await db.insert(timetables).values({
+        tenantId: tenant.id,
+        classId: req.body.classId,
+        termId: req.body.termId,
+        name: req.body.name,
+        timetableType: req.body.timetableType ?? "teaching",
+      }).returning();
       res.status(201).json({ success: true, data: tt });
     } catch (e) { next(e); }
   }
@@ -399,6 +409,42 @@ router.post("/timetables/:id/periods", ...guard, requirePermission("academics.ma
   async (req, res, next) => {
     try {
       const tenant = (req as any).tenant;
+      const [tt] = await db.select().from(timetables).where(and(eq(timetables.id, req.params.id), eq(timetables.tenantId, tenant.id))).limit(1);
+      if (!tt) throw new NotFoundError("Timetable not found");
+
+      const existing = await db.select().from(timetablePeriods).where(and(
+        eq(timetablePeriods.timetableId, req.params.id),
+        eq(timetablePeriods.tenantId, tenant.id),
+      ));
+      const candidate = {
+        id: "new",
+        dayOfWeek: req.body.dayOfWeek,
+        periodNo: req.body.periodNo,
+        startTime: req.body.startTime,
+        endTime: req.body.endTime,
+        teacherUserId: req.body.teacherUserId,
+        roomId: req.body.roomId,
+        classId: tt.classId,
+      };
+      const { detectPeriodConflicts } = await import("../services/timetable-conflicts");
+      const tenantPeriods = await db.select({
+        id: timetablePeriods.id,
+        dayOfWeek: timetablePeriods.dayOfWeek,
+        periodNo: timetablePeriods.periodNo,
+        startTime: timetablePeriods.startTime,
+        endTime: timetablePeriods.endTime,
+        teacherUserId: timetablePeriods.teacherUserId,
+        roomId: timetablePeriods.roomId,
+        classId: timetables.classId,
+      })
+        .from(timetablePeriods)
+        .innerJoin(timetables, eq(timetables.id, timetablePeriods.timetableId))
+        .where(and(eq(timetablePeriods.tenantId, tenant.id), eq(timetables.isPublished, true)));
+      const conflicts = detectPeriodConflicts([...tenantPeriods, candidate]);
+      if (conflicts.some((c) => c.severity === "error")) {
+        throw new ConflictError(conflicts[0]?.detail ?? "Timetable overlap detected");
+      }
+
       const [row] = await db.insert(timetablePeriods).values({ tenantId: tenant.id, timetableId: req.params.id, ...req.body }).returning();
       res.status(201).json({ success: true, data: row });
     } catch (e) { next(e); }
@@ -673,21 +719,90 @@ router.post("/smart-devices", ...guard, requirePermission("academics.manage"),
 router.get("/timetables/:id/conflicts", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
     const tenant = (req as any).tenant;
-    const periods = await db.select().from(timetablePeriods).where(and(eq(timetablePeriods.timetableId, req.params.id), eq(timetablePeriods.tenantId, tenant.id)));
-    const conflicts: Array<{ type: string; detail: string }> = [];
-    for (let i = 0; i < periods.length; i++) {
-      for (let j = i + 1; j < periods.length; j++) {
-        const a = periods[i];
-        const b = periods[j];
-        if (a.dayOfWeek === b.dayOfWeek && a.periodNo === b.periodNo) {
-          if (a.roomId && b.roomId && a.roomId === b.roomId) conflicts.push({ type: "room", detail: `Room clash period ${a.periodNo} day ${a.dayOfWeek}` });
-          if (a.teacherUserId && b.teacherUserId && a.teacherUserId === b.teacherUserId) conflicts.push({ type: "teacher", detail: `Teacher clash period ${a.periodNo} day ${a.dayOfWeek}` });
-        }
-      }
-    }
+    const [tt] = await db.select().from(timetables).where(and(eq(timetables.id, req.params.id), eq(timetables.tenantId, tenant.id))).limit(1);
+    const periods = await db.select({
+      id: timetablePeriods.id,
+      dayOfWeek: timetablePeriods.dayOfWeek,
+      periodNo: timetablePeriods.periodNo,
+      startTime: timetablePeriods.startTime,
+      endTime: timetablePeriods.endTime,
+      teacherUserId: timetablePeriods.teacherUserId,
+      roomId: timetablePeriods.roomId,
+      classId: timetables.classId,
+      className: classes.name,
+    })
+      .from(timetablePeriods)
+      .innerJoin(timetables, eq(timetables.id, timetablePeriods.timetableId))
+      .leftJoin(classes, eq(classes.id, timetables.classId))
+      .where(and(eq(timetablePeriods.timetableId, req.params.id), eq(timetablePeriods.tenantId, tenant.id)));
+
+    const tenantPeriods = await db.select({
+      id: timetablePeriods.id,
+      dayOfWeek: timetablePeriods.dayOfWeek,
+      periodNo: timetablePeriods.periodNo,
+      startTime: timetablePeriods.startTime,
+      endTime: timetablePeriods.endTime,
+      teacherUserId: timetablePeriods.teacherUserId,
+      roomId: timetablePeriods.roomId,
+      classId: timetables.classId,
+      className: classes.name,
+    })
+      .from(timetablePeriods)
+      .innerJoin(timetables, eq(timetables.id, timetablePeriods.timetableId))
+      .leftJoin(classes, eq(classes.id, timetables.classId))
+      .where(and(
+        eq(timetablePeriods.tenantId, tenant.id),
+        eq(timetables.isPublished, true),
+        tt ? sql`${timetables.id} <> ${tt.id}` : sql`true`,
+      ));
+
+    const { detectPeriodConflicts } = await import("../services/timetable-conflicts");
+    const local = detectPeriodConflicts(periods.map((p) => ({ ...p, classId: p.classId ?? tt?.classId ?? null })));
+    const cross = detectPeriodConflicts([...tenantPeriods, ...periods.map((p) => ({ ...p, classId: p.classId ?? tt?.classId ?? null }))]);
+    const conflicts = [...local, ...cross.filter((c) => !local.some((l) => l.detail === c.detail))];
     res.json({ success: true, data: { conflicts, periodCount: periods.length } });
   } catch (e) { next(e); }
 });
+
+router.patch("/timetables/:id/publish", ...guard, requirePermission("academics.manage"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const published = Boolean(req.body?.published ?? true);
+    const [row] = await db.update(timetables).set({ isPublished: published }).where(and(
+      eq(timetables.id, req.params.id),
+      eq(timetables.tenantId, tenant.id),
+    )).returning();
+    if (!row) throw new NotFoundError("Timetable not found");
+    res.json({ success: true, data: row });
+  } catch (e) { next(e); }
+});
+
+router.post("/timetables/:id/generate", ...guard, requirePermission("academics.manage"),
+  validate({
+    body: z.object({
+      daysOfWeek: z.array(z.number()).optional(),
+      periodsPerDay: z.number().int().min(1).max(12),
+      startTime: z.string(),
+      periodDurationMinutes: z.number().int().min(15).max(120),
+      breakAfterPeriod: z.number().int().optional(),
+      breakDurationMinutes: z.number().int().optional(),
+      subjects: z.array(z.object({
+        subjectId: z.string().uuid(),
+        teacherUserId: z.string().uuid().optional(),
+        roomId: z.string().uuid().optional(),
+        periodsPerWeek: z.number().int().min(1).max(40),
+      })).min(1),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      const tenant = (req as any).tenant;
+      const { generateTeachingTimetable } = await import("../services/timetable-generator");
+      const result = await generateTeachingTimetable(tenant.id, req.params.id, req.body);
+      res.json({ success: true, data: result });
+    } catch (e) { next(e); }
+  },
+);
 
 router.get("/materials", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {

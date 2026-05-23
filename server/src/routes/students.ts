@@ -441,4 +441,31 @@ router.post("/batch-promote", ...guard, requirePermission("students.edit"),
   },
 );
 
+router.get("/profile-pending", ...guard, requirePermission("students.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { listStudentsWithPendingProfiles, filterPendingOnly } = await import("../services/student-profile-pending");
+    const rows = filterPendingOnly(await listStudentsWithPendingProfiles(tenant.id));
+    res.json({ success: true, data: rows });
+  } catch (err) { next(err); }
+});
+
+router.post("/:id/profile-pending/approve", ...guard, requirePermission("students.edit"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { approveStudentPendingProfile } = await import("../services/student-profile-pending");
+    const updated = await approveStudentPendingProfile(tenant.id, req.params.id);
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+});
+
+router.post("/:id/profile-pending/reject", ...guard, requirePermission("students.edit"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const { rejectStudentPendingProfile } = await import("../services/student-profile-pending");
+    const updated = await rejectStudentPendingProfile(tenant.id, req.params.id);
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+});
+
 export default router;

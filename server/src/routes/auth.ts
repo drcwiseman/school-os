@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../db";
-import { users } from "../db/schema";
+import { users, staff } from "../db/schema";
 import { userAuthColumns } from "../lib/user-columns";
 import { eq, and } from "drizzle-orm";
 import { userRoles, roles, tenantSettings } from "../db/schema";
@@ -9,12 +9,13 @@ import { hashPassword, verifyPassword, createSession, deleteSession } from "../m
 import { requireAuth } from "../middleware/auth";
 import { validate } from "../utils/validate";
 import { registerSchema, loginSchema } from "./auth.schemas";
-import { ConflictError, UnauthorizedError } from "../middleware/error";
+import { ConflictError, UnauthorizedError, NotFoundError } from "../middleware/error";
 import { createAuditLog } from "../services/audit";
 import { getUserPermissions } from "../middleware/rbac";
 import { getTenantModuleAccess } from "../services/plan-features";
 import { exchangeImpersonationToken } from "../services/impersonation";
 import { isReadOnlyImpersonation } from "../middleware/auth";
+import { z } from "zod";
 
 const router = Router();
 
@@ -91,6 +92,13 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
     const locale = await localeForTenant(user.tenantId);
     const [settingsRow] = await db.select({ themeJson: tenantSettings.themeJson }).from(tenantSettings)
       .where(eq(tenantSettings.tenantId, user.tenantId)).limit(1);
+    const [staffRow] = await db.select({
+      id: staff.id,
+      photoUrl: staff.photoUrl,
+    }).from(staff).where(and(
+      eq(staff.userId, user.id),
+      eq(staff.tenantId, user.tenantId),
+    )).limit(1);
     const session = (req as any).session;
     res.json({
       success: true,
@@ -101,6 +109,12 @@ router.get("/me", requireAuth, async (req: Request, res: Response, next: NextFun
       country: locale.country,
       currency: locale.currency,
       theme: settingsRow?.themeJson ?? { mode: "dark", accent: "#6366f1" },
+      staffProfile: staffRow ? {
+        id: staffRow.id,
+        photoUrl: staffRow.photoUrl ?? null,
+        hasPhoto: Boolean(staffRow.photoUrl),
+        photoRequired: true,
+      } : null,
       impersonation: isReadOnlyImpersonation(session) ? { readOnly: true } : null,
     });
   } catch (err) { next(err); }
@@ -152,6 +166,56 @@ router.get("/impersonate", async (req: Request, res: Response, next: NextFunctio
       currency: locale.currency,
       impersonation: result.readOnly ? { readOnly: true } : null,
     });
+  } catch (err) { next(err); }
+});
+
+router.post(
+  "/profile/photo",
+  requireAuth,
+  validate({
+    body: z.object({
+      fileName: z.string().min(1),
+      contentBase64: z.string().min(1),
+      mimeType: z.string().optional(),
+    }),
+  }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenant = (req as any).tenant;
+      const user = (req as any).user;
+      const [row] = await db.select().from(staff).where(and(
+        eq(staff.userId, user.id),
+        eq(staff.tenantId, tenant.id),
+      )).limit(1);
+      if (!row) throw new NotFoundError("No staff record linked to your account");
+
+      const { validateUpload } = await import("../middleware/upload");
+      const { safeName, size } = validateUpload(req.body.fileName, req.body.mimeType, req.body.contentBase64);
+      const buffer = Buffer.from(req.body.contentBase64, "base64");
+      if (buffer.length !== size) throw new ConflictError("Invalid file payload");
+
+      const { writeProfilePhoto, profilePhotoApiPath } = await import("../services/profile-photo");
+      writeProfilePhoto(tenant.id, "staff", row.id, buffer);
+      const photoUrl = `${profilePhotoApiPath(tenant.slug, "staff")}?v=${Date.now()}`;
+      await db.update(staff).set({ photoUrl }).where(eq(staff.id, row.id));
+      res.json({ success: true, data: { photoUrl, hasPhoto: true } });
+    } catch (err) { next(err); }
+  },
+);
+
+router.get("/profile/photo", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const [row] = await db.select().from(staff).where(and(
+      eq(staff.userId, user.id),
+      eq(staff.tenantId, tenant.id),
+    )).limit(1);
+    if (!row) throw new NotFoundError("No staff record linked to your account");
+    const { readProfilePhotoFile } = await import("../services/profile-photo");
+    const abs = readProfilePhotoFile(tenant.id, "staff", row.id);
+    if (!abs) throw new NotFoundError("Photo not uploaded");
+    res.sendFile(abs);
   } catch (err) { next(err); }
 });
 

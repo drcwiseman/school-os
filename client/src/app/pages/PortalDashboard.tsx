@@ -72,6 +72,7 @@ export const PortalDashboard: React.FC = () => {
   }
 
   if (account?.type === "student" && data) {
+    const initialTheme = account.preferences?.theme === "light" ? "light" : getStoredPortalTheme(schoolSlug!);
     return (
       <StudentPortalDashboard
         schoolSlug={schoolSlug!}
@@ -80,6 +81,8 @@ export const PortalDashboard: React.FC = () => {
         summary={summary}
         onLogout={logout}
         payMsg={payMsg}
+        onAccountEmailChange={(email) => setAccount((a: any) => (a ? { ...a, email } : a))}
+        initialTheme={initialTheme}
       />
     );
   }

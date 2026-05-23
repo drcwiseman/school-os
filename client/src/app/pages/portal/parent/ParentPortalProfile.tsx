@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import { applyPortalTheme } from "../../../utils/theme";
+import { resolvePortalMediaUrl } from "../../../utils/portal-media";
 import {
   User,
   Sun,
@@ -15,6 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { PasswordInput } from "../../../components/PasswordInput";
+import { PortalImageUpload, fileToBase64Payload } from "../../../components/PortalImageUpload";
 
 type PortalTheme = "light" | "dark";
 
@@ -28,8 +30,11 @@ type ProfileData = {
     phone: string | null;
     email: string | null;
     address: string | null;
+    photoUrl?: string | null;
   };
   preferences: { theme: PortalTheme };
+  photoUrl: string | null;
+  hasPhoto: boolean;
   children: { id: string; firstName: string; lastName: string; admissionNumber: string }[];
   contacts: {
     id: string;
@@ -61,6 +66,8 @@ export const ParentPortalProfile: React.FC<{
 }> = ({ schoolSlug, theme, onThemeChange, onAccountEmailChange }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -106,6 +113,11 @@ export const ParentPortalProfile: React.FC<{
     load();
   }, [load]);
 
+  const photoPreview = useMemo(() => {
+    if (!profile?.photoUrl) return "";
+    return resolvePortalMediaUrl(profile.photoUrl, photoVersion);
+  }, [profile?.photoUrl, photoVersion]);
+
   const flash = (text: string, isErr = false) => {
     if (isErr) {
       setErr(text);
@@ -115,6 +127,36 @@ export const ParentPortalProfile: React.FC<{
       setErr("");
     }
     setTimeout(() => { setMsg(""); setErr(""); }, 4000);
+  };
+
+  const uploadPhoto = async (file: File) => {
+    setUploadingPhoto(true);
+    try {
+      const payload = await fileToBase64Payload(file);
+      const res = await api.post(`/s/${schoolSlug}/api/portal/profile/photo`, payload);
+      if (res.data?.profile) setProfile(res.data.profile);
+      else await load();
+      setPhotoVersion((v) => v + 1);
+      flash("Profile photo saved");
+    } catch (ex: any) {
+      flash(ex.message ?? "Photo upload failed", true);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const clearPhoto = async () => {
+    setUploadingPhoto(true);
+    try {
+      const res = await api.delete(`/s/${schoolSlug}/api/portal/profile/photo`);
+      setProfile(res.data);
+      setPhotoVersion((v) => v + 1);
+      flash("Profile photo removed");
+    } catch (ex: any) {
+      flash(ex.message ?? "Could not remove photo", true);
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const saveProfile = async (e: React.FormEvent) => {
@@ -258,7 +300,7 @@ export const ParentPortalProfile: React.FC<{
   return (
     <div className="space-y-5">
       {msg && (
-        <div className="text-sm text-emerald-600 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3">
+        <div className="text-sm portal-flash-success rounded-xl px-4 py-3">
           {msg}
         </div>
       )}
@@ -269,8 +311,19 @@ export const ParentPortalProfile: React.FC<{
       )}
 
       <section className="portal-panel rounded-2xl p-5">
+        <PortalImageUpload
+          label="Profile photo"
+          hint="Optional — helps the school identify you on messages and records."
+          previewSrc={photoPreview}
+          uploading={uploadingPhoto}
+          onUpload={uploadPhoto}
+          onClear={profile.hasPhoto ? clearPhoto : undefined}
+        />
+      </section>
+
+      <section className="portal-panel rounded-2xl p-5">
         <h2 className="portal-panel-title text-base font-semibold flex items-center gap-2 mb-1">
-          <Sun className="w-4 h-4 text-teal-500" />
+          <Sun className="w-4 h-4 portal-accent-text" />
           Appearance
         </h2>
         <p className="portal-panel-subtitle text-xs mb-4">Choose light or dark mode for the parent portal</p>
@@ -280,7 +333,7 @@ export const ParentPortalProfile: React.FC<{
             onClick={() => saveTheme("light")}
             className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
               theme === "light"
-                ? "border-teal-500 bg-teal-500/15 text-teal-700 dark:text-teal-300"
+                ? "portal-theme-selected"
                 : "portal-child-card border-[var(--portal-border)] text-[var(--portal-muted)]"
             }`}
           >
@@ -291,7 +344,7 @@ export const ParentPortalProfile: React.FC<{
             onClick={() => saveTheme("dark")}
             className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
               theme === "dark"
-                ? "border-teal-500 bg-teal-500/15 text-teal-700 dark:text-teal-300"
+                ? "portal-theme-selected"
                 : "portal-child-card border-[var(--portal-border)] text-[var(--portal-muted)]"
             }`}
           >
@@ -302,7 +355,7 @@ export const ParentPortalProfile: React.FC<{
 
       <section className="portal-panel rounded-2xl p-5">
         <h2 className="portal-panel-title text-base font-semibold flex items-center gap-2 mb-1">
-          <User className="w-4 h-4 text-teal-500" />
+          <User className="w-4 h-4 portal-accent-text" />
           My details
         </h2>
         <p className="portal-panel-subtitle text-xs mb-4">Contact information the school has on file for you</p>
@@ -316,7 +369,7 @@ export const ParentPortalProfile: React.FC<{
           <button
             type="submit"
             disabled={saving}
-            className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm py-2.5 font-medium disabled:opacity-60"
+            className="sm:col-span-2 portal-btn-primary inline-flex items-center justify-center gap-2 rounded-xl text-sm py-2.5 font-medium disabled:opacity-60"
           >
             <Save className="w-4 h-4" /> Save profile
           </button>
@@ -325,7 +378,7 @@ export const ParentPortalProfile: React.FC<{
 
       <section className="portal-panel rounded-2xl p-5">
         <h2 className="portal-panel-title text-base font-semibold flex items-center gap-2 mb-1">
-          <Mail className="w-4 h-4 text-teal-500" />
+          <Mail className="w-4 h-4 portal-accent-text" />
           Portal login email
         </h2>
         <p className="portal-panel-subtitle text-xs mb-4">Email used to sign in to this portal</p>
@@ -338,7 +391,7 @@ export const ParentPortalProfile: React.FC<{
             type="password"
             required
           />
-          <button type="submit" disabled={saving} className="rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm px-4 py-2 font-medium disabled:opacity-60">
+          <button type="submit" disabled={saving} className="portal-btn-primary rounded-xl text-sm px-4 py-2 font-medium disabled:opacity-60">
             Update login email
           </button>
         </form>
@@ -346,7 +399,7 @@ export const ParentPortalProfile: React.FC<{
 
       <section className="portal-panel rounded-2xl p-5">
         <h2 className="portal-panel-title text-base font-semibold flex items-center gap-2 mb-1">
-          <KeyRound className="w-4 h-4 text-teal-500" />
+          <KeyRound className="w-4 h-4 portal-accent-text" />
           Password
         </h2>
         <form onSubmit={savePassword} className="space-y-3 max-w-md">
@@ -363,7 +416,7 @@ export const ParentPortalProfile: React.FC<{
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
             <h2 className="portal-panel-title text-base font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4 text-teal-500" />
+              <Users className="w-4 h-4 portal-accent-text" />
               Family contacts
             </h2>
             <p className="portal-panel-subtitle text-xs mt-1">Other guardians linked to your children</p>

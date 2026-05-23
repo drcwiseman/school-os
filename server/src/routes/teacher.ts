@@ -165,6 +165,8 @@ router.post("/messages", ...guard, requirePermission("messaging.send"),
     try {
       const tenant = (req as any).tenant;
       const user = (req as any).user;
+      const { assertStaffCanMessageStudent } = await import("../services/portal-messaging");
+      await assertStaffCanMessageStudent(tenant.id, user.id, req.body.studentId);
       const [row] = await db.insert(portalMessages).values({
         tenantId: tenant.id, studentId: req.body.studentId, senderType: "staff",
         staffUserId: user.id, body: req.body.body,
@@ -173,6 +175,16 @@ router.post("/messages", ...guard, requirePermission("messaging.send"),
     } catch (e) { next(e); }
   }
 );
+
+router.get("/messages/recipients", ...guard, requirePermission("messaging.view"), async (req, res, next) => {
+  try {
+    const tenant = (req as any).tenant;
+    const user = (req as any).user;
+    const { getTeacherMessageRecipients } = await import("../services/portal-messaging");
+    const data = await getTeacherMessageRecipients(tenant.id, user.id);
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
 
 router.get("/performance", ...guard, requirePermission("academics.view"), async (req, res, next) => {
   try {
