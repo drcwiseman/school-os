@@ -24,6 +24,9 @@ if [[ ! -f dist/index.js ]]; then
   exit 1
 fi
 
+echo "==> Install server dependencies (picks up package.json changes from deploy)"
+npm install --omit=dev --no-audit --no-fund
+
 echo "==> PM2: delete old process, start Node"
 pm2 delete school-os 2>/dev/null || true
 
@@ -45,7 +48,13 @@ fi
 
 pm2 save
 
-sleep 3
+echo "==> Wait for API (up to 30s)"
+for i in $(seq 1 15); do
+  if curl -sf "http://127.0.0.1:5000/api/health" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
 echo ""
 pm2 describe school-os 2>/dev/null | grep -E 'script path|status|restarts' || pm2 list
 echo ""
